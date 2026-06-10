@@ -6,6 +6,7 @@ import {
   Sprite,
   Text,
   TextStyle,
+  Texture,
   TilingSprite,
 } from "pixi.js";
 import {
@@ -22,6 +23,9 @@ import {
   getParticleFXFrames,
   loadAssets,
   pawnBundleForColor,
+  getPawnFrames,
+  type PawnTool,
+  type PawnAnim,
   getWoodItemTexture,
   BUNDLE_BUILDINGS,
   getBuildingTexture,
@@ -160,6 +164,11 @@ export class GameEngine {
   private playerSprite!: AnimatedSprite;
   private playerAnimState: AnimState = "idle";
   private playerShadow!: Sprite;
+  private lastEquippedWeapon: string | null = null;
+
+  // Campfire glow
+  private campfireGlow!: Sprite;
+  private lightTexture!: Texture;
 
   // Zoom parameters
   private zoom = 1.0;
@@ -206,6 +215,7 @@ export class GameEngine {
       // Load static bundles
       await loadGameAssets();
       await loadAssets(BUNDLE_WARRIORS);
+      await loadAssets(pawnBundleForColor("blue"));
       await loadAssets(pawnBundleForColor("yellow"));
       await loadAssets(BUNDLE_BUILDINGS);
       await loadAssets(BUNDLE_TERRAIN_DECO);
@@ -243,6 +253,9 @@ export class GameEngine {
 
       // Populate entities
       this.spawnEntities();
+
+      // Pre-generate lighting textures
+      this.initLightingTextures();
 
       // Survival state: restore persisted thirst/statuses and hook the
       // feedback + hp sinks so state modules can reach the canvas/player.
@@ -610,6 +623,13 @@ export class GameEngine {
         this.entitySprites
       );
 
+      // Update campfire glow flicker
+      if (this.campfireGlow) {
+        const baseRadius = this.interactionResource.campfireHeatRadius;
+        const flicker = 1.0 + Math.sin(performance.now() * 0.007) * 0.04;
+        this.campfireGlow.scale.set(((baseRadius * TILE * 1.8) / 384) * flicker);
+      }
+
       // Push coordinates and lookAt entity HUD update
       this.pushHudUpdate();
     } catch (err: any) {
@@ -655,8 +675,20 @@ export class GameEngine {
     this.playerShadow.y = startY + 2 * TILE;
     this.entityLayer.addChild(this.playerShadow);
 
-    // Load Warrior frames
-    this.playerSprite = new AnimatedSprite(getWarriorFrames("idle"));
+    // Save starting loadout weapon
+    const startW = rpgState.profile?.loadout?.weapon;
+    this.lastEquippedWeapon = startW ? (typeof startW === "string" ? startW : startW.itemId) : null;
+
+    // Load matching player frames depending on starting loadout
+    const pConfig = this.getPlayerSpriteConfig();
+    let initialFrames;
+    if (pConfig.isWarrior) {
+      initialFrames = getWarriorFrames("idle");
+    } else {
+      initialFrames = getPawnFrames("idle", "blue", pConfig.tool);
+    }
+
+    this.playerSprite = new AnimatedSprite(initialFrames);
     this.playerSprite.animationSpeed = 0.12;
     this.playerSprite.play();
     const scale = (TILE * 1.1) / 192;
@@ -681,6 +713,14 @@ export class GameEngine {
     log2.anchor.set(0.5, 0.5);
     log2.rotation = 0.3;
     log2.scale.set((TILE * 0.6) / 64);
+
+    // Add warm campfire light glow behind logs
+    this.campfireGlow = new Sprite(this.lightTexture);
+    this.campfireGlow.anchor.set(0.5);
+    this.campfireGlow.blendMode = "add";
+    this.campfireGlow.alpha = 0.5;
+    this.campfireGlow.scale.set(1.5);
+    campfireContainer.addChild(this.campfireGlow);
 
     campfireContainer.addChild(log1);
     campfireContainer.addChild(log2);
@@ -1087,13 +1127,73 @@ export class GameEngine {
   // system is requesting "run"/"idle" every frame.
   private attackAnimLockTimer = 0;
 
+  private getPlayerSpriteConfig(): { isWarrior: boolean; tool: PawnTool } {
+    const w = rpgState.profile?.loadout?.weapon;
+    const itemId = w ? (typeof w === "string" ? w : w.itemId) : null;
+    if (!itemId) {
+      return { isWarrior: false, tool: null };
+    }
+    if (itemId.includes("pickaxe")) {
+      return { isWarrior: false, tool: "pickaxe" };
+    }
+    if (itemId.includes("axe")) {
+      return { isWarrior: false, tool: "axe" };
+    }
+    if (itemId.includes("hammer")) {
+      return { isWarrior: false, tool: "hammer" };
+    }
+    return { isWarrior: true, tool: null };
+  }
+
+  private initLightingTextures(): void {
+    const radius = 384;
+
+    // Create a light texture fading from warm white/orange to transparent
+    const canvas = document.createElement("canvas");
+    canvas.width = radius * 2;
+    canvas.height = radius * 2;
+    const ctx = canvas.getContext("2d")!;
+    const grad = ctx.createRadialGradient(radius, radius, 0, radius, radius, radius);
+    grad.addColorStop(0, "rgba(255, 235, 205, 0.45)"); // Warm orange/white center
+    grad.addColorStop(0.35, "rgba(255, 190, 130, 0.25)"); // Mid glow
+    grad.addColorStop(0.7, "rgba(255, 150, 90, 0.1)"); // Fading glow
+    grad.addColorStop(1, "rgba(255, 150, 90, 0)"); // Fades out completely
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, radius * 2, radius * 2);
+    this.lightTexture = Texture.from(canvas);
+  }
+
   private setPlayerAnim(state: AnimState): void {
     // While the swing pose is locked, ignore idle/run requests from movement.
     if (state !== "attack" && this.attackAnimLockTimer > 0) return;
     if (state === "attack") this.attackAnimLockTimer = 0.28;
-    if (this.playerAnimState === state) return;
+
+    const currentWeapon = rpgState.profile?.loadout?.weapon;
+    const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
+
+    if (this.playerAnimState === state && this.lastEquippedWeapon === currentWeaponId) return;
     this.playerAnimState = state;
-    this.playerSprite.textures = getWarriorFrames(state);
+    this.lastEquippedWeapon = currentWeaponId;
+
+    const config = this.getPlayerSpriteConfig();
+    let frames: Texture[];
+    if (config.isWarrior) {
+      frames = getWarriorFrames(state === "attack" ? "attack" : (state as any));
+    } else {
+      let pawnAnim: PawnAnim = "idle";
+      if (state === "run") {
+        pawnAnim = "run";
+      } else if (state === "attack") {
+        const interactTools = new Set<PawnTool>(["axe", "hammer", "knife", "pickaxe"]);
+        if (interactTools.has(config.tool)) {
+          pawnAnim = "interact";
+        } else {
+          pawnAnim = "idle";
+        }
+      }
+      frames = getPawnFrames(pawnAnim, "blue", config.tool);
+    }
+    this.playerSprite.textures = frames;
 
     if (state === "attack") {
       this.playerSprite.loop = false;
@@ -1111,6 +1211,7 @@ export class GameEngine {
 
     this.playerSprite.play();
   }
+
 
   private pushHudUpdate(): void {
     const pos = this.playerEntity.position!;

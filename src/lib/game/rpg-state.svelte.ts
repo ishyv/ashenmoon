@@ -1,4 +1,4 @@
-import type { RpgPlayerState } from "$shared/bridge-types";
+import type { RpgPlayerState } from "./rpg-types";
 import { emitEnvironmentChanged, type EnvironmentState } from "$lib/rpg/systems/environment-system";
 import "$lib/rpg/systems/item-reaction-system";
 import { StorageKeys } from "./game-events";

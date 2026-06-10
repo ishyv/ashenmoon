@@ -1,6 +1,5 @@
 <script lang="ts">
-// Root +layout.svelte already mounts Toast (via AppShell + standalone Toast)
-// and Vignette (via AppShell). No scoped chrome needed here.
+import "./../../app.css";
 import type { Snippet } from "svelte";
 
 interface Props {
@@ -9,4 +8,5 @@ interface Props {
 const { children }: Props = $props();
 </script>
 
+<!-- Layout reset: strips AppShell/nav so the game canvas owns the full viewport. -->
 {@render children()}

@@ -78,7 +78,16 @@ const weaponMeta = $derived(() => {
         title={weapon() ? "Click to unequip tool" : "Equip a tool from stash"}
       >
         {#if weapon()}
-          <span class="slot-icon">⛏️</span>
+          {@const meta = weaponMeta()}
+          {#if meta?.iconUrl}
+            <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" onerror={(e) => {
+              const img = e.currentTarget as HTMLImageElement;
+              img.style.display = 'none';
+              const fallback = img.nextElementSibling as HTMLElement;
+              if (fallback) fallback.style.display = 'inline';
+            }} />
+          {/if}
+          <span class="slot-icon" style={meta?.iconUrl ? "display:none" : ""}>⛏️</span>
         {:else}
           <span class="slot-placeholder">🗡️</span>
         {/if}
@@ -323,5 +332,11 @@ const weaponMeta = $derived(() => {
     color: rgba(255, 255, 255, 0.25);
     text-align: center;
     margin-top: 0.3rem;
+  }
+
+  .item-icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 </style>

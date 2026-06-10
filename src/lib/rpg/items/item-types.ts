@@ -45,6 +45,7 @@ export interface ItemDefinition {
   rarity: Rarity;
   category: Category;
   traits: ItemTrait[];
+  iconUrl?: string;
 }
 
 /**
@@ -76,4 +77,5 @@ export interface LegacyItemMetadata {
     transformsInto?: string;
   };
   decayable?: { lifespanSec: number; transformsInto: string };
+  iconUrl?: string;
 }

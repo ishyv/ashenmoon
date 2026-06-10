@@ -13,7 +13,7 @@
  * `{ ok: false, error }` rather than throwing; callers surface their own
  * feedback. No retries or offline queue (a deliberate non-goal for now).
  */
-import type { RpgPlayerState } from "$shared/bridge-types";
+import type { RpgPlayerState } from "./rpg-types";
 
 export type MaterialGain = { id: string; quantity: number };
 

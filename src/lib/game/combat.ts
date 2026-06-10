@@ -50,9 +50,13 @@ export class CombatConfig {
   // --- player swing ---
   /** how far the arc reaches from the player centre (world px). */
   public reach = TILE * 1;
+
+  /* Roughly represents the arc size, could be used to tweak as per player skills */
+  public arcSize = 30; 
+  
   /** half the swing cone; the arc spans aim ± this (radians). */
   public arcHalfAngle =
-    (30 * Math.PI) / 180; /* first value should be between 30 and 60 ideally */
+    (this.arcSize * Math.PI) / 180; /* first value should be between 30 and 60 ideally */
   public damage = 25;
   /** seconds between swings, independent of animation length. */
   public cooldown = 0.45;

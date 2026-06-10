@@ -1,4 +1,4 @@
-import type { RpgPlayerState, RpgGatherResult, RpgEnvironmentTickResult, RpgContentSnapshot } from "$shared/bridge-types";
+import type { RpgPlayerState, RpgGatherResult, RpgEnvironmentTickResult, RpgContentSnapshot } from "../game/rpg-types";
 import { getDashboardDb } from "./db";
 import { ITEM_DEFINITIONS } from "../rpg/items/item-definitions";
 

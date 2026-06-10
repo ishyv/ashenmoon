@@ -5,7 +5,7 @@
  * wrong and hides intent. These keep the slot-shape knowledge in one place.
  */
 import { rpgState } from "./rpg-state.svelte";
-import type { RpgPlayerState } from "$shared/bridge-types";
+import type { RpgPlayerState } from "./rpg-types";
 import { ITEM_DEFINITIONS } from "$lib/rpg/items/item-definitions";
 import type { BoilableTrait } from "$lib/rpg/items/item-traits";
 

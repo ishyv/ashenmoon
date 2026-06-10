@@ -71,9 +71,9 @@ export function tickStatuses(list: ActiveStatus[], dtSec: number): StatusTickRes
     const after = before - dtSec;
 
     if (def.pulse && def.pulseEverySec && def.pulseEverySec > 0) {
-      // Number of pulse boundaries crossed in (after, before].
+      // Number of pulse boundaries crossed in [after, before).
       const crossed =
-        Math.floor(before / def.pulseEverySec) - Math.floor(Math.max(after, 0) / def.pulseEverySec);
+        Math.ceil(before / def.pulseEverySec) - Math.ceil(Math.max(after, 0) / def.pulseEverySec);
       if (crossed > 0) {
         pulses.push(status.id);
         hpDelta += (def.pulse.hpDelta ?? 0) * crossed;

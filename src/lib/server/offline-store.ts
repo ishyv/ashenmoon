@@ -1,4 +1,4 @@
-import type { RpgPlayerState } from "$shared/bridge-types";
+import type { RpgPlayerState } from "../game/rpg-types";
 
 export let offlinePlayerState: any = {
   profile: {

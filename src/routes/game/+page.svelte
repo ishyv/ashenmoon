@@ -4,6 +4,7 @@ import { GameEngine, type HudState } from "$lib/game/engine";
 import type { Entity } from "$lib/game/ecs-miniplex";
 import { registerDevCommands } from "$lib/game/dev-commands";
 import DevConsole from "$lib/game/DevConsole.svelte";
+import { devConsole } from "$lib/game/dev-console";
 import GameHud from "$lib/game/GameHud.svelte";
 import InputConfigHub, { type Bindings } from "$lib/game/InputConfigHub.svelte";
 import EquipmentPanel from "$lib/game/EquipmentPanel.svelte";
@@ -51,6 +52,23 @@ function handleContextMenu(name: string, action: string, screenX: number, screen
 
 function closeContextMenu() {
   contextMenu = null;
+}
+
+function handleGlobalKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape") {
+    if (devConsole.open) return;
+
+    if (showSettings) {
+      showSettings = false;
+      e.preventDefault();
+    } else if (showSkills) {
+      showSkills = false;
+      e.preventDefault();
+    } else if (showInventory) {
+      showInventory = false;
+      e.preventDefault();
+    }
+  }
 }
 
 function handleBindingsUpdate(newBindings: Bindings) {
@@ -157,10 +175,14 @@ onDestroy(() => {
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cardo:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
 </svelte:head>
 
-<svelte:window on:mousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }} />
+<svelte:window
+  on:mousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
+  on:keydown={handleGlobalKeyDown}
+/>
 
 <div class="shell">
   <div bind:this={containerEl} class="canvas-mount"></div>
+  <div class="vignette"></div>
 
   <!-- Top-Right Settings Gear Button -->
   <div class="top-bar">
@@ -257,6 +279,14 @@ onDestroy(() => {
   .shell {
     position: fixed;
     inset: 0;
+  }
+
+  .vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 35%, rgba(10, 8, 16, 0.45) 100%);
+    z-index: 5;
   }
 
   .canvas-mount {

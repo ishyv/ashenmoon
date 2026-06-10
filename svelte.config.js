@@ -8,8 +8,6 @@ const config = {
     adapter: adapter(),
     alias: {
       "$shared/bridge-types": "./src/lib/shared/bridge-types.ts",
-      "$shared/embed-config": "./src/lib/shared/embed-config.ts",
-      "$shared/script-docs": "./src/lib/shared/documentation.json",
     },
   },
 };

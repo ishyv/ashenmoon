@@ -289,6 +289,7 @@ function projectLegacyItemMetadata(items: Record<string, ItemDefinition>): Recor
         description: item.description,
         rarity: item.rarity,
         category: item.category,
+        iconUrl: `/assets/rpg/icons/${id}.png`,
         ...(item.traits.some((trait) => trait.kind === "flammable")
           ? (() => {
               const trait = item.traits.find((candidate) => candidate.kind === "flammable");

@@ -8,9 +8,7 @@
 import { fade } from "svelte/transition";
 import { rpgState } from "./rpg-state.svelte";
 
-let props = $props<{ onClose: () => void }>();
-
-const onClose = () => props.onClose();
+let { onClose } = $props<{ onClose: () => void }>();
 
 const skills = $derived(rpgState.skills);
 
@@ -33,7 +31,7 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
 
 <div
   class="modal-backdrop"
-  onclick={onClose}
+  onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}
   onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose(); } }}
   role="dialog"
   aria-modal="true"
@@ -41,13 +39,11 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
 >
   <div
     class="modal-card skill-tree-card"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
     role="presentation"
   >
     <div class="modal-header">
       <h2>📜 Skill Progression & Tree</h2>
-      <button class="close-btn" onclick={onClose} aria-label="Close Skills">×</button>
+      <button class="close-btn" onclick={(e) => { e.preventDefault(); onClose(); }} aria-label="Close Skills">×</button>
     </div>
 
     <div class="modal-body skill-tree-body">
@@ -201,14 +197,20 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
   }
 
   .close-btn {
+    position: relative;
     background: transparent;
     border: none;
-    font-size: 1.6rem;
+    font-size: 1.8rem;
     color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     line-height: 1;
-    padding: 0;
+    padding: 0.5rem; /* Expand the click hitbox for accessibility */
+    margin: -0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: color 0.12s;
+    z-index: 10;
   }
 
   .close-btn:hover {

@@ -197,22 +197,19 @@ function clearSlot(action: ActionId, slotIndex: number): void {
 
 <div
   class="modal-backdrop"
-  onclick={onClose}
+  onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}
   onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose(); } }}
   role="dialog"
   aria-modal="true"
   tabindex="-1"
 >
-  <!-- Stop propagation so clicking inside the card does not close it -->
   <div
     class="modal-card"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
     role="presentation"
   >
     <div class="modal-header">
       <h2>⚙️ Control Configuration</h2>
-      <button class="close-btn" onclick={onClose} aria-label="Close Settings">×</button>
+      <button class="close-btn" onclick={(e) => { e.preventDefault(); onClose(); }} aria-label="Close Settings">×</button>
     </div>
 
     <div class="modal-body">
@@ -362,14 +359,20 @@ function clearSlot(action: ActionId, slotIndex: number): void {
   }
 
   .close-btn {
+    position: relative;
     background: transparent;
     border: none;
     font-size: 1.6rem;
     color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     line-height: 1;
-    padding: 0;
+    padding: 0.5rem; /* Expand the click hitbox for accessibility */
+    margin: -0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: color 0.12s;
+    z-index: 10;
   }
 
   .close-btn:hover {

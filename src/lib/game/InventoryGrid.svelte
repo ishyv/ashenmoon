@@ -270,17 +270,27 @@ onDestroy(() => {
       
       <div class="inspect-header">
         <div class="inspect-visual {meta.rarity}">
-          {#if meta.category === "tool"}
-            ⛏️
-          {:else if meta.category === "timber"}
-            🪵
-          {:else if meta.category === "mineral"}
-            💎
-          {:else if meta.category === "herb"}
-            🌿
-          {:else}
-            📦
+          {#if meta.iconUrl}
+            <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" onerror={(e) => {
+              const img = e.currentTarget as HTMLImageElement;
+              img.style.display = 'none';
+              const fallback = img.nextElementSibling as HTMLElement;
+              if (fallback) fallback.style.display = 'inline';
+            }} />
           {/if}
+          <span style={meta.iconUrl ? "display:none" : ""}>
+            {#if meta.category === "tool"}
+              ⛏️
+            {:else if meta.category === "timber"}
+              🪵
+            {:else if meta.category === "mineral"}
+              💎
+            {:else if meta.category === "herb"}
+              🌿
+            {:else}
+              📦
+            {/if}
+          </span>
         </div>
         <div class="inspect-title-block">
           <div class="inspect-name">{meta.name}</div>
@@ -387,7 +397,7 @@ onDestroy(() => {
         <button class="tab-btn {activeTab === 'crafting' ? 'active' : ''}" onclick={() => activeTab = 'crafting'}>🔨 Crafting</button>
         <button class="tab-btn {activeTab === 'building' ? 'active' : ''}" onclick={() => activeTab = 'building'}>🏢 Build</button>
       </div>
-      <button class="close-btn" onclick={onClose}>×</button>
+      <button class="close-btn" onclick={(e) => { e.preventDefault(); onClose(); }}>×</button>
     </div>
 
     {#if activeTab === "stash"}
@@ -420,17 +430,27 @@ onDestroy(() => {
                 onclick={() => (selectedItem = itemId)}
               >
                 <div class="item-visual">
-                  {#if meta?.category === "tool"}
-                    ⛏️
-                  {:else if meta?.category === "timber"}
-                    🪵
-                  {:else if meta?.category === "mineral"}
-                    💎
-                  {:else if meta?.category === "herb"}
-                    🌿
-                  {:else}
-                    📦
+                  {#if meta?.iconUrl}
+                    <img src={meta.iconUrl} alt={meta?.name} class="item-icon-img" onerror={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      img.style.display = 'none';
+                      const fallback = img.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'inline';
+                    }} />
                   {/if}
+                  <span style={meta?.iconUrl ? "display:none" : ""}>
+                    {#if meta?.category === "tool"}
+                      ⛏️
+                    {:else if meta?.category === "timber"}
+                      🪵
+                    {:else if meta?.category === "mineral"}
+                      💎
+                    {:else if meta?.category === "herb"}
+                      🌿
+                    {:else}
+                      📦
+                    {/if}
+                  </span>
                 </div>
                 {#if qty > 1}
                   <div class="qty-badge">{qty}</div>
@@ -825,14 +845,20 @@ onDestroy(() => {
   }
 
   .close-btn {
-    background: none;
+    position: relative;
+    background: transparent;
     border: none;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 1.2rem;
+    font-size: 1.8rem;
+    color: rgba(255, 255, 255, 0.45);
     cursor: pointer;
     line-height: 1;
-    padding: 0;
-    transition: color 0.12s;
+    padding: 0.5rem; /* Expand the click hitbox for accessibility */
+    margin: -0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.1s;
+    z-index: 10;
   }
 
   .close-btn:hover {
@@ -1265,5 +1291,11 @@ onDestroy(() => {
     padding: 0.3rem;
     border-radius: 4px;
     margin-top: 0.2rem;
+  }
+
+  .item-icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 </style>

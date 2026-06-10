@@ -250,12 +250,53 @@ export function handleHitFeedbackSystem(
     }
 
     // Debris graphic particles
-    const particleColor = isTree ? Colors.particle.woodDebris : Colors.particle.oreDebris;
+    let particleColor: number = isTree ? Colors.particle.woodDebris : Colors.particle.oreDebris;
+    let isSpark = false;
+    let isFlake = false;
+    let isStar = false;
+
+    if (!isTree) {
+      const lowerYield = yieldName.toLowerCase();
+      if (lowerYield.includes("copper")) {
+        particleColor = 0xf97316; // orange/copper
+        isSpark = true;
+      } else if (lowerYield.includes("iron")) {
+        particleColor = 0x475569; // slate/iron grey
+        isFlake = true;
+      } else if (lowerYield.includes("silver")) {
+        particleColor = 0xe2e8f0; // bright white/silver
+        isStar = true;
+      }
+    }
+
     const pCount = isSuper ? 24 : 12;
     for (let i = 0; i < pCount; i++) {
       const g = new Graphics();
       if (isTree) {
         g.rect(-2.5, -1.5, 5, 3).fill(particleColor);
+      } else if (isSpark) {
+        // Shiny copper sparks (diamond)
+        g.moveTo(-3, 0);
+        g.lineTo(0, -2);
+        g.lineTo(3, 0);
+        g.lineTo(0, 2);
+        g.closePath();
+        g.fill(particleColor);
+      } else if (isFlake) {
+        // Dark metallic steel flakes (irregular rectangle)
+        g.rect(-2, -2, 4, 3).fill(particleColor);
+      } else if (isStar) {
+        // Bright white glinting stars (4-point star)
+        g.moveTo(0, -4);
+        g.lineTo(1, -1);
+        g.lineTo(4, 0);
+        g.lineTo(1, 1);
+        g.lineTo(0, 4);
+        g.lineTo(-1, 1);
+        g.lineTo(-4, 0);
+        g.lineTo(-1, -1);
+        g.closePath();
+        g.fill(particleColor);
       } else {
         g.circle(0, 0, 2).fill(particleColor);
       }
