@@ -3,6 +3,7 @@ import { onMount, onDestroy } from "svelte";
 import { rpgState, ITEM_METADATA, setRpgState } from "./rpg-state.svelte";
 import { triggerQuestEvent } from "./quests.svelte";
 import { playCraftSound } from "./audio-synthesis";
+import { canConsume, consumeItem, getConsumeVerb } from "./consume-actions";
 
 let { engine, onClose } = $props<{ engine: any; onClose: () => void }>();
 
@@ -360,6 +361,18 @@ onDestroy(() => {
             {:else}
               <button class="inspect-btn active" onclick={() => equipTool(selectedItem!)}>⚡ Equip Tool</button>
             {/if}
+          </div>
+        {/if}
+
+        {#if getConsumeVerb(selectedItem!)}
+          <div class="inspect-actions">
+            <button
+              class="inspect-btn {canConsume(selectedItem!) ? 'active' : 'disabled'}"
+              disabled={!canConsume(selectedItem!)}
+              onclick={() => consumeItem(selectedItem!)}
+            >
+              {getConsumeVerb(selectedItem!) === "drink" ? "💧 Drink" : "🍖 Eat"}
+            </button>
           </div>
         {/if}
       </div>

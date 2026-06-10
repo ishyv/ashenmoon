@@ -1,3 +1,5 @@
+import { GameEvent } from "./game-events";
+
 export interface QuestObjective {
   id: string;
   label: string;
@@ -93,23 +95,23 @@ export function triggerQuestEvent(action: string, itemId?: string, amount = 1): 
     if (obj.completed) continue;
 
     let match = false;
-    if (action === "pickup" && obj.id === "gather_twigs" && itemId === "oak_wood") {
+    if (action === GameEvent.Pickup && obj.id === "gather_twigs" && itemId === "oak_wood") {
       match = true;
-    } else if (action === "pickup" && obj.id === "gather_stones" && itemId === "stone") {
+    } else if (action === GameEvent.Pickup && obj.id === "gather_stones" && itemId === "stone") {
       match = true;
-    } else if (action === "craft" && obj.id === "craft_axe" && itemId === "flint_axe") {
+    } else if (action === GameEvent.Craft && obj.id === "craft_axe" && itemId === "flint_axe") {
       match = true;
-    } else if (action === "harvest" && obj.id === "harvest_oak" && itemId === "oak_wood") {
+    } else if (action === GameEvent.Harvest && obj.id === "harvest_oak" && itemId === "oak_wood") {
       match = true;
-    } else if (action === "refuel" && obj.id === "refuel_fire") {
+    } else if (action === GameEvent.Refuel && obj.id === "refuel_fire") {
       match = true;
-    } else if (action === "craft" && obj.id === "craft_block" && itemId === "stone_block") {
+    } else if (action === GameEvent.Craft && obj.id === "craft_block" && itemId === "stone_block") {
       match = true;
-    } else if (action === "build" && obj.id === "build_wall" && itemId === "wall") {
+    } else if (action === GameEvent.Build && obj.id === "build_wall" && itemId === "wall") {
       match = true;
-    } else if (action === "build" && obj.id === "build_house" && itemId === "house1") {
+    } else if (action === GameEvent.Build && obj.id === "build_house" && itemId === "house1") {
       match = true;
-    } else if (action === "build" && obj.id === "build_tower" && itemId === "tower") {
+    } else if (action === GameEvent.Build && obj.id === "build_tower" && itemId === "tower") {
       match = true;
     }
 

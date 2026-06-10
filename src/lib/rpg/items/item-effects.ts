@@ -1,4 +1,5 @@
 import type { ItemId } from "./item-types";
+import type { StatusId } from "../systems/status-types";
 
 /**
  * Union of all possible effects that can be triggered by item traits.
@@ -8,7 +9,11 @@ export type ItemEffect =
   | TransformEffect
   | DestroyEffect
   | DamageHolderEffect
-  | AddStatusEffect;
+  | AddStatusEffect
+  | RestoreThirstEffect
+  | RestoreHpEffect
+  | ClearAllStatusesEffect
+  | ChanceEffect;
 
 /**
  * Transforms the item into another item (e.g., Ice Block -> Clean Water).
@@ -39,8 +44,42 @@ export interface DamageHolderEffect {
  */
 export interface AddStatusEffect {
   kind: "add_status";
-  status: string;
+  status: StatusId;
   durationSec: number;
+}
+
+/**
+ * Restores the holder's thirst pool (consumables).
+ */
+export interface RestoreThirstEffect {
+  kind: "restore_thirst";
+  amount: number;
+}
+
+/**
+ * Restores the holder's hp (consumables, medicine).
+ */
+export interface RestoreHpEffect {
+  kind: "restore_hp";
+  amount: number;
+}
+
+/**
+ * Removes every active status from the holder (debug panacea, strong cures).
+ */
+export interface ClearAllStatusesEffect {
+  kind: "clear_all_statuses";
+}
+
+/**
+ * Wraps another effect behind a probability roll. The system resolving the
+ * effect supplies the rng, so the roll stays testable.
+ */
+export interface ChanceEffect {
+  kind: "chance";
+  /** [0, 1] probability that `effect` fires. */
+  probability: number;
+  effect: ItemEffect;
 }
 
 /**
@@ -79,10 +118,50 @@ export function DamageHolder(amount: number): DamageHolderEffect {
 /**
  * DSL Helper: Define a status application effect.
  */
-export function AddStatus(status: string, durationSec: number): AddStatusEffect {
+export function AddStatus(status: StatusId, durationSec: number): AddStatusEffect {
   return {
     kind: "add_status",
     status,
     durationSec,
+  };
+}
+
+/**
+ * DSL Helper: Define a thirst restoration effect.
+ */
+export function RestoreThirst(amount: number): RestoreThirstEffect {
+  return {
+    kind: "restore_thirst",
+    amount,
+  };
+}
+
+/**
+ * DSL Helper: Define an hp restoration effect.
+ */
+export function RestoreHp(amount: number): RestoreHpEffect {
+  return {
+    kind: "restore_hp",
+    amount,
+  };
+}
+
+/**
+ * DSL Helper: Define a clear-all-statuses effect.
+ */
+export function ClearAllStatuses(): ClearAllStatusesEffect {
+  return {
+    kind: "clear_all_statuses",
+  };
+}
+
+/**
+ * DSL Helper: Wrap an effect behind a probability roll.
+ */
+export function ChanceOf(probability: number, effect: ItemEffect): ChanceEffect {
+  return {
+    kind: "chance",
+    probability,
+    effect,
   };
 }

@@ -33,11 +33,14 @@ export const stamina = $state<{
   event: { seq: 0, mode: "drain" },
 });
 
-/** Regen toward max. Called by the engine each tick. */
-export function tickStamina(dt: number, inCombat = false): void {
+/**
+ * Regen toward max. Called by the engine each tick. `rateMult` lets status
+ * effects (sickness, exhaustion) slow recovery without owning the pool.
+ */
+export function tickStamina(dt: number, inCombat = false, rateMult = 1): void {
   if (stamina.current >= staminaConfig.max) return;
   const rate = inCombat ? staminaConfig.regenCombat : staminaConfig.regenPassive;
-  stamina.current = Math.min(staminaConfig.max, stamina.current + rate * dt);
+  stamina.current = Math.min(staminaConfig.max, stamina.current + rate * rateMult * dt);
 }
 
 /**

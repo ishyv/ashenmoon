@@ -5,7 +5,7 @@
 
 import { error } from "@sveltejs/kit";
 import { type DashboardSession, hasGuildManagementPermission } from "./auth";
-import { getBridge, hasBridge } from "./bridge";
+import { getBridge, hasBridge } from "./legacy/bridge";
 import { fetchUserGuildsCached } from "./guildsCache";
 
 export async function requireGuildAccess(

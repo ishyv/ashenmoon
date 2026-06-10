@@ -17,9 +17,17 @@ import {
   playCraftSound,
   playFallSound,
   playDepleteSound,
+  playWaterBubble,
 } from "./audio-synthesis";
 import { rpgState, setRpgState, ITEM_METADATA } from "./rpg-state.svelte";
 import { spendStamina, stamina } from "./stamina.svelte";
+import { Colors } from "./colors";
+import { getPlayerEntity } from "./entity-queries";
+import { awardSkillXp } from "./skill-xp";
+import { SkillKey, InputAction, EntityId, GameEvent } from "./game-events";
+import { getItemQty, getEquippedWeaponId, isToolType, findBoilableItem } from "./inventory-api";
+import { syncGather, syncPickup, syncRefuel } from "./persistence";
+import { transformStackQty } from "$lib/rpg/systems/inventory-system";
 
 const INTERACT_RANGE = 2;
 
@@ -39,6 +47,8 @@ export class InteractionResource {
   public campfireSprite: AnimatedSprite | null = null;
   public refuelPendingConfirm = false;
   public refuelConfirmTimer = 0;
+  /** Active boil-at-campfire process; null when nothing is boiling. */
+  public boil: { itemId: string; intoItemId: string; remainingSec: number; bubbleTimer: number } | null = null;
 }
 
 /** Tints a node's sprite to mark it as the active target (or clears it). */
@@ -49,7 +59,7 @@ export function setHighlight(
 ): void {
   const sprite = entity && entitySprites.get(entity.id);
   if (sprite) {
-    sprite.tint = on ? 0xffe9a8 : 0xffffff;
+    sprite.tint = on ? Colors.vfx.highlight : Colors.ui.white;
   }
 }
 
@@ -125,7 +135,7 @@ export function triggerSuperGatherSystem(
   const currentCost = Math.max(15, interaction.superGatherStaminaCost - (sgLevel - 1) * 2);
 
   if (stamina.current < currentCost) {
-    spawnEnvFloatingText(vfx, "⚡️ Out of Stamina!", 0xff5555, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "⚡️ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
     return;
   }
 
@@ -136,7 +146,7 @@ export function triggerSuperGatherSystem(
 
   interaction.triggerSuperGatherNextSwing = true;
   interaction.gatherCooldownTimer = 0; // Trigger first swing immediately
-  spawnEnvFloatingText(vfx, "⚡ SUPER GATHER! ⚡", 0xffa500, playerEntity.position!, entityLayer);
+  spawnEnvFloatingText(vfx, "⚡ SUPER GATHER! ⚡", Colors.vfx.superGather, playerEntity.position!, entityLayer);
   playClinkSound();
 }
 
@@ -181,8 +191,8 @@ export function handleHitFeedbackSystem(
       oldFlash.graphic.destroy();
     }
     const flashG = new Graphics();
-    flashG.rect(-TILE * 0.45, -TILE, TILE * 0.9, TILE).fill({ color: 0xffffff, alpha: 0.55 });
-    (flashG as any).blendMode = "add";
+    flashG.rect(-TILE * 0.45, -TILE, TILE * 0.9, TILE).fill({ color: Colors.vfx.hitFlash, alpha: 0.55 });
+    flashG.blendMode = "add";
     flashG.x = entity.position.x + TILE / 2;
     flashG.y = entity.position.y + TILE;
     entityLayer.addChild(flashG);
@@ -197,8 +207,8 @@ export function handleHitFeedbackSystem(
       fontFamily: "monospace",
       fontSize: isSuper ? 22 : 15,
       fontWeight: "bold",
-      fill: isSuper ? 0xffc84a : isTree ? 0xd4ffc8 : 0xffe0a0,
-      stroke: { color: 0x000000, width: isSuper ? 4 : 3 },
+      fill: isSuper ? Colors.resource.superText : isTree ? Colors.resource.wood : Colors.resource.ore,
+      stroke: { color: Colors.ui.stroke, width: isSuper ? 4 : 3 },
     });
     const textObj = new Text({ text: `+${quantity} ${yieldName}`, style: textStyle });
     textObj.anchor.set(0.5, 0.5);
@@ -240,7 +250,7 @@ export function handleHitFeedbackSystem(
     }
 
     // Debris graphic particles
-    const particleColor = isTree ? 0x9c704c : 0xffa500;
+    const particleColor = isTree ? Colors.particle.woodDebris : Colors.particle.oreDebris;
     const pCount = isSuper ? 24 : 12;
     for (let i = 0; i < pCount; i++) {
       const g = new Graphics();
@@ -286,7 +296,7 @@ export function depleteNodeSystem(
   const gy = Math.round(pos.y / TILE);
   const wasTree = interaction.nodeKinds.get(entity.id) === "tree";
   if (wasTree) {
-    triggerQuestEvent("harvest", entity.resource?.drop);
+    triggerQuestEvent(GameEvent.Harvest, entity.resource?.drop);
   }
 
   const sprite = entitySprites.get(entity.id);
@@ -306,7 +316,7 @@ export function depleteNodeSystem(
 
   // Spray particles
   const burstCount = 22 + Math.floor(Math.random() * 10);
-  const burstColor = wasTree ? 0x6aaa44 : 0xb8b8c8;
+  const burstColor = wasTree ? Colors.particle.treeBurst : Colors.particle.oreBurst;
   for (let i = 0; i < burstCount; i++) {
     const g = new Graphics();
     if (wasTree) {
@@ -338,7 +348,7 @@ export function depleteNodeSystem(
     graphic: ringG,
     life: 0,
     maxLife: 0.35,
-    color: wasTree ? 0x88cc44 : 0xccccdd,
+    color: wasTree ? Colors.particle.treeRing : Colors.particle.oreRing,
   });
 
   triggerCameraShake(vfx, 5, 0.18);
@@ -407,29 +417,14 @@ export function triggerImmediateInteraction(
       const item = target.pickup.itemId;
       const qty = target.pickup.qty;
 
-      fetch("/api/rpg/gather", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "pickup",
-          locationId: item,
-          pickupId: target.id,
-        }),
-      })
-        .then(async (response) => {
-          if (response.ok) {
-            const data = await response.json();
-            setRpgState(data.playerState);
-          }
-        })
-        .catch((err) => {
-          console.error("Pickup sync failed:", err);
-        });
+      void syncPickup(item, target.id).then((r) => {
+        if (r.ok) setRpgState(r.data.playerState);
+      });
 
       const itemName = ITEM_METADATA[item]?.name ?? item;
-      const playerEntity = world.entities.find((e) => e.id === "player")!;
-      spawnEnvFloatingText(vfx, `+${qty} ${itemName}`, 0xffdc78, playerEntity.position!, entityLayer);
-      triggerQuestEvent("pickup", item, qty);
+      const playerEntity = getPlayerEntity();
+      spawnEnvFloatingText(vfx, `+${qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
+      triggerQuestEvent(GameEvent.Pickup, item, qty);
     }
 
     depleteNodeSystem(
@@ -444,9 +439,32 @@ export function triggerImmediateInteraction(
       getStumpTexture
     );
   } else if (action === "refuel") {
-    const slots = rpgState.inventory?.slots;
-    const woodQty = slots && slots.oak_wood && "qty" in slots.oak_wood ? slots.oak_wood.qty : 0;
-    const playerEntity = world.entities.find((e) => e.id === "player")!;
+    const playerEntity = getPlayerEntity();
+
+    // Boiling takes the first interaction when the player carries boilable
+    // water: it costs nothing, can't fail, and is the survival loop's reason to
+    // visit the fire. A second interaction (while boiling) reaches refuel.
+    const boilable = !interaction.boil && !interaction.refuelPendingConfirm ? findBoilableItem() : null;
+    if (boilable && boilable.trait.effect.kind === "transform") {
+      interaction.boil = {
+        itemId: boilable.itemId,
+        intoItemId: boilable.trait.effect.into,
+        remainingSec: boilable.trait.durationSec,
+        bubbleTimer: 0,
+      };
+      playWaterBubble();
+      const itemName = ITEM_METADATA[boilable.itemId]?.name ?? boilable.itemId;
+      spawnEnvFloatingText(
+        vfx,
+        `💧 Boiling ${itemName}...`,
+        Colors.vfx.campfireMsg,
+        playerEntity.position!,
+        entityLayer
+      );
+      return;
+    }
+
+    const woodQty = getItemQty("oak_wood");
     if (woodQty >= 5) {
       if (!interaction.refuelPendingConfirm) {
         interaction.refuelPendingConfirm = true;
@@ -454,33 +472,19 @@ export function triggerImmediateInteraction(
         spawnEnvFloatingText(
           vfx,
           "🔥 Interact again to Confirm Refuel (5x Wood)",
-          0xffe066,
+          Colors.vfx.campfireMsg,
           playerEntity.position!,
           entityLayer
         );
         return;
       }
-      
+
       interaction.refuelPendingConfirm = false;
       interaction.refuelConfirmTimer = 0;
 
-      fetch("/api/rpg/gather", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "refuel",
-          locationId: "campfire",
-        }),
-      })
-        .then(async (response) => {
-          if (response.ok) {
-            const data = await response.json();
-            setRpgState(data.playerState);
-          }
-        })
-        .catch((err) => {
-          console.error("Refuel sync failed:", err);
-        });
+      void syncRefuel().then((r) => {
+        if (r.ok) setRpgState(r.data.playerState);
+      });
 
       playCraftSound();
 
@@ -489,21 +493,21 @@ export function triggerImmediateInteraction(
       if (interaction.campfireSprite) {
         interaction.campfireSprite.scale.set((TILE * 1.3) / 48);
       }
-      spawnEnvParticles(vfx, 0xff6600, 25, "smoke", playerEntity.position!, entityLayer);
+      spawnEnvParticles(vfx, Colors.vfx.campfire, 25, "smoke", playerEntity.position!, entityLayer);
       spawnEnvFloatingText(
         vfx,
         "🔥 Campfire refueled! Heat radius extended.",
-        0xffdc78,
+        Colors.resource.gold,
         playerEntity.position!,
         entityLayer
       );
 
-      triggerQuestEvent("refuel");
+      triggerQuestEvent(GameEvent.Refuel);
     } else {
       spawnEnvFloatingText(
         vfx,
         "❌ Needs 5x Oak Wood to refuel",
-        0xff3333,
+        Colors.ui.error,
         playerEntity.position!,
         entityLayer
       );
@@ -514,7 +518,7 @@ export function triggerImmediateInteraction(
       name: target.interactable?.name ?? "NPC",
     };
 
-    triggerQuestEvent("talk", target.id);
+    triggerQuestEvent(GameEvent.Talk, target.id);
   }
 }
 
@@ -550,14 +554,74 @@ export function runInteractionSystem(
       if (interaction.campfireSprite) {
         interaction.campfireSprite.scale.set((TILE * 0.8) / 48);
       }
-      const playerEntity = world.entities.find((e) => e.id === "player")!;
+      const playerEntity = getPlayerEntity();
       spawnEnvFloatingText(
         vfx,
         "🔥 Campfire heat starts to fade...",
-        0xffaa55,
+        Colors.ui.warning,
         playerEntity.position!,
         entityLayer
       );
+    }
+  }
+
+  // Advance an active boil; walking out of the campfire's heat cancels it.
+  if (interaction.boil) {
+    const playerEntity = getPlayerEntity();
+    const campfire = world.with("position").entities.find((e) => e.id === EntityId.Campfire);
+    let inHeat = true;
+    if (campfire?.position && playerEntity.position) {
+      const dx = (campfire.position.x - playerEntity.position.x) / TILE;
+      const dy = (campfire.position.y - playerEntity.position.y) / TILE;
+      inHeat = Math.hypot(dx, dy) <= interaction.campfireHeatRadius;
+    }
+
+    if (!inHeat) {
+      spawnEnvFloatingText(
+        vfx,
+        "💧 You pull the water from the fire.",
+        Colors.ui.muted,
+        playerEntity.position!,
+        entityLayer
+      );
+      interaction.boil = null;
+    } else {
+      const boil = interaction.boil;
+      boil.remainingSec -= dt;
+      boil.bubbleTimer -= dt;
+      if (boil.bubbleTimer <= 0 && campfire?.position) {
+        boil.bubbleTimer = 0.8;
+        spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", campfire.position, entityLayer);
+        playWaterBubble();
+      }
+      if (boil.remainingSec <= 0) {
+        if (rpgState.inventory) {
+          const next = transformStackQty(rpgState.inventory, boil.itemId, boil.intoItemId, 1);
+          if (next !== rpgState.inventory) {
+            rpgState.inventory = next;
+            const intoName = ITEM_METADATA[boil.intoItemId]?.name ?? boil.intoItemId;
+            spawnEnvFloatingText(
+              vfx,
+              `💧 The water bubbles clean. +1 ${intoName}`,
+              Colors.ui.success,
+              playerEntity.position!,
+              entityLayer
+            );
+            playCraftSound();
+            triggerQuestEvent(GameEvent.Boil, boil.intoItemId);
+          } else {
+            // The source stack vanished mid-boil (consumed, dropped) — fail readably.
+            spawnEnvFloatingText(
+              vfx,
+              "💧 The water is gone.",
+              Colors.ui.muted,
+              playerEntity.position!,
+              entityLayer
+            );
+          }
+        }
+        interaction.boil = null;
+      }
     }
   }
 
@@ -566,11 +630,11 @@ export function runInteractionSystem(
     interaction.refuelConfirmTimer -= dt;
     if (interaction.refuelConfirmTimer <= 0) {
       interaction.refuelPendingConfirm = false;
-      const playerEntity = world.entities.find((e) => e.id === "player")!;
+      const playerEntity = getPlayerEntity();
       spawnEnvFloatingText(
         vfx,
         "🔥 Refuel cancelled",
-        0xaaaaaa,
+        Colors.ui.muted,
         playerEntity.position!,
         entityLayer
       );
@@ -580,13 +644,13 @@ export function runInteractionSystem(
   // Cancel refuel confirmation if player moves, dashes, or target changes
   if (interaction.refuelPendingConfirm) {
     const moving =
-      inputs.isActionPressed("MOVE_UP") ||
-      inputs.isActionPressed("MOVE_DOWN") ||
-      inputs.isActionPressed("MOVE_LEFT") ||
-      inputs.isActionPressed("MOVE_RIGHT") ||
+      inputs.isActionPressed(InputAction.MoveUp) ||
+      inputs.isActionPressed(InputAction.MoveDown) ||
+      inputs.isActionPressed(InputAction.MoveLeft) ||
+      inputs.isActionPressed(InputAction.MoveRight) ||
       isDashing;
 
-    if (moving || interaction.currentTarget?.id !== "campfire") {
+    if (moving || interaction.currentTarget?.id !== EntityId.Campfire) {
       interaction.refuelPendingConfirm = false;
       interaction.refuelConfirmTimer = 0;
     }
@@ -607,7 +671,7 @@ export function runInteractionSystem(
 
   if (inputs.superGatherTriggered) {
     inputs.superGatherTriggered = false;
-    const playerEntity = world.entities.find((e) => e.id === "player")!;
+    const playerEntity = getPlayerEntity();
     triggerSuperGatherSystem(
       interaction,
       vfx,
@@ -620,10 +684,10 @@ export function runInteractionSystem(
   // Cancel gathering if moving, dashing, or target changes/depletes
   if (interaction.gatheringTarget !== null) {
     const moving =
-      inputs.isActionPressed("MOVE_UP") ||
-      inputs.isActionPressed("MOVE_DOWN") ||
-      inputs.isActionPressed("MOVE_LEFT") ||
-      inputs.isActionPressed("MOVE_RIGHT") ||
+      inputs.isActionPressed(InputAction.MoveUp) ||
+      inputs.isActionPressed(InputAction.MoveDown) ||
+      inputs.isActionPressed(InputAction.MoveLeft) ||
+      inputs.isActionPressed(InputAction.MoveRight) ||
       isDashing; // Inputs dash active
 
     if (moving || interaction.currentTarget !== interaction.gatheringTarget) {
@@ -631,7 +695,7 @@ export function runInteractionSystem(
     }
   }
 
-  const wantsInteract = inputs.isActionPressed("HARVEST") || inputs.pendingInteract;
+  const wantsInteract = inputs.isActionPressed(InputAction.Harvest) || inputs.pendingInteract;
   inputs.pendingInteract = false;
 
   if (wantsInteract && interaction.gatheringTarget === null) {
@@ -640,17 +704,17 @@ export function runInteractionSystem(
       if (target.resource) {
         const res = target.resource;
         if (res.rpgLocationId && res.rpgAction) {
-          const weapon = rpgState.profile?.loadout?.weapon;
+          const weaponId = getEquippedWeaponId();
           const expectedKind = res.rpgAction === "mine" ? "pickaxe" : "axe";
 
           const spawnFailText = (msg: string) => {
-            const playerEntity = world.entities.find((e) => e.id === "player")!;
+            const playerEntity = getPlayerEntity();
             const textStyle = new TextStyle({
               fontFamily: "monospace",
               fontSize: 13,
               fontWeight: "bold",
-              fill: 0xff5555,
-              stroke: { color: 0x000000, width: 3 },
+              fill: Colors.ui.error,
+              stroke: { color: Colors.ui.stroke, width: 3 },
             });
             const textObj = new Text({ text: msg, style: textStyle });
             textObj.anchor.set(0.5, 1);
@@ -660,7 +724,7 @@ export function runInteractionSystem(
             entityLayer.addChild(textObj);
           };
 
-          if (!weapon) {
+          if (!weaponId) {
             devConsoleLog(`[Error] No tool equipped! Equip a ${expectedKind} first.`);
             spawnFailText(`need ${expectedKind}`);
             onInteract(target);
@@ -668,10 +732,7 @@ export function runInteractionSystem(
             return;
           }
 
-          const itemId = typeof weapon === "string" ? weapon : weapon.itemId;
-          const isAxe = itemId.includes("axe");
-          const isPickaxe = itemId.includes("pickaxe");
-          if ((expectedKind === "axe" && !isAxe) || (expectedKind === "pickaxe" && !isPickaxe)) {
+          if (!isToolType(weaponId, expectedKind)) {
             devConsoleLog(`[Error] Wrong tool! Equip an ${expectedKind} to harvest this.`);
             spawnFailText(`need ${expectedKind}`);
             onInteract(target);
@@ -682,7 +743,7 @@ export function runInteractionSystem(
 
         interaction.gatheringTarget = target;
         const isTree = interaction.nodeKinds.get(target.id) === "tree";
-        const skillKey = isTree ? "lumberjacking" : "mining";
+        const skillKey = isTree ? SkillKey.Lumberjacking : SkillKey.Mining;
         const skillLevel = rpgState.skills?.[skillKey]?.level ?? 1;
         interaction.currentGatherInterval = Math.max(0.15, interaction.gatherInterval * Math.pow(0.95, skillLevel - 1));
         interaction.gatherCooldownTimer = 0;
@@ -710,8 +771,8 @@ export function runInteractionSystem(
       const target = interaction.gatheringTarget;
       const res = target.resource;
 
-      const playerEntity = world.entities.find((e) => e.id === "player");
-      if (playerEntity?.position && target.position) {
+      const playerEntity = getPlayerEntity();
+      if (playerEntity.position && target.position) {
         const dx = target.position.x - playerEntity.position.x;
         if (dx < 0) {
           playerSprite.scale.x = -Math.abs(playerSprite.scale.x);
@@ -723,7 +784,7 @@ export function runInteractionSystem(
       setPlayerAnim("attack");
 
       const isTree = interaction.nodeKinds.get(target.id) === "tree";
-      const skillKey = isTree ? "lumberjacking" : "mining";
+      const skillKey = isTree ? SkillKey.Lumberjacking : SkillKey.Mining;
       const skillLevel = rpgState.skills?.[skillKey]?.level ?? 1;
       const scaledInterval = Math.max(0.15, interaction.gatherInterval * Math.pow(0.95, skillLevel - 1));
       interaction.currentGatherInterval = scaledInterval;
@@ -737,65 +798,11 @@ export function runInteractionSystem(
 
       onHit(target, dropName, quantity);
 
-      // Award XP
-      const skills = rpgState.skills;
-      if (skills) {
-        const isTree = interaction.nodeKinds.get(target.id) === "tree";
-        const skillKey = isTree ? "lumberjacking" : "mining";
-        const skill = skills[skillKey];
-        if (skill) {
-          const xpGained = 10;
-          const newXp = skill.xp + xpGained;
-          const playerEntity = world.entities.find((e) => e.id === "player")!;
-          if (newXp >= skill.nextXp) {
-            const newLevel = skill.level + 1;
-            const overflow = newXp - skill.nextXp;
-            const newNextXp = newLevel * 100;
-            rpgState.skills = {
-              ...rpgState.skills,
-              [skillKey]: { level: newLevel, xp: overflow, nextXp: newNextXp },
-            } as any;
-            spawnEnvFloatingText(
-              vfx,
-              `🎉 ${isTree ? "Lumberjacking" : "Mining"} Level ${newLevel}!`,
-              0x55ff55,
-              playerEntity.position!,
-              entityLayer
-            );
-          } else {
-            rpgState.skills = {
-              ...rpgState.skills,
-              [skillKey]: { ...skill, xp: newXp },
-            } as any;
-          }
-        }
-
-        if (isSuper && skills.superGather) {
-          const sgSkill = skills.superGather;
-          const newXp = sgSkill.xp + 15;
-          const playerEntity = world.entities.find((e) => e.id === "player")!;
-          if (newXp >= sgSkill.nextXp) {
-            const newLevel = sgSkill.level + 1;
-            const overflow = newXp - sgSkill.nextXp;
-            const newNextXp = newLevel * 100;
-            rpgState.skills = {
-              ...rpgState.skills,
-              superGather: { level: newLevel, xp: overflow, nextXp: newNextXp },
-            } as any;
-            spawnEnvFloatingText(
-              vfx,
-              `🎉 Super-Gather Level ${newLevel}!`,
-              0xffaa00,
-              playerEntity.position!,
-              entityLayer
-            );
-          } else {
-            rpgState.skills = {
-              ...rpgState.skills,
-              superGather: { ...sgSkill, xp: newXp },
-            } as any;
-          }
-        }
+      // Award XP. awardSkillXp no-ops if a skill isn't loaded, so no guard needed.
+      const xpPos = getPlayerEntity().position!;
+      awardSkillXp(isTree ? SkillKey.Lumberjacking : SkillKey.Mining, 10, vfx, xpPos, entityLayer);
+      if (isSuper) {
+        awardSkillXp(SkillKey.SuperGather, 15, vfx, xpPos, entityLayer);
       }
 
       if (res) {
@@ -817,37 +824,21 @@ export function runInteractionSystem(
         }
       }
 
-      // Backend Sync
+      // Backend sync (persists yields + tool durability).
       if (res && res.rpgLocationId && res.rpgAction) {
-        fetch("/api/rpg/gather", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: res.rpgAction,
-            locationId: res.rpgLocationId,
-            superGather: isSuper,
-          }),
-        })
-          .then(async (response) => {
-            if (response.ok) {
-              const data = await response.json();
-              setRpgState(data.playerState);
-
-              for (const mat of data.materialsGained) {
-                devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
-              }
-
-              if (data.toolBroken) {
-                devConsoleLog(`[Warning] Your equipped tool broke!`);
-              }
-            } else {
-              const err = await response.json().catch(() => ({ error: "unknown error" }));
-              devConsoleLog(`[Error] Gathering failed: ${err.error}`);
+        void syncGather(res.rpgAction, res.rpgLocationId, isSuper).then((r) => {
+          if (r.ok) {
+            setRpgState(r.data.playerState);
+            for (const mat of r.data.materialsGained) {
+              devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
             }
-          })
-          .catch((err) => {
-            devConsoleLog(`[Error] Gather request failed: ${err}`);
-          });
+            if (r.data.toolBroken) {
+              devConsoleLog(`[Warning] Your equipped tool broke!`);
+            }
+          } else {
+            devConsoleLog(`[Error] Gathering failed: ${r.error}`);
+          }
+        });
       }
     }
   }

@@ -9,7 +9,10 @@
  */
 import { fade } from "svelte/transition";
 import StatBar from "./StatBar.svelte";
+import StatusHud from "./StatusHud.svelte";
 import { stamina, staminaConfig } from "./stamina.svelte";
+import { thirst, thirstConfig } from "./survival.svelte";
+import { statusState } from "./status-effects.svelte";
 import { rpgState, uiPreferences } from "./rpg-state.svelte";
 
 let showHud = $state(true);
@@ -18,6 +21,8 @@ let fadeTimeout: ReturnType<typeof setTimeout> | null = null;
 const hp = $derived(rpgState.profile?.hpCurrent ?? 100);
 const stam = $derived(stamina.current);
 const maxStam = $derived(staminaConfig.max);
+const thirstVal = $derived(thirst.current);
+const maxThirst = $derived(thirstConfig.max);
 
 $effect(() => {
   if (!uiPreferences.minimalHud) {
@@ -30,7 +35,7 @@ $effect(() => {
   }
 
   // Fade in HUD if resources are spent or damaged. Keep visible for a 3s cooldown after reaching 100%.
-  const isFull = hp >= 100 && stam >= maxStam;
+  const isFull = hp >= 100 && stam >= maxStam && thirstVal >= maxThirst && statusState.active.length === 0;
   if (!isFull) {
     showHud = true;
     if (fadeTimeout) {
@@ -56,20 +61,34 @@ $effect(() => {
 </script>
 
 {#if showHud}
-  <div transition:fade={{ duration: 300 }} class="hud-container">
-    <div class="bar-wrapper">
-      <span class="icon">❤️</span>
-      <StatBar value={hp} max={100} fill="rgba(240, 90, 90, 0.65)" />
-    </div>
+  <div transition:fade={{ duration: 300 }} class="hud-stack">
+    <StatusHud />
+    <div class="hud-container">
+      <div class="bar-wrapper">
+        <span class="icon">❤️</span>
+        <StatBar value={hp} max={100} fill="rgba(240, 90, 90, 0.65)" />
+      </div>
 
-    <div class="bar-wrapper">
-      <span class="icon">⚡</span>
-      <StatBar value={stam} max={maxStam} event={stamina.event} />
+      <div class="bar-wrapper">
+        <span class="icon">⚡</span>
+        <StatBar value={stam} max={maxStam} event={stamina.event} />
+      </div>
+
+      <div class="bar-wrapper">
+        <span class="icon">💧</span>
+        <StatBar value={thirstVal} max={maxThirst} fill="rgba(90, 170, 240, 0.65)" event={thirst.event} />
+      </div>
     </div>
   </div>
 {/if}
 
 <style>
+  .hud-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
   .hud-container {
     display: flex;
     justify-content: center;

@@ -1,12 +1,12 @@
 import { json } from "@sveltejs/kit";
-import { getBridge } from "$lib/server/bridge";
+import { rpgService } from "$lib/server/rpg-service";
 import type { RequestHandler } from "./$types";
 
 /**
  * POST /api/rpg/environment
  *
  * Receives the player's client-side computed ambient parameters (temperature, humidity, toxins)
- * and dispatches them to the bot backend to run environmental tick calculations.
+ * and runs environmental tick calculations.
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
   const userId = locals.session?.userId ?? "mock_user";
@@ -25,14 +25,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       );
     }
 
-    const bridge = getBridge();
-    const result = await bridge.rpgEnvironmentTick(userId, { temperature, humidity, toxins });
-
-    if (result.isErr()) {
-      return json({ error: result.error.message }, { status: 400 });
-    }
-
-    return json(result.unwrap());
+    const result = await rpgService.environmentTick(userId, { temperature, humidity, toxins });
+    return json(result);
   } catch (err) {
     return json({ error: String(err) }, { status: 500 });
   }

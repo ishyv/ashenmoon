@@ -9,6 +9,14 @@ import { devConsole } from "./dev-console";
 import type { GameEngine } from "./engine";
 import { rpgState, devEquip, devGiveItem, devSetHp, cooldownsState, debugConfig } from "./rpg-state.svelte";
 import { type SpendMode, setStamina, spendStamina, stamina, staminaConfig } from "./stamina.svelte";
+import { setThirst, thirst, thirstConfig } from "./survival.svelte";
+import {
+  applyStatusEffect,
+  clearAllStatusEffects,
+  clearStatusEffect,
+  statusState,
+} from "./status-effects.svelte";
+import { StatusId, isStatusId } from "$lib/rpg/systems/status-types";
 
 /** Parses a base-10 int, or null if the token isn't a finite integer. */
 function int(token: string | undefined): number | null {
@@ -176,6 +184,77 @@ export function registerDevCommands(engine: GameEngine): void {
       }
       spendStamina(amount, mode);
       return `spent ${amount} (${mode}) -> ${Math.round(stamina.current)}/${staminaConfig.max}`;
+    },
+  });
+
+  // Sub-actions for `thirst` (same keyed dispatch pattern as `stamina`).
+  const thirstSub: Record<string, (a: string[]) => string> = {
+    set: (a) => {
+      const n = int(a[0]);
+      if (n === null) return "usage: thirst set <n>";
+      setThirst(n);
+      return `thirst ${Math.round(thirst.current)}/${thirstConfig.max}`;
+    },
+    max: (a) => {
+      const n = int(a[0]);
+      if (n === null || n <= 0) return "usage: thirst max <n>";
+      thirstConfig.max = n;
+      return `thirst max set to ${n}`;
+    },
+    rate: (a) => {
+      const n = a[0] ? Number(a[0]) : null;
+      if (n === null || Number.isNaN(n) || n < 0) return "usage: thirst rate <base drain/s>";
+      thirstConfig.baseDrainPerSec = n;
+      return `thirst base drain set to ${n}/s (moving x${thirstConfig.movingMult}, laboring x${thirstConfig.laboringMult})`;
+    },
+  };
+
+  devConsole.register({
+    name: "thirst",
+    help: "thirst [set <n> | max <n> | rate <drain/s>] : inspect / tune thirst",
+    run: (args) => {
+      if (!args[0]) {
+        return `thirst ${Math.round(thirst.current)}/${thirstConfig.max} (base drain ${thirstConfig.baseDrainPerSec}/s)`;
+      }
+      const sub = thirstSub[args[0]];
+      return sub ? sub(args.slice(1)) : "usage: thirst [set <n> | max <n> | rate <drain/s>]";
+    },
+  });
+
+  const statusIds = Object.values(StatusId).join("|");
+  const statusSub: Record<string, (a: string[]) => string> = {
+    list: () => {
+      if (statusState.active.length === 0) return "no active statuses";
+      return statusState.active
+        .map((s) => `${s.id} (${Math.ceil(s.remainingSec)}s${s.source ? `, from ${s.source}` : ""})`)
+        .join(" | ");
+    },
+    apply: (a) => {
+      const id = a[0];
+      const sec = int(a[1]) ?? 30;
+      if (!id || !isStatusId(id) || sec <= 0) return `usage: status apply <${statusIds}> [sec]`;
+      applyStatusEffect(id, sec, "dev");
+      return `applied ${id} for ${sec}s`;
+    },
+    clear: (a) => {
+      const id = a[0];
+      if (!id || !isStatusId(id)) return `usage: status clear <${statusIds}>`;
+      clearStatusEffect(id);
+      return `cleared ${id}`;
+    },
+    clearall: () => {
+      clearAllStatusEffects();
+      return "all statuses cleared";
+    },
+  };
+
+  devConsole.register({
+    name: "status",
+    help: "status [list | apply <id> [sec] | clear <id> | clearall] : manage status effects",
+    run: (args) => {
+      if (!args[0]) return statusSub.list([]);
+      const sub = statusSub[args[0].toLowerCase()];
+      return sub ? sub(args.slice(1)) : "usage: status [list | apply <id> [sec] | clear <id> | clearall]";
     },
   });
 

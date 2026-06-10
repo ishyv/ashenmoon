@@ -18,6 +18,10 @@ export enum GameEvent {
   Craft = "craft",
   Build = "build",
   Talk = "talk",
+  Consume = "consume",
+  Boil = "boil",
+  StatusApplied = "status_applied",
+  StatusExpired = "status_expired",
 }
 
 /** Singleton entity ids that systems look up by name. */
@@ -55,4 +59,6 @@ export enum InputAction {
 export const StorageKeys = {
   inputBindings: "ashenmoor_input_bindings",
   uiPreferences: "ashenmoor_ui_preferences",
+  survival: "ashenmoor_survival",
+  statuses: "ashenmoor_statuses",
 } as const;

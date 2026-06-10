@@ -115,10 +115,19 @@ import {
   ITEM_METADATA,
 } from "./rpg-state.svelte";
 import { tickStamina, stamina } from "./stamina.svelte";
+import { tickThirst, loadSurvival } from "./survival.svelte";
+import {
+  tickStatusEffects,
+  getStatusModifiers,
+  loadStatuses,
+} from "./status-effects.svelte";
+import { registerPlayerFeedback, registerPlayerHp } from "./player-feedback";
 import { triggerQuestEvent, dialogueState } from "./quests.svelte";
-
-// Ground dirt color
-const COLOR_DIRT = 0x5a4232;
+import { Colors } from "./colors";
+import { coordKey } from "./coord-utils";
+import { EntityId, SkillKey, InputAction } from "./game-events";
+import { getBuildingSpec } from "./building-specs";
+import { awardSkillXp } from "./skill-xp";
 
 export class GameEngine {
   private app!: Application;
@@ -189,7 +198,7 @@ export class GameEngine {
       this.app = new Application();
       await this.app.init({
         resizeTo: this.containerEl,
-        background: COLOR_DIRT,
+        background: Colors.world.dirt,
         antialias: false,
       });
       this.containerEl.appendChild(this.app.canvas);
@@ -235,6 +244,28 @@ export class GameEngine {
       // Populate entities
       this.spawnEntities();
 
+      // Survival state: restore persisted thirst/statuses and hook the
+      // feedback + hp sinks so state modules can reach the canvas/player.
+      loadSurvival();
+      loadStatuses();
+      registerPlayerFeedback((text, tone) => {
+        const color =
+          tone === "danger"
+            ? Colors.ui.error
+            : tone === "warning"
+              ? Colors.ui.warning
+              : tone === "good"
+                ? Colors.ui.success
+                : Colors.ui.info;
+        spawnEnvFloatingText(this.vfxResource, text, color, this.playerEntity.position!, this.entityLayer);
+      });
+      registerPlayerHp((delta) => {
+        const h = this.playerEntity.health;
+        if (!h) return;
+        h.current = Math.max(0, Math.min(h.max, h.current + delta));
+        this.syncPlayerHp();
+      });
+
       // Main ticking loop schedule runner
       this.app.ticker.add((ticker) => this.tick(ticker.deltaTime / 60));
     } catch (err: any) {
@@ -253,6 +284,8 @@ export class GameEngine {
       this.cleanupInputListeners();
     }
     window.removeEventListener("wheel", this.onWheel);
+    registerPlayerFeedback(null);
+    registerPlayerHp(null);
 
     this.app.destroy(true, { children: true });
     world.clear();
@@ -343,7 +376,7 @@ export class GameEngine {
         this.buildingResource.previewSprite
       ) {
         const wantsPlacement =
-          this.inputResource.isActionPressed("HARVEST") ||
+          this.inputResource.isActionPressed(InputAction.Harvest) ||
           this.inputResource.pendingInteract ||
           this.inputResource.pendingAttack;
         this.inputResource.pendingInteract = false;
@@ -371,7 +404,7 @@ export class GameEngine {
             spawnEnvFloatingText(
               this.vfxResource,
               "❌ Invalid Position!",
-              0xff5555,
+              Colors.ui.error,
               this.playerEntity.position!,
               this.entityLayer
             );
@@ -452,12 +485,32 @@ export class GameEngine {
       this.playerSprite.x = this.playerEntity.position!.x + TILE / 2;
       this.playerSprite.y = this.playerEntity.position!.y + TILE;
 
+      // --- Survival ---
+      // Thirst drains with activity; statuses tick once per accumulated second
+      // and hand back any pulse damage (bleeding, sickness fever).
+      tickThirst(dt, {
+        moving: this.playerAnimState === "run",
+        laboring: this.interactionResource.gatheringTarget !== null,
+      });
+      const statusTick = tickStatusEffects(dt);
+      if (statusTick.hpDelta !== 0) {
+        playerHealth.current = Math.max(
+          0,
+          Math.min(playerHealth.max, playerHealth.current + statusTick.hpDelta)
+        );
+      }
+
       if (playerHealth.current <= 0) this.respawnPlayer();
       this.syncPlayerHp();
 
-      // Regenerate stamina when not sprinting (slower while in combat).
+      // Regenerate stamina when not sprinting (slower while in combat,
+      // slower still while sick/exhausted).
       if (!wasSprinting) {
-        tickStamina(dt, this.combatResource.inCombatTimer > 0);
+        tickStamina(
+          dt,
+          this.combatResource.inCombatTimer > 0,
+          getStatusModifiers().staminaRegenMult
+        );
       }
 
       // Update Svelte cooldown progress bars
@@ -492,7 +545,7 @@ export class GameEngine {
 
       // Footsteps smoke trail updates
       const isMoving = this.playerAnimState === "run";
-      const isSprinting = this.inputResource.isActionPressed("SPRINT");
+      const isSprinting = this.inputResource.isActionPressed(InputAction.Sprint);
       footstepParticleSystem(
         this.vfxResource,
         dt,
@@ -580,7 +633,7 @@ export class GameEngine {
     // same damage path handles the player and enemies; the HUD mirrors it.
     this.playerSpawn = { x: startX, y: startY + TILE };
     this.playerEntity = {
-      id: "player",
+      id: EntityId.Player,
       position: { x: startX, y: startY + TILE, targetX: startX, targetY: startY + TILE },
       playerControlled: { speed: TILE * 6 },
       health: {
@@ -612,7 +665,7 @@ export class GameEngine {
     this.playerSprite.x = startX + TILE / 2;
     this.playerSprite.y = startY + 2 * TILE;
     this.entityLayer.addChild(this.playerSprite);
-    this.entitySprites.set("player", this.playerSprite);
+    this.entitySprites.set(EntityId.Player, this.playerSprite);
 
     // Campfire entity
     const campfireContainer = new Container();
@@ -642,16 +695,16 @@ export class GameEngine {
 
     this.entityLayer.addChild(campfireContainer);
     this.interactionResource.campfireSprite = campfire;
-    this.entitySprites.set("campfire", campfireContainer);
+    this.entitySprites.set(EntityId.Campfire, campfireContainer);
 
     world.add({
-      id: "campfire",
+      id: EntityId.Campfire,
       position: { x: startX, y: startY, targetX: startX, targetY: startY },
       interactable: { name: "Campfire", action: "refuel" },
       collider: { isSolid: true },
     });
-    this.mapResource.solidCoords.add(`${spawnX},${spawnY}`);
-    this.mapResource.customSolids.set(`${spawnX},${spawnY}`, {
+    this.mapResource.solidCoords.add(coordKey(spawnX, spawnY));
+    this.mapResource.customSolids.set(coordKey(spawnX, spawnY), {
       minX: startX + TILE * 0.25,
       maxX: startX + TILE * 0.75,
       minY: startY + TILE * 0.25,
@@ -665,13 +718,13 @@ export class GameEngine {
     const npcEy = npcGy * TILE;
 
     world.add({
-      id: "npc_vane",
+      id: EntityId.NpcVane,
       position: { x: npcEx, y: npcEy, targetX: npcEx, targetY: npcEy },
       interactable: { name: "Commander Vane", action: "talk" },
       collider: { isSolid: true },
     });
-    this.mapResource.solidCoords.add(`${npcGx},${npcGy}`);
-    this.mapResource.customSolids.set(`${npcGx},${npcGy}`, {
+    this.mapResource.solidCoords.add(coordKey(npcGx, npcGy));
+    this.mapResource.customSolids.set(coordKey(npcGx, npcGy), {
       minX: npcEx + TILE * 0.3,
       maxX: npcEx + TILE * 0.7,
       minY: npcEy + TILE * 0.7,
@@ -687,7 +740,7 @@ export class GameEngine {
     vaneSprite.y = npcEy + TILE;
     vaneSprite.scale.set((TILE * 1.1) / 192);
     this.entityLayer.addChild(vaneSprite);
-    this.entitySprites.set("npc_vane", vaneSprite);
+    this.entitySprites.set(EntityId.NpcVane, vaneSprite);
 
     // Scatter resource nodes
     const gatheredPickups = rpgState.profile?.gatheredPickups ?? [];
@@ -727,7 +780,7 @@ export class GameEngine {
       for (let gx = 0; gx < W; gx++) {
         const cell = this.mapResource.cells[gy * W + gx];
         if (cell !== Cell.Meadows && cell !== Cell.CrimsonGrove) continue;
-        if (this.mapResource.solidCoords.has(`${gx},${gy}`)) continue;
+        if (this.mapResource.solidCoords.has(coordKey(gx, gy))) continue;
 
         const hash = (gx * 1031 + gy * 2053) & 0xffff;
         if (hash > 0xffff * 0.06) continue;
@@ -867,16 +920,16 @@ export class GameEngine {
           rpgLocationId,
         },
       });
-      this.mapResource.solidCoords.add(`${gx},${gy}`);
+      this.mapResource.solidCoords.add(coordKey(gx, gy));
       if (kind === "tree") {
-        this.mapResource.customSolids.set(`${gx},${gy}`, {
+        this.mapResource.customSolids.set(coordKey(gx, gy), {
           minX: ex + TILE * 0.35,
           maxX: ex + TILE * 0.65,
           minY: ey + TILE * 0.7,
           maxY: ey + TILE,
         });
       } else {
-        this.mapResource.customSolids.set(`${gx},${gy}`, {
+        this.mapResource.customSolids.set(coordKey(gx, gy), {
           minX: ex + TILE * 0.2,
           maxX: ex + TILE * 0.8,
           minY: ey + TILE * 0.2,
@@ -921,7 +974,7 @@ export class GameEngine {
    */
   public spawnEnemy(gx: number, gy: number, arch: EnemyArchetype = GRUNT): string | null {
     if (!this.mapResource.inBounds(gx, gy)) return null;
-    if (this.mapResource.solidCoords.has(`${gx},${gy}`)) return null;
+    if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return null;
 
     const id = `enemy_${this.enemySeq++}`;
     const ex = gx * TILE;
@@ -962,12 +1015,12 @@ export class GameEngine {
         this.entityLayer,
         pos.x + TILE / 2,
         pos.y + TILE * 0.6,
-        0xc0392b
+        Colors.combat.enemyDeath
       );
       const xp = enemy.loot?.xpReward ?? 0;
       if (xp > 0) {
-        spawnEnvFloatingText(this.vfxResource, `+${xp} xp`, 0xffd86b, pos, this.entityLayer);
-        this.awardCombatXp(xp);
+        spawnEnvFloatingText(this.vfxResource, `+${xp} xp`, Colors.resource.xp, pos, this.entityLayer);
+        awardSkillXp(SkillKey.Combat, xp, this.vfxResource, this.playerEntity.position!, this.entityLayer);
       }
     }
     playDepleteSound();
@@ -975,40 +1028,12 @@ export class GameEngine {
     despawnEntity(world, enemy, this.entityLayer, this.entitySprites, this.vfxResource);
   }
 
-  /**
-   * Awards combat XP if a `combat` skill exists in the loaded profile. Kept
-   * defensive: the backend may not define one yet, so absence is a safe no-op
-   * beyond the floating-text reward already shown.
-   */
-  private awardCombatXp(amount: number): void {
-    const skills = rpgState.skills as any;
-    const skill = skills?.combat;
-    if (!skill) return;
-    const newXp = skill.xp + amount;
-    if (newXp >= skill.nextXp) {
-      const newLevel = skill.level + 1;
-      rpgState.skills = {
-        ...skills,
-        combat: { level: newLevel, xp: newXp - skill.nextXp, nextXp: newLevel * 100 },
-      };
-      spawnEnvFloatingText(
-        this.vfxResource,
-        `🎉 Combat Level ${newLevel}!`,
-        0xff8855,
-        this.playerEntity.position!,
-        this.entityLayer
-      );
-    } else {
-      rpgState.skills = { ...skills, combat: { ...skill, xp: newXp } };
-    }
-  }
-
   /** Player death: feedback, then respawn at camp with brief invulnerability. */
   private respawnPlayer(): void {
     const h = this.playerEntity.health!;
     const pos = this.playerEntity.position!;
-    spawnDeathBurst(this.vfxResource, this.entityLayer, pos.x + TILE / 2, pos.y + TILE * 0.6, 0xff5555);
-    spawnEnvFloatingText(this.vfxResource, "you fell...", 0xff5555, pos, this.entityLayer);
+    spawnDeathBurst(this.vfxResource, this.entityLayer, pos.x + TILE / 2, pos.y + TILE * 0.6, Colors.combat.playerDeath);
+    spawnEnvFloatingText(this.vfxResource, "you fell...", Colors.combat.playerDeath, pos, this.entityLayer);
     triggerCameraShake(this.vfxResource, 8, 0.35);
 
     pos.x = pos.targetX = this.playerSpawn.x;
@@ -1146,18 +1171,7 @@ export class GameEngine {
       this.buildingResource.previewSprite.destroy();
     }
 
-    let tex;
-    if (type === "wall") {
-      tex = getBuildingTexture("yellow", "house3");
-    } else if (type === "house1") {
-      tex = getBuildingTexture("yellow", "house1");
-    } else if (type === "tower") {
-      tex = getBuildingTexture("yellow", "tower");
-    } else if (type === "barracks") {
-      tex = getBuildingTexture("yellow", "barracks");
-    } else {
-      tex = getBuildingTexture("yellow", "house1");
-    }
+    const tex = getBuildingTexture("yellow", getBuildingSpec(type).textureType);
 
     this.buildingResource.previewSprite = new Sprite(tex);
     this.buildingResource.previewSprite.anchor.set(0.5, 1);
@@ -1178,7 +1192,7 @@ export class GameEngine {
     this.buildingResource.onPlacementCompleteCb = undefined;
   }
 
-  public spawnEnvFloatingText(text: string, color = 0xffe0a0): void {
+  public spawnEnvFloatingText(text: string, color: number = Colors.ui.info): void {
     spawnEnvFloatingText(
       this.vfxResource,
       text,
@@ -1232,7 +1246,7 @@ export class GameEngine {
 
   public devSpawn(kind: "tree" | "ore", gx: number, gy: number): string {
     if (!this.mapResource.inBounds(gx, gy)) return `out of bounds: ${gx},${gy}`;
-    if (this.mapResource.solidCoords.has(`${gx},${gy}`)) return `cell occupied: ${gx},${gy}`;
+    if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return `cell occupied: ${gx},${gy}`;
     this.spawnResource(`dev_${kind}_${this.devSpawnSeq++}`, gx, gy, kind);
     return `spawned ${kind} at ${gx},${gy}`;
   }

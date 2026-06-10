@@ -6,6 +6,8 @@
  */
 import { rpgState } from "./rpg-state.svelte";
 import type { RpgPlayerState } from "$shared/bridge-types";
+import { ITEM_DEFINITIONS } from "$lib/rpg/items/item-definitions";
+import type { BoilableTrait } from "$lib/rpg/items/item-traits";
 
 type WeaponSlot = RpgPlayerState["profile"]["loadout"]["weapon"];
 
@@ -41,4 +43,19 @@ export function getEquippedWeaponId(): string | null {
 export function isToolType(itemId: string, kind: "axe" | "pickaxe"): boolean {
   if (kind === "pickaxe") return itemId.includes("pickaxe");
   return itemId.includes("axe") && !itemId.includes("pickaxe");
+}
+
+/**
+ * First inventory stack carrying a boilable trait (the campfire interaction
+ * offers to boil it). Trait data rides along so the caller never re-derives it.
+ */
+export function findBoilableItem(): { itemId: string; trait: BoilableTrait } | null {
+  const slots = rpgState.inventory?.slots;
+  if (!slots) return null;
+  for (const [itemId, slot] of Object.entries(slots)) {
+    if (!("qty" in slot) || slot.qty < 1) continue;
+    const trait = ITEM_DEFINITIONS[itemId]?.traits.find((t) => t.kind === "boilable");
+    if (trait && trait.kind === "boilable") return { itemId, trait };
+  }
+  return null;
 }

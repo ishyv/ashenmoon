@@ -1,5 +1,6 @@
 import { json } from "@sveltejs/kit";
-import { getBridge, type RpgContentSnapshot } from "$lib/server/bridge";
+import { rpgService } from "$lib/server/rpg-service";
+import type { RpgContentSnapshot } from "$shared/bridge-types";
 import { requireRpgEditor } from "$lib/server/rpg-access";
 import { type ItemDef, parseItemDef } from "$lib/server/rpg-registry";
 import type { RequestHandler } from "./$types";
@@ -7,15 +8,13 @@ import type { RequestHandler } from "./$types";
 type RpgSnapshot = RpgContentSnapshot & { items: Record<string, ItemDef> };
 
 async function loadSnapshot(): Promise<RpgSnapshot> {
-  const result = await getBridge().getRpgContent();
-  if (result.isErr()) throw result.error;
-  return result.unwrap() as RpgSnapshot;
+  const result = await rpgService.getRpgContent();
+  return result as RpgSnapshot;
 }
 
 async function saveSnapshot(snapshot: RpgSnapshot): Promise<RpgSnapshot> {
-  const result = await getBridge().saveRpgContent(snapshot);
-  if (result.isErr()) throw result.error;
-  return result.unwrap() as RpgSnapshot;
+  const result = await rpgService.saveRpgContent(snapshot);
+  return result as RpgSnapshot;
 }
 
 /** DELETE /api/rpg/items/[id] — remove an item from the active RPG snapshot. */

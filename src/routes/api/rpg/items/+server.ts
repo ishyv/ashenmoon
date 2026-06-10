@@ -1,5 +1,6 @@
 import { json } from "@sveltejs/kit";
-import { getBridge, type RpgContentSnapshot } from "$lib/server/bridge";
+import { rpgService } from "$lib/server/rpg-service";
+import type { RpgContentSnapshot } from "$shared/bridge-types";
 import { requireRpgEditor } from "$lib/server/rpg-access";
 import { type ItemDef, parseItemDef } from "$lib/server/rpg-registry";
 import type { RequestHandler } from "./$types";
@@ -7,15 +8,13 @@ import type { RequestHandler } from "./$types";
 type RpgSnapshot = RpgContentSnapshot & { items: Record<string, ItemDef> };
 
 async function loadSnapshot(): Promise<RpgSnapshot> {
-  const result = await getBridge().getRpgContent();
-  if (result.isErr()) throw result.error;
-  return result.unwrap() as RpgSnapshot;
+  const result = await rpgService.getRpgContent();
+  return result as RpgSnapshot;
 }
 
 async function saveSnapshot(snapshot: RpgSnapshot): Promise<RpgSnapshot> {
-  const result = await getBridge().saveRpgContent(snapshot);
-  if (result.isErr()) throw result.error;
-  return result.unwrap() as RpgSnapshot;
+  const result = await rpgService.saveRpgContent(snapshot);
+  return result as RpgSnapshot;
 }
 
 /** GET /api/rpg/items — returns items from the active Mongo-backed RPG snapshot. */
@@ -23,7 +22,7 @@ export const GET: RequestHandler = async ({ locals }) => {
   requireRpgEditor(locals.session);
   try {
     const snapshot = await loadSnapshot();
-    const items = Object.values(snapshot.items);
+    const items = Object.values(snapshot.items || {});
     return json({ items, count: items.length });
   } catch (err) {
     return json({ error: String(err) }, { status: 500 });
@@ -68,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
 
     const snapshot = await loadSnapshot();
-    const items = Object.values(snapshot.items);
+    const items = Object.values(snapshot.items || {});
 
     // Check for duplicate ID
     if (items.some((i) => i.id === newItem.id)) {
@@ -77,7 +76,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     const next = await saveSnapshot({
       ...snapshot,
-      items: { ...snapshot.items, [newItem.id]: newItem },
+      items: { ...(snapshot.items || {}), [newItem.id]: newItem },
     });
 
     return json(

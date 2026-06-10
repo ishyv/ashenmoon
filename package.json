@@ -1,27 +1,28 @@
 {
-  "name": "tx-moderation-webapp",
+  "name": "ashenmoon",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Self-hosted SvelteKit moderation dashboard for the tx Discord bot. Runs in-process alongside the bot and uses a typed bridge for live data.",
+  "description": "A dark-fantasy survival sandbox RPG built with SvelteKit and Pixi.js.",
   "author": "Hyvnt",
   "license": "MIT",
-  "homepage": "https://github.com/ishyv/tx-discord-bot-webapp#readme",
+  "homepage": "https://github.com/ishyv/ashenmoon#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ishyv/tx-discord-bot-webapp.git"
+    "url": "https://github.com/ishyv/ashenmoon.git"
   },
   "bugs": {
-    "url": "https://github.com/ishyv/tx-discord-bot-webapp/issues"
+    "url": "https://github.com/ishyv/ashenmoon/issues"
   },
   "keywords": [
-    "discord",
-    "discord-bot",
-    "dashboard",
-    "moderation",
+    "game",
+    "rpg",
+    "survival",
+    "sandbox",
     "sveltekit",
     "svelte",
-    "self-hosted"
+    "pixi",
+    "pixijs"
   ],
   "scripts": {
     "dev": "vite dev",

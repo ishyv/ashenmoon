@@ -1,27 +1,22 @@
 import { json } from "@sveltejs/kit";
-import { getBridge } from "$lib/server/bridge";
+import { rpgService } from "$lib/server/rpg-service";
 import { requireRpgEditor } from "$lib/server/rpg-access";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async ({ locals }) => {
   requireRpgEditor(locals.session);
   try {
-    const result = await getBridge().getRpgContent();
-    if (result.isErr()) throw result.error;
-    const snapshot = result.unwrap() as {
-      craftingRecipes?: Record<string, { requires: Record<string, number> }>;
-      processingRecipes?: Record<
-        string,
-        { output: string; materialsPerBatch: number; outputPerBatch: number }
-      >;
-    };
-    const crafting = Object.entries(snapshot.craftingRecipes ?? {}).map(([id, recipe]) => ({
+    const snapshot = await rpgService.getRpgContent();
+    const craftingRecipes = (snapshot.craftingRecipes ?? {}) as Record<string, any>;
+    const processingRecipes = (snapshot.processingRecipes ?? {}) as Record<string, any>;
+
+    const crafting = Object.entries(craftingRecipes).map(([id, recipe]) => ({
       id,
       method: "crafting",
-      ingredients: Object.keys(recipe.requires),
+      ingredients: Object.keys(recipe.requires || {}),
       output: { id, qty: 1 },
     }));
-    const processing = Object.entries(snapshot.processingRecipes ?? {}).map(([id, recipe]) => ({
+    const processing = Object.entries(processingRecipes).map(([id, recipe]) => ({
       id,
       method: "processing",
       ingredients: [id],

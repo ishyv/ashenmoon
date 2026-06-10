@@ -2,8 +2,9 @@ import { Category, Rarity, itemId, type LegacyItemMetadata, type ItemDefinition 
 import { Item } from "./item-builder";
 import { defineItems } from "./item-registry";
 import { buildItemTraitIndex } from "./item-validation";
-import { TransformInto } from "./item-effects";
-import { Decayable, Flammable, TemperatureSensitive } from "./item-traits";
+import { AddStatus, ChanceOf, ClearAllStatuses, RestoreHp, RestoreThirst, TransformInto } from "./item-effects";
+import { Boilable, Consumable, Decayable, Flammable, TemperatureSensitive } from "./item-traits";
+import { StatusId } from "../systems/status-types";
 
 export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
   stone: Item({
@@ -239,7 +240,41 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Water that has been boiled and condensed to remove essence taint.",
     rarity: Rarity.Common,
     category: Category.Component,
-  }),
+  }).with(
+    Consumable({
+      verb: "drink",
+      onConsume: [RestoreThirst(60)],
+    }),
+  ),
+  dirty_water: Item({
+    id: itemId("dirty_water"),
+    name: "Dirty Water",
+    description: "Murky water with debris drifting in it. It smells faintly of rot.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+  }).with(
+    Consumable({
+      verb: "drink",
+      onConsume: [RestoreThirst(35), ChanceOf(0.45, AddStatus(StatusId.Sickness, 60))],
+    }),
+    Boilable({
+      minTemp: 80,
+      durationSec: 4,
+      effect: TransformInto(itemId("clean_water")),
+    }),
+  ),
+  debug_panacea: Item({
+    id: itemId("debug_panacea"),
+    name: "Debug Panacea",
+    description: "A vial of impossible medicine. Cures everything. Not found in nature.",
+    rarity: Rarity.Legendary,
+    category: Category.Reagent,
+  }).with(
+    Consumable({
+      verb: "drink",
+      onConsume: [ClearAllStatuses(), RestoreThirst(100), RestoreHp(100)],
+    }),
+  ),
 });
 
 export const ITEM_TRAIT_INDEX = buildItemTraitIndex(ITEM_DEFINITIONS);

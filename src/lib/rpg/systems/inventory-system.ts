@@ -48,6 +48,56 @@ export function transformStackItem(
   };
 }
 
+/**
+ * Removes `qty` units from a stack, deleting the slot when it empties.
+ * Returns the inventory unchanged if the stack is missing or too small.
+ */
+export function removeStackQty(inventory: Inventory, itemId: string, qty: number): Inventory {
+  const existing = inventory.slots[itemId];
+  if (!existing || !("qty" in existing) || existing.qty < qty || qty <= 0) {
+    return inventory;
+  }
+
+  const nextSlots = { ...inventory.slots };
+  const remaining = existing.qty - qty;
+  if (remaining <= 0) {
+    delete nextSlots[itemId];
+  } else {
+    nextSlots[itemId] = { qty: remaining };
+  }
+
+  return { ...inventory, slots: nextSlots };
+}
+
+/**
+ * Converts `qty` units of one stack into another item (boiling one unit of
+ * dirty water, charring one log). Unlike `transformStackItem`, the rest of the
+ * source stack stays put. No-op if the source stack is missing or too small.
+ */
+export function transformStackQty(
+  inventory: Inventory,
+  fromItemId: string,
+  toItemId: string,
+  qty: number,
+): Inventory {
+  const source = inventory.slots[fromItemId];
+  if (!source || !("qty" in source) || source.qty < qty || qty <= 0) {
+    return inventory;
+  }
+
+  const removed = removeStackQty(inventory, fromItemId, qty);
+  const target = removed.slots[toItemId];
+  const targetQty = target && "qty" in target ? target.qty : 0;
+
+  return {
+    ...removed,
+    slots: {
+      ...removed.slots,
+      [toItemId]: { qty: targetQty + qty },
+    },
+  };
+}
+
 export function removeStackItem(inventory: Inventory, itemId: string): Inventory {
   if (!inventory.slots[itemId]) {
     return inventory;

@@ -20,23 +20,25 @@ function parseAllowList(): readonly string[] {
     .filter(Boolean);
 }
 
-/** Returns true iff the session's user is listed in `BOT_OWNER_IDS`. */
+/** Returns true if the session's user is listed in `BOT_OWNER_IDS`, or true by default in dev. */
 export function canEditRpgContent(session: DashboardSession | null): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
   if (!session) return false;
   const allowed = parseAllowList();
-  if (allowed.length === 0) return false; // fail-closed
+  if (allowed.length === 0) return false;
   return allowed.includes(session.userId);
 }
 
 /**
  * SvelteKit guard for +page.server.ts loaders and /api/rpg/** handlers.
- * Throws a 403 if the session can't edit RPG content. Use as the first
- * line of any RPG-related load() or RequestHandler.
+ * Allows access by default in non-production environments.
  */
 export function requireRpgEditor(
   session: DashboardSession | null,
 ): asserts session is DashboardSession {
+  if (process.env.NODE_ENV !== "production") return;
   if (!canEditRpgContent(session)) {
     throw error(403, "RPG content editing is restricted to configured bot owners.");
   }
 }
+
