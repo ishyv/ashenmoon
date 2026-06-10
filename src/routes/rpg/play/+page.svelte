@@ -14,7 +14,7 @@ import SkillTreePanel from "$lib/game/SkillTreePanel.svelte";
 import DialogueBox from "$lib/game/DialogueBox.svelte";
 import QuestTracker from "$lib/game/QuestTracker.svelte";
 import IntroOverlay from "$lib/game/IntroOverlay.svelte";
-import { setRpgState, activeEnvironment, uiPreferences, loadUiPreferences } from "$lib/game/rpg-state.svelte";
+import { setRpgState, activeEnvironment, uiPreferences, loadUiPreferences, setEnvironment } from "$lib/game/rpg-state.svelte";
 
 let { data } = $props();
 
@@ -68,9 +68,7 @@ function getAmbientEnvironment(gx: number, gy: number) {
 $effect(() => {
   if (coords) {
     const env = getAmbientEnvironment(coords.gx, coords.gy);
-    activeEnvironment.temperature = env.temperature;
-    activeEnvironment.humidity = env.humidity;
-    activeEnvironment.toxins = env.toxins;
+    setEnvironment(env);
   }
 });
 
