@@ -27,3 +27,17 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+AGENTS_MUST_READ_GAMEDEV_GUIDES
+docs
+
+CLAUDE.md
+Combat_System_Specification.md
+EXAMPLE_FILE_Game_Mechanics_Specification.md
+agent_prompt_engine_refactor_guardrails.md
+SECURITY.md
+
+
+.vite-guide.log
+.vite-guide.err.log
+
