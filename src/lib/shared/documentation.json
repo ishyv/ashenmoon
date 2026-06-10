@@ -1,0 +1,223 @@
+{
+  "api": [
+    {
+      "name": "guild",
+      "category": "context",
+      "signature": "guild: { id: string, name: string, memberCount: number }",
+      "description": "Access metadata of the current guild/server.",
+      "example": "return [field(\"Server\", guild.name)];"
+    },
+    {
+      "name": "channel",
+      "category": "context",
+      "signature": "channel: { id: string, name: string } | null",
+      "description": "The channel where the script was triggered. Null if run in a background schedule or event without context.",
+      "example": "if (channel) {\n  return [field(\"Channel\", channel.name)];\n}"
+    },
+    {
+      "name": "invoker",
+      "category": "context",
+      "signature": "invoker: { id: string, tag: string } | null",
+      "description": "The Discord member who ran the script. Null if triggered by a schedule or event.",
+      "example": "if (invoker) {\n  return [field(\"Runner\", invoker.tag)];\n}"
+    },
+    {
+      "name": "members",
+      "category": "context",
+      "signature": "members: MemberView[]",
+      "description": "List of cached members in the guild. MemberView properties: `.has_role(name)`, `.joined_days_ago`, `.mention`, `.role_names`.",
+      "example": "const recent = members.filter(m => (m.joined_days_ago ?? 999) < 7);"
+    },
+    {
+      "name": "roles",
+      "category": "context",
+      "signature": "roles: RoleSnapshot[]",
+      "description": "List of roles in the guild. RoleSnapshot has: `{ id: string, name: string }`.",
+      "example": "const allRoles = roles.map(r => r.name);"
+    },
+    {
+      "name": "channels",
+      "category": "context",
+      "signature": "channels: ChannelSnapshot[]",
+      "description": "List of channels in the guild. ChannelSnapshot has: `{ id: string, name: string }`.",
+      "example": "const textChannels = channels.map(c => c.name);"
+    },
+    {
+      "name": "now",
+      "category": "context",
+      "signature": "now: number",
+      "description": "The current time as epoch milliseconds.",
+      "example": "const date = new Date(now);"
+    },
+    {
+      "name": "form",
+      "category": "context",
+      "signature": "form: Record<string, string>",
+      "description": "Map of values collected from the input form (declared using `input.*`).",
+      "example": "const target = form.reason;"
+    },
+    {
+      "name": "find_role",
+      "category": "context",
+      "signature": "find_role(nameOrMentionOrId: string): RoleSnapshot | null",
+      "description": "Resolves a guild role by its name, mention, or raw ID.",
+      "example": "const role = find_role(\"Moderator\");"
+    },
+    {
+      "name": "find_member",
+      "category": "context",
+      "signature": "find_member(tagOrMentionOrId: string): MemberView | null",
+      "description": "Resolves a guild member by their user tag, mention, or raw ID.",
+      "example": "const member = find_member(\"user#0000\");"
+    },
+    {
+      "name": "members_with_role",
+      "category": "context",
+      "signature": "members_with_role(roleNameOrMentionOrId: string): MemberView[]",
+      "description": "Returns all guild members who hold the specified role.",
+      "example": "const mods = members_with_role(\"Moderator\");"
+    },
+    {
+      "name": "member.add_role",
+      "category": "capability",
+      "capability": "roles",
+      "signature": "member.add_role(role: string): void",
+      "description": "Adds a role to this member. The argument can be a role name, mention, or ID.",
+      "example": "member.add_role(\"Newcomer\");"
+    },
+    {
+      "name": "member.remove_role",
+      "category": "capability",
+      "capability": "roles",
+      "signature": "member.remove_role(role: string): void",
+      "description": "Removes a role from this member. The argument can be a role name, mention, or ID.",
+      "example": "member.remove_role(\"Muted\");"
+    },
+    {
+      "name": "member.dm",
+      "category": "capability",
+      "capability": "messaging",
+      "signature": "member.dm(content: string): void",
+      "description": "Sends a private DM to this member.",
+      "example": "member.dm(\"Your warning has been processed.\");"
+    },
+    {
+      "name": "createChannel",
+      "category": "capability",
+      "capability": "channels",
+      "signature": "createChannel(opts: { name: string; type?: \"text\" | \"voice\" }): void",
+      "description": "Creates a text or voice channel in the guild.",
+      "example": "createChannel({ name: \"temp-chat\", type: \"text\" });"
+    },
+    {
+      "name": "createRole",
+      "category": "capability",
+      "capability": "channels",
+      "signature": "createRole(opts: { name: string; color?: number }): void",
+      "description": "Creates a role in the guild with an optional color.",
+      "example": "createRole({ name: \"VIP\", color: 0xffd700 });"
+    },
+    {
+      "name": "title",
+      "category": "output",
+      "signature": "title(text: string): OutputToken",
+      "description": "Sets the title heading at the top of the script result card.",
+      "example": "return [title(\"Weekly Cleanup Report\")];"
+    },
+    {
+      "name": "sep",
+      "category": "output",
+      "signature": "sep(): OutputToken",
+      "description": "Draws a visible separator line between output sections.",
+      "example": "return [\n  title(\"Before\"),\n  sep(),\n  title(\"After\")\n];"
+    },
+    {
+      "name": "footer",
+      "category": "output",
+      "signature": "footer(text: string): OutputToken",
+      "description": "Sets a small muted caption at the bottom of the script result card.",
+      "example": "return [footer(\"Automated task executed by bot.\")];"
+    },
+    {
+      "name": "field",
+      "category": "output",
+      "signature": "field(name: string, value: string): OutputToken",
+      "description": "Adds a key-value detail row to the result card.",
+      "example": "return [field(\"Status\", \"Cleaned up 12 roles\")];"
+    },
+    {
+      "name": "display",
+      "category": "output",
+      "signature": "display(content: string): OutputToken",
+      "description": "Renders plain text description in the result card.",
+      "example": "return [display(\"No changes were made to the server.\")];"
+    },
+    {
+      "name": "color",
+      "category": "output",
+      "signature": "color(accent: \"ok\" | \"warn\" | \"danger\" | \"info\" | \"mute\"): OutputToken",
+      "description": "Configures the accent color strip on the results panel.",
+      "example": "return [color(\"danger\"), title(\"Error detected\")];"
+    },
+    {
+      "name": "input.text",
+      "category": "input",
+      "signature": "input.text(name: string, label: string): void",
+      "description": "Declares a single-line text input field in the runner form.",
+      "example": "input.text(\"reason\", \"Reason for purge\");"
+    },
+    {
+      "name": "input.number",
+      "category": "input",
+      "signature": "input.number(name: string, label: string): void",
+      "description": "Declares a number input field in the runner form.",
+      "example": "input.number(\"limit\", \"Max messages to scan\");"
+    },
+    {
+      "name": "input.role",
+      "category": "input",
+      "signature": "input.role(name: string, label: string): void",
+      "description": "Declares a native Discord role picker field in the runner form.",
+      "example": "input.role(\"target\", \"Role to grant\");"
+    },
+    {
+      "name": "input.member",
+      "category": "input",
+      "signature": "input.member(name: string, label: string): void",
+      "description": "Declares a native Discord member picker field in the runner form.",
+      "example": "input.member(\"target\", \"Member to scan\");"
+    },
+    {
+      "name": "input.channel",
+      "category": "input",
+      "signature": "input.channel(name: string, label: string): void",
+      "description": "Declares a native Discord channel picker field in the runner form.",
+      "example": "input.channel(\"target\", \"Log destination\");"
+    },
+    {
+      "name": "fail_input",
+      "category": "input",
+      "signature": "fail_input(message: string): never",
+      "description": "Rejects the form inputs and halts execution, displaying the custom validation message so the user can correct it.",
+      "example": "if (!form.reason) {\n  fail_input(\"Please provide a reason.\");\n}"
+    }
+  ],
+  "examples": [
+    {
+      "title": "List all roles",
+      "code": "return roles\n  .filter(r => r.name !== \"@everyone\")\n  .map(r => r.name);"
+    },
+    {
+      "title": "Structured result card",
+      "code": "return [\n  title(\"Stats\"),\n  { members: guild.memberCount },\n  footer(guild.name)\n];"
+    },
+    {
+      "title": "Grant role to recent joiners (needs 'roles' cap)",
+      "code": "const recent = members.filter(m => (m.joined_days_ago ?? 999) < 7);\nfor (const m of recent) {\n  m.add_role(\"Newcomer\");\n}\nreturn [\n  title(\"Tagged\"),\n  footer(`${recent.length} members`)\n];"
+    },
+    {
+      "title": "Count members with a role (uses inputs)",
+      "code": "input.role(\"role\", \"Pick the role to count\");\nconst role = find_role(form.role);\nif (!role) {\n  fail_input(\"That role no longer exists — pick another.\");\n}\nreturn [\n  title(`Members with ${role.name}`),\n  { count: members_with_role(role.id).length }\n];"
+    }
+  ]
+}

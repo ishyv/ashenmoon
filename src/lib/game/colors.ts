@@ -1,0 +1,84 @@
+/**
+ * Central color palette for the canvas game layer.
+ *
+ * WHY: Pixi draws with numeric hex (0xRRGGBB), so the HyvUI CSS token system
+ * doesn't reach the canvas — these constants are the canvas equivalent of design
+ * tokens. Every raw 0x… literal that was scattered through the game systems
+ * lives here instead, grouped by the concern it serves. Svelte HUD components
+ * keep using CSS tokens; this file is only for what Pixi renders.
+ *
+ * Values are `as const` so each reads back as its own literal type.
+ */
+export const Colors = {
+  /** generic feedback + text scaffolding. */
+  ui: {
+    success: 0x55ff55,
+    warning: 0xffaa55,
+    error: 0xff5555,
+    info: 0xffe0a0,
+    muted: 0xaaaaaa,
+    white: 0xffffff,
+    stroke: 0x000000,
+  },
+  /** gather yields + reward text. */
+  resource: {
+    wood: 0xd4ffc8,
+    ore: 0xffe0a0,
+    xp: 0xffd86b,
+    gold: 0xffdc78,
+    superText: 0xffc84a,
+  },
+  combat: {
+    playerHit: 0xff4444,
+    enemyHit: 0xffffff,
+    playerDmgNum: 0xff6666,
+    enemyDmgNum: 0xffe066,
+    slashArc: 0xfff1c0,
+    windupTint: 0xff6a6a,
+    invulnTint: 0xffcccc,
+    playerDeath: 0xff5555,
+    enemyDeath: 0xc0392b,
+    xpReward: 0xff8855,
+  },
+  evade: {
+    flash: 0x55aaff,
+    dashText: 0xffe0a0,
+    dashParticle: 0xcccccc,
+  },
+  vfx: {
+    highlight: 0xffe9a8,
+    selectionRing: 0xffe9a8,
+    gatherRing: 0xffe066,
+    superGather: 0xffa500,
+    campfire: 0xff6600,
+    campfireMsg: 0xffe066,
+    footstep: 0xb09870,
+    smoke: 0xcccccc,
+    hitFlash: 0xffffff,
+  },
+  particle: {
+    woodDebris: 0x9c704c,
+    oreDebris: 0xffa500,
+    treeBurst: 0x6aaa44,
+    oreBurst: 0xb8b8c8,
+    treeRing: 0x88cc44,
+    oreRing: 0xccccdd,
+  },
+  building: {
+    validPlace: 0x88ff88,
+    invalidPlace: 0xff8888,
+    success: 0x4ade80,
+    particle: 0xcccccc,
+  },
+  world: {
+    dirt: 0x5a4232,
+    camp: 0x8b7355,
+  },
+  /** skill level-up announcement text, per skill family. */
+  skillLevel: {
+    gather: 0x55ff55,
+    superGather: 0xffaa00,
+    evade: 0x55aaff,
+    combat: 0xff8855,
+  },
+} as const;
