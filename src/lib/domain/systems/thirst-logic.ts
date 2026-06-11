@@ -1,5 +1,5 @@
 /**
- * Pure thirst math. The reactive pool lives in `src/lib/game/survival.svelte.ts`;
+ * Pure thirst math. The reactive pool lives in `src/lib/domain/survival.svelte.ts`;
  * this module only answers "how much does thirst drain this tick" so the rates
  * stay unit-testable and tunable as data.
  */

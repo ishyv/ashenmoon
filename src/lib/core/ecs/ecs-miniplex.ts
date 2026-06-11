@@ -29,6 +29,7 @@ export interface Entity {
     hp: number;
     maxHp: number;
     drop: string;
+    gatherableId?: string;
     rpgAction?: "mine" | "forest";
     rpgLocationId?: string;
   };
@@ -38,6 +39,7 @@ export interface Entity {
   pickup?: {
     itemId: string;
     qty: number;
+    gatherableId?: string;
   };
 
   // --- Combat components -----------------------------------------------------

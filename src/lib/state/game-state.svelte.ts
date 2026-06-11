@@ -18,30 +18,41 @@ export interface GameState {
 }
 
 /** Initial baseline for a new game. */
+export function createDefaultSkills(): RpgPlayerState["skills"] {
+  return {
+    lumberjacking: { level: 1, xp: 0, nextXp: 100 },
+    mining: { level: 1, xp: 0, nextXp: 100 },
+    evade: { level: 1, xp: 0, nextXp: 100 },
+    superGather: { level: 1, xp: 0, nextXp: 100 },
+  };
+}
+
+export function createDefaultProfile(opts?: {
+  hpCurrent?: number;
+  weapon?: RpgPlayerState["profile"]["loadout"]["weapon"];
+}): RpgPlayerState["profile"] {
+  return {
+    hpCurrent: opts?.hpCurrent ?? 100,
+    stashSize: 20,
+    loadout: {
+      weapon: opts?.weapon ?? null,
+      shield: null,
+      helmet: null,
+      chest: null,
+      pants: null,
+      boots: null,
+      ring: null,
+      necklace: null,
+    },
+  };
+}
+
 function createInitialState(): GameState {
   return {
     rpg: {
-      profile: {
-        hpCurrent: 100,
-        stashSize: 20,
-        loadout: {
-          weapon: null,
-          shield: null,
-          helmet: null,
-          chest: null,
-          pants: null,
-          boots: null,
-          ring: null,
-          necklace: null,
-        },
-      },
+      profile: createDefaultProfile(),
       inventory: { slots: {} },
-      skills: {
-        lumberjacking: { level: 1, xp: 0, nextXp: 100 },
-        mining: { level: 1, xp: 0, nextXp: 100 },
-        evade: { level: 1, xp: 0, nextXp: 100 },
-        superGather: { level: 1, xp: 0, nextXp: 100 },
-      },
+      skills: createDefaultSkills(),
     },
     survival: {
       thirst: 100,
@@ -56,6 +67,12 @@ function createInitialState(): GameState {
  */
 export const gameState = $state<GameState>(createInitialState());
 
+let persistenceHydrated = false;
+
+export function markGameStateHydrated(): void {
+  persistenceHydrated = true;
+}
+
 /**
  * Loads the full game state from the server.
  */
@@ -67,6 +84,7 @@ export async function loadGameState(): Promise<void> {
       if (data) {
         // Deep merge/assignment to maintain reactivity
         Object.assign(gameState, data);
+        markGameStateHydrated();
       }
     }
   } catch (e) {
@@ -79,13 +97,14 @@ export async function loadGameState(): Promise<void> {
  * Watches the `gameState` for any deep changes and syncs them to the server
  * using a debounced write to prevent performance issues.
  */
-let saveTimeout: any = null;
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 $effect.root(() => {
   $effect(() => {
     // Svelte 5 automatically tracks every reactive property accessed here.
     // By taking a full snapshot, we track everything in gameState.
     const snapshot = $state.snapshot(gameState);
+    if (!persistenceHydrated) return;
 
     // Debounce the save operation (500ms)
     if (saveTimeout) clearTimeout(saveTimeout);

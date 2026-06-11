@@ -2,18 +2,18 @@
  * Reactive binding between live game state and the pure reaction processors.
  * Listens for environment changes and applies temperature / ambient-ignition
  * reactions to the player's inventory. All decision logic lives in the pure
- * `item-reactions.ts`; this file only wires it to `rpgState` and the event bus.
+ * `item-reactions.ts`; this file only wires it to game state and the event bus.
  *
- * Layering note: importing `rpgState` (game layer) here is an existing seam, the
- * reaction *rules* themselves stay pure and game-free in `item-reactions.ts`.
+ * The reaction *rules* themselves stay pure and game-free in `item-reactions.ts`.
  */
 import { evaluateEnvironmentalExposure } from "./item-reactions";
 import { onEnvironmentChanged, type EnvironmentChangedEvent } from "./environment-system";
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { setRpgInventory } from "$lib/state/rpg-actions.svelte";
 
 /** Applies environmental reactions (temperature, flammability) when the environment shifts. */
 export function onEnvironmentChangedEvent(event: EnvironmentChangedEvent): void {
-  const inventory = rpgState.inventory;
+  const inventory = gameState.rpg.inventory;
   if (!inventory) return;
   if (event.previous.temperature === event.current.temperature) return;
 
@@ -24,7 +24,7 @@ export function onEnvironmentChangedEvent(event: EnvironmentChangedEvent): void 
   });
 
   if (next !== inventory) {
-    rpgState.inventory = next;
+    setRpgInventory(next);
   }
 }
 

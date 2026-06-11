@@ -18,7 +18,11 @@ function def(carry?: CarryClass): ItemDefinition {
     description: "",
     rarity: Rarity.Common,
     category: Category.Tool,
-    carry,
+    physical: {
+      carryClass: carry ?? DEFAULT_CARRY_CLASS,
+      weight: 1,
+      stackLimit: 20,
+    },
     traits: [],
   };
 }
@@ -52,6 +56,32 @@ describe("content tagging", () => {
   it("tags survival items as pocket", () => {
     expect(carryClassOf(ITEM_DEFINITIONS.clean_water)).toBe("pocket");
     expect(carryClassOf(ITEM_DEFINITIONS.dirty_water)).toBe("pocket");
+  });
+
+  it("requires physical data on milestone items", () => {
+    for (const itemId of [
+      "stick",
+      "branch",
+      "flint_shard",
+      "grass_fiber",
+      "leaves",
+      "bark",
+      "berries",
+      "mushroom",
+      "dirty_water",
+      "clean_water",
+      "clay",
+      "moss",
+      "ash",
+      "charcoal",
+      "weak_medicine",
+      "debug_panacea",
+    ]) {
+      const defn = ITEM_DEFINITIONS[itemId];
+      expect(defn, itemId).toBeDefined();
+      expect(defn.physical.weight, itemId).toBeGreaterThan(0);
+      expect(["pocket", "pack", "haul"], itemId).toContain(defn.physical.carryClass);
+    }
   });
 
   it("indexes haul items (none yet, but the set exists and excludes stashables)", () => {

@@ -4,7 +4,7 @@
  * makes you sick teaches its toxicity), not handed over up front. These pure
  * helpers own the store shape, queries, and the inspect view-model.
  */
-import type { ItemDefinition, ItemEffect } from "$lib/domain/items";
+import type { InventoryEffect, ItemDefinition, VitalsEffect } from "$lib/domain/items";
 
 /** A discoverable fact about an item. */
 export type KnowledgeProperty =
@@ -54,7 +54,9 @@ export function learn(
   return { ...knowledge, [itemId]: next };
 }
 
-function effectIsHarmful(effect: ItemEffect): boolean {
+type KnowledgeEffect = InventoryEffect | VitalsEffect;
+
+function effectIsHarmful(effect: KnowledgeEffect): boolean {
   switch (effect.kind) {
     case "damage_holder":
     case "add_status":
@@ -66,7 +68,7 @@ function effectIsHarmful(effect: ItemEffect): boolean {
   }
 }
 
-function effectRestoresThirst(effect: ItemEffect): boolean {
+function effectRestoresThirst(effect: KnowledgeEffect): boolean {
   if (effect.kind === "restore_thirst") return true;
   if (effect.kind === "chance") return effectRestoresThirst(effect.effect);
   return false;

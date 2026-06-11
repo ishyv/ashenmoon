@@ -5,7 +5,7 @@ import type { InputResource } from "$lib/core/input";
 import { TILE, type MapResource } from "$lib/core/systems/map";
 import type { VFXResource } from "$lib/core/vfx";
 import { spawnEnvFloatingText, spawnEnvParticles, triggerCameraShake } from "$lib/core/vfx";
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
 import { findPlayerEntity } from "$lib/core/ecs/entity-queries";
@@ -201,7 +201,7 @@ export function triggerDashSystem(
 
   movement.isDashing = true;
   movement.dashActiveTimer = config.dashDuration;
-  const evadeLevel = rpgState.skills?.evade?.level ?? 1;
+  const evadeLevel = gameState.rpg.skills?.evade?.level ?? 1;
   const currentEvadeCooldown = Math.max(0.5, config.dashCooldown - (evadeLevel - 1) * 0.05);
   movement.dashCooldownTimer = currentEvadeCooldown;
 
@@ -240,7 +240,7 @@ export function playerMovementSystem(
         entityLayer,
         playerSprite,
         playerEntity,
-        rpgState.profile === null
+        gameState.rpg.profile === null
       );
     }
   }

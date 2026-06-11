@@ -1,12 +1,12 @@
 /**
  * Serializable player-state types: the canonical description of what a save
- * contains. The reactive orchestrators in `src/lib/game/*.svelte.ts` own the
+ * contains. The reactive orchestrators in `src/lib/domain/*.svelte.ts` and
+ * `src/lib/state/*.svelte.ts` own the
  * live runtime state; this module describes the snapshot that gets persisted
  * and hydrated.
  *
- * Layering note: the server-backed core (`RpgPlayerState`) still lives in
- * `src/lib/game/rpg-types.ts` and is imported type-only here. It is a candidate
- * to migrate into this module once the `state/` slice owns hydration end to end.
+ * Layering note: the server-backed core (`RpgPlayerState`) lives in
+ * `src/lib/domain/rpg-types.ts` and is imported type-only here.
  */
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import { SAVE_VERSION } from "$lib/state/persistence/migrations";

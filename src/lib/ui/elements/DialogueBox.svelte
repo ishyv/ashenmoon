@@ -1,7 +1,9 @@
 <script lang="ts">
 import { activeQuests, dialogueState } from "$lib/domain/quests.svelte";
-import { devGiveItem, rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { devGiveItem } from "$lib/state/dev-rpg-actions";
 import { playPickupSound, playCraftSound } from "$lib/core/audio-synthesis";
+import { learnRecipe } from "$lib/domain/crafting.svelte";
 
 // Typings
 interface Objective {
@@ -14,12 +16,12 @@ interface Objective {
 
 let textToShow = $state("");
 let currentText = "";
-let typeInterval: any = null;
+let typeInterval: ReturnType<typeof setInterval> | null = null;
 
 // Determine current dialog state based on active quests
 function getDialogText(): string {
   if (!activeQuests.currentQuestId) {
-    return "Scout... thank the gods you survived. The blighted winds of Ashenmoor have taken our wagon, and the crew is scattered. We have nothing but this dying campfire. We need tools to rebuild. Search the forest floor for Loose Twigs and Loose Stones, then craft a Flint Axe so we can gather timber.";
+    return "scout... the wagon is gone and the woods are not feeling generous. find a stick, a flint shard, and grass fiber. i will show you the flint axe recipe.";
   }
 
   if (activeQuests.currentQuestId === "scavenger_tools") {
@@ -31,7 +33,7 @@ function getDialogText(): string {
     if (allDoneExceptTalk) {
       return "Incredible work! That Flint Axe will serve us well. Here, take this Copper Ingot from our salvaged stash. We must secure our camp next. We need to gather real timber from the oak trees and keep this fire burning bright.";
     }
-    return "Any luck finding twigs and stones? Remember, you can craft a Flint Axe from your stash menu once you have 5 Twigs and 3 Stones. The forest floor is littered with debris.";
+    return "still missing pieces? you need one stick, one flint shard, and one grass fiber. open the stash, craft the flint axe, then equip it.";
   }
 
   if (activeQuests.currentQuestId === "securing_perimeter") {
@@ -88,7 +90,7 @@ $effect(() => {
           textToShow += rawText[i];
           i++;
         } else {
-          clearInterval(typeInterval);
+          if (typeInterval) clearInterval(typeInterval);
         }
       }, 15);
     }
@@ -103,26 +105,33 @@ function handleAction() {
   if (!activeQuests.currentQuestId) {
     // Accept scavenger_tools quest
     activeQuests.currentQuestId = "scavenger_tools";
+    learnRecipe("flint_axe");
     
     // Retrospective check of inventory items
-    const slots = rpgState.inventory?.slots;
-    const twigQty = slots && slots.oak_wood && "qty" in slots.oak_wood ? slots.oak_wood.qty : 0;
-    const stoneQty = slots && slots.stone && "qty" in slots.stone ? slots.stone.qty : 0;
+    const slots = gameState.rpg.inventory?.slots;
+    const stickQty = slots && slots.stick && "qty" in slots.stick ? slots.stick.qty : 0;
+    const flintQty = slots && slots.flint_shard && "qty" in slots.flint_shard ? slots.flint_shard.qty : 0;
+    const fiberQty = slots && slots.grass_fiber && "qty" in slots.grass_fiber ? slots.grass_fiber.qty : 0;
     
-    const equippedWeapon = rpgState.profile?.loadout?.weapon;
+    const equippedWeapon = gameState.rpg.profile?.loadout?.weapon;
     const hasAxeEquipped = equippedWeapon && (typeof equippedWeapon === "string" ? equippedWeapon === "flint_axe" : equippedWeapon.itemId === "flint_axe");
     const axeQty = (slots && slots.flint_axe && "qty" in slots.flint_axe ? slots.flint_axe.qty : 0) + (hasAxeEquipped ? 1 : 0);
     
     const quest = activeQuests.quests.scavenger_tools;
-    const twigsObj = quest.objectives.find((o) => o.id === "gather_twigs");
-    if (twigsObj) {
-      twigsObj.current = Math.min(twigsObj.target, twigQty);
-      if (twigsObj.current >= twigsObj.target) twigsObj.completed = true;
+    const stickObj = quest.objectives.find((o) => o.id === "gather_stick");
+    if (stickObj) {
+      stickObj.current = Math.min(stickObj.target, stickQty);
+      if (stickObj.current >= stickObj.target) stickObj.completed = true;
     }
-    const stonesObj = quest.objectives.find((o) => o.id === "gather_stones");
-    if (stonesObj) {
-      stonesObj.current = Math.min(stonesObj.target, stoneQty);
-      if (stonesObj.current >= stonesObj.target) stonesObj.completed = true;
+    const flintObj = quest.objectives.find((o) => o.id === "gather_flint");
+    if (flintObj) {
+      flintObj.current = Math.min(flintObj.target, flintQty);
+      if (flintObj.current >= flintObj.target) flintObj.completed = true;
+    }
+    const fiberObj = quest.objectives.find((o) => o.id === "gather_fiber");
+    if (fiberObj) {
+      fiberObj.current = Math.min(fiberObj.target, fiberQty);
+      if (fiberObj.current >= fiberObj.target) fiberObj.completed = true;
     }
     const axeObj = quest.objectives.find((o) => o.id === "craft_axe");
     if (axeObj) {

@@ -1,6 +1,15 @@
 import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { rpgService } from "$lib/server/rpg-service";
+import type { RpgPlayerState } from "$lib/domain/rpg-types";
+
+interface GameStatePayload {
+  rpg?: Partial<RpgPlayerState> | null;
+  survival?: {
+    thirst?: number;
+    wasParched?: boolean;
+  };
+}
 
 /**
  * Loads the full game state for the current user.
@@ -9,8 +18,14 @@ import { rpgService } from "$lib/server/rpg-service";
 export const GET: RequestHandler = async ({ locals }) => {
   // Use a mock user ID for local-first development
   const userId = "mock_user";
-  const state = await rpgService.getPlayerState(userId);
-  return json(state);
+  const rpg = await rpgService.getPlayerState(userId);
+  return json({
+    rpg,
+    survival: {
+      thirst: 100,
+      wasParched: false,
+    },
+  });
 };
 
 /**
@@ -19,10 +34,10 @@ export const GET: RequestHandler = async ({ locals }) => {
  */
 export const POST: RequestHandler = async ({ request }) => {
   const userId = "mock_user";
-  const snapshot = await request.json();
+  const snapshot = (await request.json()) as GameStatePayload | null;
   
-  if (snapshot) {
-    await rpgService.savePlayerState(userId, snapshot);
+  if (snapshot?.rpg) {
+    await rpgService.savePlayerState(userId, snapshot.rpg);
     return json({ ok: true });
   }
   

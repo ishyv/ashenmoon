@@ -1,10 +1,10 @@
 /**
- * Read helpers over `rpgState.inventory` / `rpgState.loadout`. WHY: call sites
+ * Read helpers over `gameState.rpg.inventory` / loadout. WHY: call sites
  * were reaching into the slot union by hand
  * (`slots[id] && "qty" in slots[id] ? slots[id].qty : 0`), which is easy to get
  * wrong and hides intent. These keep the slot-shape knowledge in one place.
  */
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
 import { matchesToolKind } from "$lib/domain/gathering/gather-system";
@@ -13,7 +13,7 @@ type WeaponSlot = RpgPlayerState["profile"]["loadout"]["weapon"];
 
 /** Stackable quantity of an item (0 if absent, or the slot holds instances not a qty). */
 export function getItemQty(itemId: string): number {
-  const slot = rpgState.inventory?.slots[itemId];
+  const slot = gameState.rpg.inventory?.slots[itemId];
   return slot && "qty" in slot ? slot.qty : 0;
 }
 
@@ -23,7 +23,7 @@ export function hasItem(itemId: string, qty: number): boolean {
 
 /** The equipped weapon slot raw (may be a string id or an instance object), or null. */
 export function getEquippedWeapon(): WeaponSlot {
-  return rpgState.profile?.loadout?.weapon ?? null;
+  return gameState.rpg.profile?.loadout?.weapon ?? null;
 }
 
 /** Normalized item id of the equipped weapon, or null when nothing is equipped. */

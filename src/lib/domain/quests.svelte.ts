@@ -39,12 +39,13 @@ export const activeQuests = $state<{
     scavenger_tools: {
       id: "scavenger_tools",
       title: "Scavenger's Tools",
-      description: "Gather wood and stones to craft a flint axe.",
+      description: "Gather simple materials to craft a flint axe.",
       completed: false,
       rewardClaimed: false,
       objectives: [
-        { id: "gather_twigs", label: "Gather Loose Twigs", current: 0, target: 5, completed: false },
-        { id: "gather_stones", label: "Gather Loose Stones", current: 0, target: 3, completed: false },
+        { id: "gather_stick", label: "Gather Stick", current: 0, target: 1, completed: false },
+        { id: "gather_flint", label: "Gather Flint Shard", current: 0, target: 1, completed: false },
+        { id: "gather_fiber", label: "Gather Grass Fiber", current: 0, target: 1, completed: false },
         { id: "craft_axe", label: "Craft Flint Axe", current: 0, target: 1, completed: false },
         { id: "talk_vane", label: "Report back to Commander Vane", current: 0, target: 1, completed: false },
       ],
@@ -114,9 +115,11 @@ export function triggerQuestEvent(action: string, itemId?: string, amount = 1): 
       match = true;
     } else if (action === GameEvent.Refuel && obj.id === "warm_fire") {
       match = true;
-    } else if (action === GameEvent.Pickup && obj.id === "gather_twigs" && itemId === "oak_wood") {
+    } else if (action === GameEvent.Pickup && obj.id === "gather_stick" && itemId === "stick") {
       match = true;
-    } else if (action === GameEvent.Pickup && obj.id === "gather_stones" && itemId === "stone") {
+    } else if (action === GameEvent.Pickup && obj.id === "gather_flint" && itemId === "flint_shard") {
+      match = true;
+    } else if (action === GameEvent.Pickup && obj.id === "gather_fiber" && itemId === "grass_fiber") {
       match = true;
     } else if (action === GameEvent.Craft && obj.id === "craft_axe" && itemId === "flint_axe") {
       match = true;

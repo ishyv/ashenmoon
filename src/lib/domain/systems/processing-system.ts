@@ -1,12 +1,13 @@
 import { getItemDef } from "$lib/domain/items";
+import type { StationDefinition } from "$lib/domain/stations";
 import type { InventoryEffect } from "$lib/domain/items/item-effects";
 import type { Inventory } from "./inventory-system";
 import { applyInventoryEffectToQty } from "./item-effect-system";
 
-export interface ProcessingStation {
-  kind: "campfire" | "smelter";
-  ambientTemp: number;
-}
+export type ProcessingStation = Pick<
+  StationDefinition,
+  "id" | "processTypes" | "heatOutput"
+>;
 
 export interface ProcessingResult {
   itemId: string;
@@ -29,8 +30,8 @@ export function findProcessableItem(
     const boilable = def.traits.find((t) => t.kind === "boilable");
     if (
       boilable?.kind === "boilable" &&
-      station.kind === "campfire" &&
-      station.ambientTemp >= boilable.minTemp
+      station.processTypes.includes("boil") &&
+      (station.heatOutput ?? 0) >= boilable.minTemp
     ) {
       return {
         itemId,

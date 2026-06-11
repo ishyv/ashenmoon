@@ -5,10 +5,11 @@
  * the two can never drift.
  */
 import { type CraftRecipe, getRecipe } from "./recipes";
+import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 
 /** A stackable inventory slot. Equipment-style instance slots are ignored by crafting. */
 type StackSlot = { readonly qty: number };
-type InventorySlot = StackSlot | { readonly instances: readonly unknown[] };
+type InventorySlot = RpgInventorySlot;
 
 /** The slot map crafting reads and writes. Matches `RpgPlayerState.inventory.slots`. */
 export type CraftSlots = Readonly<Record<string, InventorySlot>>;

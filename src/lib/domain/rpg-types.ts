@@ -17,26 +17,36 @@ export interface RpgSkillState {
   nextXp: number;
 }
 
+export interface RpgDurableEquipment {
+  instanceId: string;
+  itemId: string;
+  durability: number;
+}
+
+export type RpgWeaponSlot = RpgDurableEquipment | string | null;
+export type RpgEquipmentSlot = RpgDurableEquipment | string | null;
+export type RpgInventorySlot =
+  | { qty: number }
+  | {
+      instances: {
+        instanceId: string;
+        durability: number;
+      }[];
+    };
+
 export interface RpgPlayerState {
   profile: {
     hpCurrent: number;
     stashSize: number;
     loadout: {
-      weapon:
-        | {
-            instanceId: string;
-            itemId: string;
-            durability: number;
-          }
-        | string
-        | null;
-      shield: any;
-      helmet: any;
-      chest: any;
-      pants: any;
-      boots: any;
-      ring: any;
-      necklace: any;
+      weapon: RpgWeaponSlot;
+      shield: RpgEquipmentSlot;
+      helmet: RpgEquipmentSlot;
+      chest: RpgEquipmentSlot;
+      pants: RpgEquipmentSlot;
+      boots: RpgEquipmentSlot;
+      ring: RpgEquipmentSlot;
+      necklace: RpgEquipmentSlot;
     };
     buildings?: {
       id: string;
@@ -47,16 +57,7 @@ export interface RpgPlayerState {
     gatheredPickups?: string[];
   };
   inventory: {
-    slots: Record<
-      string,
-      | { qty: number }
-      | {
-          instances: {
-            instanceId: string;
-            durability: number;
-          }[];
-        }
-    >;
+    slots: Record<string, RpgInventorySlot>;
   };
   skills: {
     lumberjacking: RpgSkillState;

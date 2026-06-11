@@ -13,18 +13,18 @@ function slots(map: Record<string, number>): CraftSlots {
 
 describe("matchExperiment", () => {
   it("matches the exact ingredient set with enough of each", () => {
-    const { recipe } = matchExperiment({ oak_wood: 5, stone: 3 });
+    const { recipe } = matchExperiment({ stick: 1, flint_shard: 1, grass_fiber: 1 });
     expect(recipe?.id).toBe("flint_axe");
   });
 
   it("does not match when an extra ingredient is present", () => {
-    const { recipe, partial } = matchExperiment({ oak_wood: 5, stone: 3, charcoal: 1 });
+    const { recipe, partial } = matchExperiment({ stick: 1, flint_shard: 1, grass_fiber: 1, charcoal: 1 });
     expect(recipe).toBeNull();
     expect(partial.length).toBeGreaterThan(0); // shares ingredients -> hints
   });
 
   it("does not match when short on a material", () => {
-    const { recipe } = matchExperiment({ oak_wood: 5, stone: 1 });
+    const { recipe } = matchExperiment({ stick: 1, flint_shard: 1 });
     expect(recipe).toBeNull();
   });
 
@@ -37,8 +37,8 @@ describe("matchExperiment", () => {
 
 describe("resolveExperiment", () => {
   it("discovers and crafts a matching recipe, drawing from inventory", () => {
-    const inv = slots({ oak_wood: 5, stone: 3 });
-    const result = resolveExperiment(inv, { oak_wood: 5, stone: 3 }, { isNearCampfire: false });
+    const inv = slots({ stick: 1, flint_shard: 1, grass_fiber: 1 });
+    const result = resolveExperiment(inv, { stick: 1, flint_shard: 1, grass_fiber: 1 }, { isNearCampfire: false });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.recipe.id).toBe("flint_axe");
@@ -57,7 +57,7 @@ describe("resolveExperiment", () => {
   });
 
   it("reports insufficient_materials when the inventory lacks what the inputs claim", () => {
-    const result = resolveExperiment(slots({ oak_wood: 1 }), { oak_wood: 5, stone: 3 }, { isNearCampfire: false });
+    const result = resolveExperiment(slots({ stick: 1 }), { stick: 1, flint_shard: 1, grass_fiber: 1 }, { isNearCampfire: false });
     expect(result).toEqual({ ok: false, reason: "insufficient_materials" });
   });
 });

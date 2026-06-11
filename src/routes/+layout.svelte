@@ -18,37 +18,43 @@ const themeRegister = $derived<string | null>(
 );
 </script>
 
-<!-- AppShell sets mission-control weight register on <body> + Vignette overlay.
-     loadFonts=false because app.html pre-establishes the IBM Plex Mono link. -->
-<AppShell register="mission-control" loadFonts={false}>
-  {#if themeRegister === "hextech"}
-    <div data-register="hextech" class="theme-scope">
-      <div class="ambient" aria-hidden="true"><HexGrid /></div>
-      {#key $page.url.pathname}
-        <div in:fade={{ duration: 180 }}>{@render children()}</div>
-      {/key}
-    </div>
-  {:else if themeRegister === "arcane"}
-    <div data-register="arcane" class="theme-scope">
-      <div class="ambient" aria-hidden="true">
-        <ShimmerCloud />
-        <ArcaneVein x1="4%" y1="18%" x2="96%" y2="22%" />
-        <ArcaneVein x1="4%" y1="78%" x2="96%" y2="82%" />
+{#if $page.url.pathname.startsWith("/game")}
+  {@render children()}
+{:else}
+  <!-- AppShell sets mission-control weight register on <body> + Vignette overlay.
+       loadFonts=false because app.html pre-establishes the IBM Plex Mono link.
+       The playable game route opts out so Pixi owns the viewport without
+       decorative app-shell layers over or under the canvas. -->
+  <AppShell register="mission-control" loadFonts={false}>
+    {#if themeRegister === "hextech"}
+      <div data-register="hextech" class="theme-scope">
+        <div class="ambient" aria-hidden="true"><HexGrid /></div>
+        {#key $page.url.pathname}
+          <div in:fade={{ duration: 180 }}>{@render children()}</div>
+        {/key}
       </div>
-      {#key $page.url.pathname}
-        <div in:fade={{ duration: 180 }}>{@render children()}</div>
-      {/key}
-    </div>
-  {:else}
-    <div class="base-scope">
-      <div class="ambient ambient-base" aria-hidden="true"><GridOverlay /></div>
-      {#key $page.url.pathname}
-        <div in:fade={{ duration: 180 }}>{@render children()}</div>
-      {/key}
-    </div>
-  {/if}
-  <Toast />
-</AppShell>
+    {:else if themeRegister === "arcane"}
+      <div data-register="arcane" class="theme-scope">
+        <div class="ambient" aria-hidden="true">
+          <ShimmerCloud />
+          <ArcaneVein x1="4%" y1="18%" x2="96%" y2="22%" />
+          <ArcaneVein x1="4%" y1="78%" x2="96%" y2="82%" />
+        </div>
+        {#key $page.url.pathname}
+          <div in:fade={{ duration: 180 }}>{@render children()}</div>
+        {/key}
+      </div>
+    {:else}
+      <div class="base-scope">
+        <div class="ambient ambient-base" aria-hidden="true"><GridOverlay /></div>
+        {#key $page.url.pathname}
+          <div in:fade={{ duration: 180 }}>{@render children()}</div>
+        {/key}
+      </div>
+    {/if}
+    <Toast />
+  </AppShell>
+{/if}
 
 <style>
   /* Theme/base scope wraps the page subtree so ambient layers anchor to the

@@ -30,18 +30,18 @@ describe("checkCraft", () => {
   });
 
   it("succeeds when materials suffice", () => {
-    const result = checkCraft(slots({ oak_wood: 5, stone: 3 }), "flint_axe", away);
+    const result = checkCraft(slots({ stick: 1, flint_shard: 1, grass_fiber: 1 }), "flint_axe", away);
     expect(result.ok).toBe(true);
   });
 
   it("reports missing materials with shortfall detail", () => {
-    const result = checkCraft(slots({ oak_wood: 2 }), "flint_axe", away);
+    const result = checkCraft(slots({ stick: 1 }), "flint_axe", away);
     expect(result).toMatchObject({
       ok: false,
       reason: "insufficient_materials",
       missing: [
-        { itemId: "oak_wood", required: 5, have: 2 },
-        { itemId: "stone", required: 3, have: 0 },
+        { itemId: "flint_shard", required: 1, have: 0 },
+        { itemId: "grass_fiber", required: 1, have: 0 },
       ],
     });
   });
@@ -55,24 +55,24 @@ describe("checkCraft", () => {
 
 describe("resolveCraft", () => {
   it("deducts costs and adds the output without mutating input", () => {
-    const input = slots({ oak_wood: 8, stone: 3 });
+    const input = slots({ stick: 2, flint_shard: 1, grass_fiber: 1 });
     const result = resolveCraft(input, "flint_axe", away);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.slots).toEqual({
-      oak_wood: { qty: 3 },
+      stick: { qty: 1 },
       flint_axe: { qty: 1 },
     });
-    // stone fully consumed -> slot removed
-    expect(result.slots.stone).toBeUndefined();
+    expect(result.slots.flint_shard).toBeUndefined();
+    expect(result.slots.grass_fiber).toBeUndefined();
     // input untouched
-    expect(input).toEqual(slots({ oak_wood: 8, stone: 3 }));
+    expect(input).toEqual(slots({ stick: 2, flint_shard: 1, grass_fiber: 1 }));
   });
 
   it("stacks onto an existing output stack", () => {
-    const result = resolveCraft(slots({ oak_wood: 5, charcoal: 2 }), "charcoal", away);
+    const result = resolveCraft(slots({ oak_wood: 5, charcoal: 2 }), "charcoal", near);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // 5 - 2 = 3 oak_wood, charcoal 2 + 1 = 3
@@ -80,7 +80,7 @@ describe("resolveCraft", () => {
   });
 
   it("returns the failure unchanged when the craft is impossible", () => {
-    expect(resolveCraft(slots({ oak_wood: 1 }), "flint_axe", away)).toMatchObject({
+    expect(resolveCraft(slots({ stick: 1 }), "flint_axe", away)).toMatchObject({
       ok: false,
       reason: "insufficient_materials",
     });

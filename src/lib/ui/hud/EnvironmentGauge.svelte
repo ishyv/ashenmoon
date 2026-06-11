@@ -5,7 +5,8 @@
  * 2. A minimalist, glassmorphic Temperature widget in the top-left corner.
  */
 import { fade } from "svelte/transition";
-import { activeEnvironment, uiPreferences } from "$lib/state/rpg-state.svelte";
+import { activeEnvironment } from "$lib/state/environment-state.svelte";
+import { uiPreferences } from "$lib/state/runtime-ui-state.svelte";
 
 let showTempWidget = $state(true);
 let tempFadeTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -89,7 +90,7 @@ $effect(() => {
 <!-- Minimalist, corner temperature pill widget -->
 {#if showTempWidget}
   <div transition:fade={{ duration: 300 }} class="temp-widget">
-    <span class="temp-icon {getTempColorName()}">🌡️</span>
+    <span class="temp-icon {getTempColorName()}">temp</span>
     <span class="temp-val">{activeEnvironment.temperature}°C</span>
   </div>
 {/if}
@@ -152,7 +153,7 @@ $effect(() => {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.72rem;
-    color: #f0f0f0;
+    color: var(--color-text, white);
     pointer-events: auto;
     user-select: none;
     z-index: 90;
@@ -163,10 +164,10 @@ $effect(() => {
     font-size: 0.8rem;
   }
 
-  .temp-icon.cold { color: #3b82f6; text-shadow: 0 0 4px rgba(59, 130, 246, 0.4); }
-  .temp-icon.neutral { color: #10b981; }
-  .temp-icon.warm { color: #f59e0b; }
-  .temp-icon.hot { color: #ef4444; text-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+  .temp-icon.cold { color: var(--color-cold, skyblue); text-shadow: 0 0 4px rgba(59, 130, 246, 0.4); }
+  .temp-icon.neutral { color: var(--color-success, lightgreen); }
+  .temp-icon.warm { color: var(--color-warning, gold); }
+  .temp-icon.hot { color: var(--color-danger, tomato); text-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
 
   @keyframes pulse {
     0% { transform: scale(1); opacity: calc(var(--intensity-opacity) * 0.7); }

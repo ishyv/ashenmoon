@@ -1,6 +1,7 @@
 <script lang="ts">
-import { rpgState, setRpgState } from "$lib/state/rpg-state.svelte";
-import { getItemDef, iconUrlFor } from "$lib/domain/items";
+import { gameState } from "$lib/state/game-state.svelte";
+import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { getItemDef } from "$lib/domain/items";
 
 let hoveredSlot = $state<string | null>(null);
 
@@ -14,9 +15,9 @@ function getDurabilityPercent(current: number, max: number): number {
 }
 
 function getDurabilityColor(percent: number): string {
-  if (percent > 50) return "#4caf50"; // Green
-  if (percent > 20) return "#ff9800"; // Orange
-  return "#f44336"; // Red
+  if (percent > 50) return "var(--gear-good)";
+  if (percent > 20) return "var(--gear-warning)";
+  return "var(--gear-danger)";
 }
 
 async function unequipTool() {
@@ -28,7 +29,7 @@ async function unequipTool() {
     });
     if (res.ok) {
       const newState = await res.json();
-      setRpgState(newState);
+      applyRpgState(newState);
     }
   } catch (err) {
     console.error("Failed to unequip:", err);
@@ -36,7 +37,7 @@ async function unequipTool() {
 }
 
 const weapon = $derived(() => {
-  const w = rpgState.profile?.loadout?.weapon;
+  const w = gameState.rpg.profile?.loadout?.weapon;
   if (!w) return null;
   if (typeof w === "string") {
     return { itemId: w, durability: getMaxDurability(w) };
@@ -52,7 +53,7 @@ const weaponMeta = $derived(() => {
 
 <div class="equip-panel">
   <div class="panel-header">
-    🛡️ Loadout & Gear
+    loadout
   </div>
 
   <div class="gear-slots">
@@ -64,7 +65,7 @@ const weaponMeta = $derived(() => {
         onmouseenter={() => (hoveredSlot = "head")} 
         onmouseleave={() => (hoveredSlot = null)}
       >
-        <span class="slot-placeholder">🪖</span>
+        <span class="slot-placeholder">head</span>
       </div>
     </div>
 
@@ -83,16 +84,14 @@ const weaponMeta = $derived(() => {
         {#if weapon()}
           {@const meta = weaponMeta()}
           {#if meta}
-            <img src={iconUrlFor(meta.id)} alt={meta.name} class="item-icon-img" onerror={(e) => {
-              const img = e.currentTarget as HTMLImageElement;
-              img.style.display = 'none';
-              const fallback = img.nextElementSibling as HTMLElement;
-              if (fallback) fallback.style.display = 'inline';
-            }} />
+            {#if meta.iconUrl}
+              <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+            {:else}
+              <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
+            {/if}
           {/if}
-          <span class="slot-icon" style={meta ? "display:none" : ""}>⛏️</span>
         {:else}
-          <span class="slot-placeholder">🗡️</span>
+          <span class="slot-placeholder">tool</span>
         {/if}
       </div>
 
@@ -102,7 +101,7 @@ const weaponMeta = $derived(() => {
         onmouseenter={() => (hoveredSlot = "chest")} 
         onmouseleave={() => (hoveredSlot = null)}
       >
-        <span class="slot-placeholder">👕</span>
+        <span class="slot-placeholder">body</span>
       </div>
 
       <div 
@@ -111,7 +110,7 @@ const weaponMeta = $derived(() => {
         onmouseenter={() => (hoveredSlot = "shield")} 
         onmouseleave={() => (hoveredSlot = null)}
       >
-        <span class="slot-placeholder">🛡️</span>
+        <span class="slot-placeholder">guard</span>
       </div>
     </div>
 
@@ -123,7 +122,7 @@ const weaponMeta = $derived(() => {
         onmouseenter={() => (hoveredSlot = "legs")} 
         onmouseleave={() => (hoveredSlot = null)}
       >
-        <span class="slot-placeholder">👖</span>
+        <span class="slot-placeholder">legs</span>
       </div>
     </div>
 
@@ -135,7 +134,7 @@ const weaponMeta = $derived(() => {
         onmouseenter={() => (hoveredSlot = "feet")} 
         onmouseleave={() => (hoveredSlot = null)}
       >
-        <span class="slot-placeholder">🥾</span>
+        <span class="slot-placeholder">feet</span>
       </div>
     </div>
   </div>
@@ -161,7 +160,7 @@ const weaponMeta = $derived(() => {
       </div>
     {:else if hoveredSlot}
       <div class="details-locked">
-        <span class="lock-icon">🔒</span> Slot Locked (Tier 2 Shelter Required)
+        <span class="lock-icon">locked</span> tier 2 shelter required
       </div>
     {:else if weapon()}
       {@const maxDur = getMaxDurability(weapon()!.itemId)}
@@ -181,7 +180,7 @@ const weaponMeta = $derived(() => {
       </div>
     {:else}
       <div class="details-empty">
-        ⚠️ No tool equipped. You cannot gather without an equipped tool!
+        no tool equipped. trees and stone nodes need the right tool.
       </div>
     {/if}
   </div>
@@ -189,6 +188,9 @@ const weaponMeta = $derived(() => {
 
 <style>
   .equip-panel {
+    --gear-good: var(--color-success, lightgreen);
+    --gear-warning: var(--color-warning, gold);
+    --gear-danger: var(--color-danger, tomato);
     position: absolute;
     top: 5rem;
     left: 1.1rem;
@@ -202,7 +204,7 @@ const weaponMeta = $derived(() => {
     z-index: 90;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     font-family: "IBM Plex Mono", monospace;
-    color: #f0f0f0;
+    color: var(--color-text, white);
     user-select: none;
     pointer-events: auto;
   }

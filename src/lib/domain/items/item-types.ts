@@ -33,9 +33,15 @@ export type CarryClass = "pocket" | "pack" | "haul";
 /** Carry class assumed when an item definition does not specify one. */
 export const DEFAULT_CARRY_CLASS: CarryClass = "pack";
 
+export interface ItemPhysicalProperties {
+  carryClass: CarryClass;
+  weight: number;
+  stackLimit?: number;
+}
+
 /** Resolves an item's carry class, falling back to the default. */
-export function carryClassOf(def: Pick<ItemDefinition, "carry">): CarryClass {
-  return def.carry ?? DEFAULT_CARRY_CLASS;
+export function carryClassOf(def: Pick<ItemDefinition, "physical">): CarryClass {
+  return def.physical.carryClass;
 }
 
 /**
@@ -60,8 +66,7 @@ export interface ItemDefinition {
   description: string;
   rarity: Rarity;
   category: Category;
-  /** How the item is carried. Defaults to `pack` when omitted. */
-  carry?: CarryClass;
+  physical: ItemPhysicalProperties;
   traits: ItemTrait[];
   iconUrl?: string;
 }

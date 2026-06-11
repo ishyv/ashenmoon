@@ -1,33 +1,112 @@
 {
   "playerStates": {
     "mock_user": {
-      "rpg": {
-        "skills": {
-          "lumberjacking": {
-            "level": 1,
-            "xp": 0,
-            "nextXp": 100
+      "profile": {
+        "hpCurrent": 52,
+        "stashSize": 60,
+        "loadout": {
+          "weapon": {
+            "instanceId": "standalone_flint_axe_1781187333962",
+            "itemId": "flint_axe",
+            "durability": 20
           },
-          "mining": {
-            "level": 1,
-            "xp": 0,
-            "nextXp": 100
+          "shield": null,
+          "helmet": null,
+          "chest": null,
+          "pants": null,
+          "boots": null,
+          "ring": null,
+          "necklace": null
+        },
+        "buildings": [
+          {
+            "id": "building_storage_pile_1781186971053",
+            "type": "storage_pile",
+            "x": 22,
+            "y": 20
           },
-          "evade": {
-            "level": 1,
-            "xp": 0,
-            "nextXp": 100
+          {
+            "id": "building_storage_pile_1781187333978",
+            "type": "storage_pile",
+            "x": 23,
+            "y": 20
+          }
+        ],
+        "gatheredPickups": [
+          "manual_stick_2",
+          "manual_flint_2",
+          "manual_fiber_2",
+          "pickup_stone_4",
+          "pickup_leaf_litter_0",
+          "pickup_loose_stone_pickup_6",
+          "pickup_grass_patch_1",
+          "pickup_bark_strip_1",
+          "pickup_leaf_litter_1",
+          "pickup_leaf_litter_2",
+          "pickup_leaf_litter_6",
+          "pickup_grass_patch_0",
+          "pickup_leaf_litter_3",
+          "clean_stick_mq9kqerk",
+          "clean_flint_mq9kqerk",
+          "clean_fiber_mq9kqerk",
+          "clean_leaves_mq9kqerk",
+          "last_stick_mq9ky6tq",
+          "last_flint_mq9ky6tq",
+          "last_fiber_mq9ky6tq",
+          "last_leaves_mq9ky6tq",
+          "pickup_bark_strip_5",
+          "pickup_flint_shard_pickup_2",
+          "pickup_bark_strip_4",
+          "pickup_flint_shard_pickup_1",
+          "pickup_loose_stone_pickup_2"
+        ]
+      },
+      "inventory": {
+        "slots": {
+          "flint_axe": {
+            "qty": 3
           },
-          "superGather": {
-            "level": 1,
-            "xp": 0,
-            "nextXp": 100
+          "stone": {
+            "qty": 3
+          },
+          "leaves": {
+            "qty": 10
+          },
+          "grass_fiber": {
+            "qty": 4
+          },
+          "bark": {
+            "qty": 3
+          },
+          "oak_wood": {
+            "qty": 17
+          },
+          "flint_shard": {
+            "qty": 2
           }
         }
       },
-      "survival": {
-        "thirst": 100,
-        "wasParched": false
+      "skills": {
+        "lumberjacking": {
+          "level": 1,
+          "xp": 0,
+          "nextXp": 100
+        },
+        "mining": {
+          "level": 1,
+          "xp": 0,
+          "nextXp": 100
+        },
+        "evade": {
+          "level": 1,
+          "xp": 0,
+          "nextXp": 100
+        },
+        "superGather": {
+          "level": 1,
+          "xp": 0,
+          "nextXp": 100
+        }
       }
     }
   }

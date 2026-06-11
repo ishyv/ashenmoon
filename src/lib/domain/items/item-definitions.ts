@@ -19,13 +19,172 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A raw chunk of stone. Rough and heavy.",
     rarity: Rarity.Common,
     category: Category.Mineral,
+    physical: { carryClass: "pack", weight: 1.2, stackLimit: 30 },
   }),
+  stick: Item({
+    id: itemId("stick"),
+    name: "Stick",
+    description: "A dry fallen stick. Light enough to carry by the handful.",
+    rarity: Rarity.Common,
+    category: Category.Timber,
+    physical: { carryClass: "pocket", weight: 0.2, stackLimit: 20 },
+  }).with(
+    Flammable({
+      ignitionTemp: 95,
+      burnDurationSec: 6,
+      effect: TransformInto(itemId("ash")),
+    }),
+  ),
+  branch: Item({
+    id: itemId("branch"),
+    name: "Branch",
+    description: "A thicker branch, useful as crude structure or tool stock.",
+    rarity: Rarity.Common,
+    category: Category.Timber,
+    physical: { carryClass: "pack", weight: 0.8, stackLimit: 12 },
+  }).with(
+    Flammable({
+      ignitionTemp: 105,
+      burnDurationSec: 10,
+      effect: TransformInto(itemId("charcoal")),
+    }),
+  ),
+  flint_shard: Item({
+    id: itemId("flint_shard"),
+    name: "Flint Shard",
+    description: "A jagged stone shard with a pale edge.",
+    rarity: Rarity.Common,
+    category: Category.Mineral,
+    physical: { carryClass: "pocket", weight: 0.15, stackLimit: 20 },
+  }),
+  grass_fiber: Item({
+    id: itemId("grass_fiber"),
+    name: "Grass Fiber",
+    description: "Pulled strands of tough grass that can bind small tools.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.05, stackLimit: 40 },
+  }),
+  leaves: Item({
+    id: itemId("leaves"),
+    name: "Leaves",
+    description: "Dry leaf litter. Useful as tinder, terrible near flame.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.03, stackLimit: 50 },
+  }).with(
+    Flammable({
+      ignitionTemp: 70,
+      burnDurationSec: 3,
+      effect: TransformInto(itemId("ash")),
+    }),
+  ),
+  bark: Item({
+    id: itemId("bark"),
+    name: "Bark",
+    description: "Rough bark stripped from fallen wood.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.1, stackLimit: 30 },
+  }).with(
+    Flammable({
+      ignitionTemp: 90,
+      burnDurationSec: 5,
+      effect: TransformInto(itemId("charcoal")),
+    }),
+  ),
+  berries: Item({
+    id: itemId("berries"),
+    name: "Berries",
+    description: "Small dark berries with a tart smell.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(2)],
+    }),
+    Decayable({
+      lifespanSec: 240,
+      effect: TransformInto(itemId("volatile_ash")),
+    }),
+  ),
+  mushroom: Item({
+    id: itemId("mushroom"),
+    name: "Mushroom",
+    description: "A pale forest mushroom with damp gills.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.08, stackLimit: 20 },
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(1), ChanceOfVitals(0.35, AddStatus(StatusId.Poison, 45))],
+    }),
+    Decayable({
+      lifespanSec: 180,
+      effect: TransformInto(itemId("volatile_ash")),
+    }),
+  ),
+  clay: Item({
+    id: itemId("clay"),
+    name: "Clay",
+    description: "Wet clay that holds shape when pressed.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.8, stackLimit: 20 },
+  }).with(
+    TemperatureSensitive({
+      minSafeTemp: -100,
+      maxSafeTemp: 90,
+      effect: TransformInto(itemId("hardened_clay")),
+    }),
+  ),
+  hardened_clay: Item({
+    id: itemId("hardened_clay"),
+    name: "Hardened Clay",
+    description: "Clay baked firm enough for crude containers and structure.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.7, stackLimit: 20 },
+  }),
+  moss: Item({
+    id: itemId("moss"),
+    name: "Moss",
+    description: "Soft damp moss with a clean, green scent.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.04, stackLimit: 30 },
+  }),
+  ash: Item({
+    id: itemId("ash"),
+    name: "Ash",
+    description: "Fine grey ash left by burned tinder.",
+    rarity: Rarity.Common,
+    category: Category.Reagent,
+    physical: { carryClass: "pocket", weight: 0.02, stackLimit: 50 },
+  }),
+  weak_medicine: Item({
+    id: itemId("weak_medicine"),
+    name: "Weak Medicine",
+    description: "A bitter moss tea that steadies the body a little.",
+    rarity: Rarity.Common,
+    category: Category.Reagent,
+    physical: { carryClass: "pocket", weight: 0.25, stackLimit: 10 },
+  }).with(
+    Consumable({
+      verb: "drink",
+      onConsume: [RestoreHp(10), RestoreThirst(10)],
+    }),
+  ),
   copper_ore: Item({
     id: itemId("copper_ore"),
     name: "Copper Ore",
     description: "Veins of copper running through rock.",
     rarity: Rarity.Common,
     category: Category.Mineral,
+    physical: { carryClass: "pack", weight: 1.4, stackLimit: 20 },
   }),
   iron_ore: Item({
     id: itemId("iron_ore"),
@@ -33,6 +192,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Deep-vein iron with crystalline structure.",
     rarity: Rarity.Uncommon,
     category: Category.Mineral,
+    physical: { carryClass: "pack", weight: 1.6, stackLimit: 20 },
   }),
   silver_ore: Item({
     id: itemId("silver_ore"),
@@ -40,6 +200,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Shining silver ore, cool to the touch.",
     rarity: Rarity.Rare,
     category: Category.Mineral,
+    physical: { carryClass: "pack", weight: 1.3, stackLimit: 20 },
   }),
   oak_wood: Item({
     id: itemId("oak_wood"),
@@ -47,6 +208,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A sturdy log of raw oak timber.",
     rarity: Rarity.Common,
     category: Category.Timber,
+    physical: { carryClass: "pack", weight: 1.5, stackLimit: 20 },
   }).with(
     Flammable({
       ignitionTemp: 120,
@@ -60,6 +222,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Softwood log, smells of mountain pine.",
     rarity: Rarity.Uncommon,
     category: Category.Timber,
+    physical: { carryClass: "pack", weight: 1.2, stackLimit: 20 },
   }),
   palm_wood: Item({
     id: itemId("palm_wood"),
@@ -67,6 +230,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Fibrous timber from tropical shores.",
     rarity: Rarity.Rare,
     category: Category.Timber,
+    physical: { carryClass: "pack", weight: 1.1, stackLimit: 20 },
   }),
   pine_wood: Item({
     id: itemId("pine_wood"),
@@ -74,6 +238,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Dense hardwood from ancient pinelands.",
     rarity: Rarity.Legendary,
     category: Category.Timber,
+    physical: { carryClass: "pack", weight: 1.7, stackLimit: 20 },
   }),
   stone_block: Item({
     id: itemId("stone_block"),
@@ -81,6 +246,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Refined block of cut stone.",
     rarity: Rarity.Common,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 2, stackLimit: 20 },
   }),
   copper_ingot: Item({
     id: itemId("copper_ingot"),
@@ -88,6 +254,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A pure bar of smelted copper.",
     rarity: Rarity.Common,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 1, stackLimit: 20 },
   }),
   iron_ingot: Item({
     id: itemId("iron_ingot"),
@@ -95,6 +262,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A solid bar of refined iron.",
     rarity: Rarity.Uncommon,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 1.2, stackLimit: 20 },
   }),
   silver_ingot: Item({
     id: itemId("silver_ingot"),
@@ -102,6 +270,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A glistening bar of sterling silver.",
     rarity: Rarity.Rare,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 1, stackLimit: 20 },
   }),
   oak_plank: Item({
     id: itemId("oak_plank"),
@@ -109,6 +278,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Smooth plank of sawed oak wood.",
     rarity: Rarity.Common,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.6, stackLimit: 30 },
   }),
   spruce_plank: Item({
     id: itemId("spruce_plank"),
@@ -116,6 +286,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Clean plank of sawed spruce wood.",
     rarity: Rarity.Uncommon,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.5, stackLimit: 30 },
   }),
   palm_plank: Item({
     id: itemId("palm_plank"),
@@ -123,6 +294,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Flexible plank of sawed palm wood.",
     rarity: Rarity.Rare,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.5, stackLimit: 30 },
   }),
   pine_plank: Item({
     id: itemId("pine_plank"),
@@ -130,6 +302,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Resilient plank of sawed pine wood.",
     rarity: Rarity.Legendary,
     category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.7, stackLimit: 30 },
   }),
   starter_pickaxe: Item({
     id: itemId("starter_pickaxe"),
@@ -137,6 +310,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A tired pickaxe with a worn iron head.",
     rarity: Rarity.Common,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 2, stackLimit: 1 },
   }),
   starter_axe: Item({
     id: itemId("starter_axe"),
@@ -144,6 +318,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A simple hand axe with a notched blade.",
     rarity: Rarity.Common,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.6, stackLimit: 1 },
   }),
   stone_pickaxe: Item({
     id: itemId("stone_pickaxe"),
@@ -151,6 +326,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A pickaxe bound with flint and twine.",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
   }),
   stone_axe: Item({
     id: itemId("stone_axe"),
@@ -158,6 +334,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A heavy axe with a polished stone head.",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
   }),
   flint_pickaxe: Item({
     id: itemId("flint_pickaxe"),
@@ -165,6 +342,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A pickaxe bound with flint and twine.",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.4, stackLimit: 1 },
   }),
   flint_axe: Item({
     id: itemId("flint_axe"),
@@ -172,6 +350,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A simple axe made of sharp flint stone and wood.",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.2, stackLimit: 1 },
   }),
   copper_pickaxe: Item({
     id: itemId("copper_pickaxe"),
@@ -179,6 +358,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Malleable copper pickaxe. Gleams brightly.",
     rarity: Rarity.Rare,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.7, stackLimit: 1 },
   }),
   copper_axe: Item({
     id: itemId("copper_axe"),
@@ -186,6 +366,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A copper woodsman axe with a sharp edge.",
     rarity: Rarity.Rare,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.5, stackLimit: 1 },
   }),
   iron_pickaxe: Item({
     id: itemId("iron_pickaxe"),
@@ -193,6 +374,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A heavy, professional iron mining tool.",
     rarity: Rarity.Legendary,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 2.2, stackLimit: 1 },
   }),
   iron_axe: Item({
     id: itemId("iron_axe"),
@@ -200,6 +382,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Tempered iron head on a sturdy oak shaft.",
     rarity: Rarity.Legendary,
     category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.9, stackLimit: 1 },
   }),
   ice_block: Item({
     id: itemId("ice_block"),
@@ -207,6 +390,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A solid, freezing block of glacial ice. Melts rapidly in warm areas.",
     rarity: Rarity.Uncommon,
     category: Category.Mineral,
+    physical: { carryClass: "pack", weight: 1, stackLimit: 10 },
   }).with(
     TemperatureSensitive({
       minSafeTemp: -100,
@@ -220,7 +404,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Translucent white flower found near Blight zones. Wilts within hours of picking.",
     rarity: Rarity.Rare,
     category: Category.Herb,
-    carry: "pocket",
+    physical: { carryClass: "pocket", weight: 0.03, stackLimit: 10 },
   }).with(
     Decayable({
       lifespanSec: 60,
@@ -233,6 +417,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Slow-burned wood. Hotter and cleaner than coal.",
     rarity: Rarity.Common,
     category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.2, stackLimit: 30 },
   }),
   volatile_ash: Item({
     id: itemId("volatile_ash"),
@@ -240,6 +425,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Grey, inert ash residue from failed Crucible synthesis or decay.",
     rarity: Rarity.Common,
     category: Category.Reagent,
+    physical: { carryClass: "pocket", weight: 0.02, stackLimit: 50 },
   }),
   clean_water: Item({
     id: itemId("clean_water"),
@@ -247,7 +433,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Water that has been boiled and condensed to remove essence taint.",
     rarity: Rarity.Common,
     category: Category.Component,
-    carry: "pocket",
+    physical: { carryClass: "pocket", weight: 0.25, stackLimit: 10 },
   }).with(
     Consumable({
       verb: "drink",
@@ -260,7 +446,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Murky water with debris drifting in it. It smells faintly of rot.",
     rarity: Rarity.Common,
     category: Category.Component,
-    carry: "pocket",
+    physical: { carryClass: "pocket", weight: 0.25, stackLimit: 10 },
   }).with(
     Consumable({
       verb: "drink",
@@ -278,6 +464,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "A vial of impossible medicine. Cures everything. Not found in nature.",
     rarity: Rarity.Legendary,
     category: Category.Reagent,
+    physical: { carryClass: "pocket", weight: 0.1, stackLimit: 5 },
   }).with(
     Consumable({
       verb: "drink",

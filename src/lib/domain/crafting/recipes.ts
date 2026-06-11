@@ -43,19 +43,21 @@ const RAW_RECIPES: readonly RecipeInput[] = [
   {
     id: "flint_axe",
     name: "Flint Axe",
-    description: "A basic woodsman tool. Used to harvest Oak Trees.",
+    description: "a crude cutting tool for taking down small trees.",
     costs: [
-      { itemId: "oak_wood", name: "Loose Twigs", required: 5 },
-      { itemId: "stone", name: "Loose Stones", required: 3 },
+      { itemId: "stick", name: "stick", required: 1 },
+      { itemId: "flint_shard", name: "flint shard", required: 1 },
+      { itemId: "grass_fiber", name: "grass fiber", required: 1 },
     ],
   },
   {
     id: "flint_pickaxe",
     name: "Flint Pickaxe",
-    description: "A basic mining tool. Used to harvest ore veins.",
+    description: "a crude mining tool for later stone work.",
     costs: [
-      { itemId: "oak_wood", name: "Loose Twigs", required: 5 },
-      { itemId: "stone", name: "Loose Stones", required: 3 },
+      { itemId: "stick", name: "stick", required: 1 },
+      { itemId: "flint_shard", name: "flint shard", required: 1 },
+      { itemId: "grass_fiber", name: "grass fiber", required: 1 },
     ],
   },
   {
@@ -73,8 +75,19 @@ const RAW_RECIPES: readonly RecipeInput[] = [
   {
     id: "charcoal",
     name: "Charcoal",
-    description: "Slow-burned wood. Smelted to melt metals in the campfire.",
+    description: "slow-burned wood for steady heat.",
+    requiresCampfire: true,
     costs: [{ itemId: "oak_wood", name: "Oak Wood", required: 2 }],
+  },
+  {
+    id: "weak_medicine",
+    name: "Weak Medicine",
+    description: "a bitter moss tea that steadies sickness and thirst.",
+    requiresCampfire: true,
+    costs: [
+      { itemId: "clean_water", name: "clean water", required: 1 },
+      { itemId: "moss", name: "moss", required: 1 },
+    ],
   },
   {
     id: "copper_ingot",

@@ -20,13 +20,6 @@ export type VitalsEffect =
   | ChanceVitalsEffect;
 
 /**
- * Legacy union for backward compatibility during migration.
- * @deprecated Use InventoryEffect or VitalsEffect.
- */
-export type ItemEffect = InventoryEffect | VitalsEffect;
-
-
-/**
  * Transforms the item into another item (e.g., Ice Block -> Clean Water).
  */
 export interface TransformEffect {
@@ -99,17 +92,6 @@ export interface ChanceVitalsEffect {
   probability: number;
   effect: VitalsEffect;
 }
-
-/**
- * @deprecated Use ChanceInventoryEffect or ChanceVitalsEffect.
- */
-export interface ChanceEffect {
-  kind: "chance";
-  /** [0, 1] probability that `effect` fires. */
-  probability: number;
-  effect: ItemEffect;
-}
-
 
 /**
  * DSL Helper: Define a transformation effect.
@@ -209,18 +191,6 @@ export function ChanceOfVitals(
     kind: "chance",
     probability,
     effect,
-  };
-}
-
-/**
- * DSL Helper: Wrap an effect behind a probability roll.
- * @deprecated Use ChanceOfInventory or ChanceOfVitals.
- */
-export function ChanceOf(probability: number, effect: ItemEffect): ChanceEffect {
-  return {
-    kind: "chance",
-    probability,
-    effect: effect as any,
   };
 }
 

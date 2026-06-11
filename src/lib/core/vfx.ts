@@ -22,6 +22,7 @@ import {
 } from "$lib/core/audio-synthesis";
 import { Colors } from "$lib/utils/colors";
 import { EntityId } from "$lib/domain/game-events";
+import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 
 export class VFXResource {
   public particles: Particle[] = [];
@@ -213,7 +214,7 @@ export function gatherRingUpdateSystem(
   }
   vfx.gatherRing.visible = true;
   vfx.gatherRing.x = playerPos.x + TILE / 2;
-  vfx.gatherRing.y = playerPos.y + TILE;
+  vfx.gatherRing.y = playerPos.y + TILE / 2;
 
   const progress = 1 - Math.max(0, gatherCooldownTimer) / gatherInterval;
   vfx.gatherRing.clear();
@@ -231,7 +232,6 @@ export function selectionRingUpdateSystem(
   vfx: VFXResource,
   dt: number,
   currentTarget: Entity | null,
-  nodeKinds: Map<string, "tree" | "ore" | "twig" | "stone">,
   entitySprites: Map<string, Container>
 ): void {
   if (!currentTarget?.position) {
@@ -249,10 +249,11 @@ export function selectionRingUpdateSystem(
     if (currentTarget.id === EntityId.Campfire) {
       targetY = sprite.y + 4;
     } else {
-      const kind = nodeKinds.get(currentTarget.id);
-      if (kind === "tree") {
+      const gatherableId = currentTarget.resource?.gatherableId ?? currentTarget.pickup?.gatherableId;
+      const gatherable = gatherableId ? getGatherableDefinition(gatherableId) : undefined;
+      if (gatherable?.solidKind === "tree") {
         targetY = sprite.y - 38;
-      } else if (kind === "ore" || kind === "twig" || kind === "stone") {
+      } else if (gatherable?.solidKind === "rock" || gatherable?.renderKind.includes("pickup")) {
         targetY = sprite.y - 32;
       } else {
         targetY = sprite.y - 38;

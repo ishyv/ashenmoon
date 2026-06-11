@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/svelte";
 import SkillTreePanel from "./SkillTreePanel.svelte";
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
 
 // Initialize skills state so it doesn't stay in loading state
-rpgState.skills = {
+setRpgSkills({
   lumberjacking: { level: 1, xp: 0, nextXp: 100 },
   mining: { level: 1, xp: 0, nextXp: 100 },
   evade: { level: 1, xp: 0, nextXp: 100 },
   superGather: { level: 1, xp: 0, nextXp: 100 },
-};
+});
 
 afterEach(() => {
   cleanup();

@@ -8,7 +8,8 @@
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
 import { getConsumableTrait, resolveConsume } from "$lib/domain/systems/consume-system";
 import { removeStackQty } from "$lib/domain/systems/inventory-system";
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { setRpgInventory } from "$lib/state/rpg-actions.svelte";
 import { restoreThirst } from "$lib/domain/survival.svelte";
 import {
   applyStatusEffect,
@@ -28,7 +29,7 @@ import { propertiesFromConsume } from "$lib/domain/knowledge/knowledge-unlock";
 export function canConsume(itemId: string): boolean {
   const def = ITEM_DEFINITIONS[itemId];
   if (!def || !getConsumableTrait(def)) return false;
-  const slot = rpgState.inventory?.slots[itemId];
+  const slot = gameState.rpg.inventory?.slots[itemId];
   return !!slot && "qty" in slot && slot.qty >= 1;
 }
 
@@ -54,8 +55,8 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
   const outcome = resolveConsume(def, rng);
   if (!outcome) return false;
 
-  if (!rpgState.inventory) return false;
-  rpgState.inventory = removeStackQty(rpgState.inventory, itemId, 1);
+  if (!gameState.rpg.inventory) return false;
+  setRpgInventory(removeStackQty(gameState.rpg.inventory, itemId, 1));
 
   playPickupSound();
   emitPlayerFeedback(

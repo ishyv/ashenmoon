@@ -6,11 +6,11 @@
  * Evade, and Super-Gathering.
  */
 import { fade } from "svelte/transition";
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
 
 let { onClose } = $props<{ onClose: () => void }>();
 
-const skills = $derived(rpgState.skills);
+const skills = $derived(gameState.rpg.skills);
 
 // Helper to calculate XP percentages
 function getXpPercent(xp: number, nextXp: number): number {

@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
       fs: {
         allow: [".."],
       },
+      watch: {
+        ignored: ["**/.data/**"],
+      },
     },
     ...(isTest && {
       resolve: {

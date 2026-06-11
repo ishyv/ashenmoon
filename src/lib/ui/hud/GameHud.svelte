@@ -13,7 +13,7 @@ import StatusHud from "./StatusHud.svelte";
 import { stamina, staminaConfig } from "$lib/domain/stamina.svelte";
 import { thirstEvent, thirstConfig } from "$lib/domain/survival.svelte";
 import { statusState } from "$lib/domain/status-effects.svelte";
-import { uiPreferences } from "$lib/state/rpg-state.svelte";
+import { uiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 
 let showHud = $state(true);
@@ -66,17 +66,17 @@ $effect(() => {
     <StatusHud />
     <div class="hud-container">
       <div class="bar-wrapper">
-        <span class="icon">❤️</span>
+        <span class="icon">hp</span>
         <StatBar value={hp} max={100} fill="rgba(240, 90, 90, 0.65)" />
       </div>
 
       <div class="bar-wrapper">
-        <span class="icon">⚡</span>
+        <span class="icon">st</span>
         <StatBar value={stam} max={maxStam} event={stamina.event} />
       </div>
 
       <div class="bar-wrapper">
-        <span class="icon">💧</span>
+        <span class="icon">th</span>
         <StatBar value={thirstVal} max={maxThirst} fill="rgba(90, 170, 240, 0.65)" event={thirstEvent} />
       </div>
     </div>

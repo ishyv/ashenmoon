@@ -1,7 +1,7 @@
 /**
  * Pure reaction processors: given an inventory, the trait index, and the
  * conditions an item is exposed to, compute the resulting inventory plus a list
- * of which items reacted (for feedback). No mutation, no rpgState, no Pixi.
+ * of which items reacted (for feedback). No mutation, no app state, no Pixi.
  *
  * The reactive handler in `item-reaction-system.ts` binds these to live game
  * state and environment events; everything decision-making lives here so it can

@@ -24,7 +24,7 @@ export function emitPlayerFeedback(text: string, tone: FeedbackTone = "info"): v
 
 /**
  * Player hp changes also route through here: the engine's player entity is the
- * hp source of truth (it mirrors into rpgState each frame), so state modules
+ * hp source of truth (it mirrors into gameState each frame), so state modules
  * hand deltas to the engine instead of writing health themselves.
  */
 export type PlayerHpSink = (delta: number) => void;

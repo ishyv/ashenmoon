@@ -5,7 +5,8 @@
  * hextech-themed circular icons and radial cooldown clock overlays.
  */
 import { fade } from "svelte/transition";
-import { cooldownsState, rpgState, uiPreferences } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { cooldownsState, uiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { stamina } from "$lib/domain/stamina.svelte";
 
 const evadeCooldown = $derived(cooldownsState.evade);
@@ -39,10 +40,10 @@ const hasSgStam = $derived(stamina.current >= 35);
       <div class="cooldown-time">{evadeCooldown.toFixed(1)}s</div>
     {/if}
     
-    <div class="skill-icon evade-bg">💨</div>
+    <div class="skill-icon evade-bg">ev</div>
     <div class="skill-key">SHIFT</div>
     <div class="tooltip">
-      <div class="title">Evade (Lvl {rpgState.skills?.evade?.level ?? 1})</div>
+      <div class="title">Evade (Lvl {gameState.rpg.skills?.evade?.level ?? 1})</div>
       <div class="desc">Perform a quick dash in your movement direction. Grant invulnerability frames if neutral-dashing.</div>
       <div class="cost">Cost: 25 Stamina</div>
     </div>
@@ -63,12 +64,12 @@ const hasSgStam = $derived(stamina.current >= 35);
       <div class="cooldown-time">{sgCooldown.toFixed(1)}s</div>
     {/if}
     
-    <div class="skill-icon sg-bg">⛏️</div>
+    <div class="skill-icon sg-bg">sg</div>
     <div class="skill-key">EE</div>
     <div class="tooltip">
-      <div class="title">Super-Gather (Lvl {rpgState.skills?.superGather?.level ?? 1})</div>
+      <div class="title">Super-Gather (Lvl {gameState.rpg.skills?.superGather?.level ?? 1})</div>
       <div class="desc">Double-tap E to execute a strong strike yielding double drops and doubling impact feedback.</div>
-      <div class="cost">Cost: {Math.max(15, 35 - ((rpgState.skills?.superGather?.level ?? 1) - 1) * 2)} Stamina</div>
+      <div class="cost">Cost: {Math.max(15, 35 - ((gameState.rpg.skills?.superGather?.level ?? 1) - 1) * 2)} Stamina</div>
     </div>
   </div>
 </div>
@@ -128,11 +129,11 @@ const hasSgStam = $derived(stamina.current >= 35);
   }
 
   .evade-bg {
-    color: #55aaff;
+    color: var(--color-cold, skyblue);
   }
 
   .sg-bg {
-    color: #ffa500;
+    color: var(--color-warning, gold);
   }
 
   /* Hotkey labels underneath slot */
@@ -178,7 +179,7 @@ const hasSgStam = $derived(stamina.current >= 35);
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.72rem;
     font-weight: bold;
-    color: #ffffff;
+    color: var(--color-text, white);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 1), 0 0 6px rgba(255, 170, 0, 0.8);
     pointer-events: none;
   }
@@ -229,7 +230,7 @@ const hasSgStam = $derived(stamina.current >= 35);
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.78rem;
     font-weight: bold;
-    color: #ffaa00;
+    color: var(--color-warning, gold);
     margin-bottom: 0.25rem;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -246,7 +247,7 @@ const hasSgStam = $derived(stamina.current >= 35);
   .tooltip .cost {
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.65rem;
-    color: #55aaff;
+    color: var(--color-cold, skyblue);
     font-weight: bold;
   }
 </style>

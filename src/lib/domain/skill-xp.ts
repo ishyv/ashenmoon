@@ -6,12 +6,14 @@
  *
  * INVARIANT: this is the only place that writes a skill's level. Callers decide
  * which skill and how much XP; the per-skill label and announcement color live
- * in `SKILL_DISPLAY`. A skill missing from `rpgState.skills` (e.g. `combat`,
+ * in `SKILL_DISPLAY`. A skill missing from `gameState.rpg.skills` (e.g. `combat`,
  * which the backend may not define) is a safe no-op.
  */
 import type { Container } from "pixi.js";
-import { rpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
 import { SkillKey } from "$lib/domain/game-events";
+import type { RpgPlayerState, RpgSkillState } from "$lib/domain/rpg-types";
 import { Colors } from "$lib/utils/colors";
 import { spawnEnvFloatingText, type VFXResource } from "$lib/core/vfx";
 
@@ -19,6 +21,8 @@ interface SkillDisplay {
   label: string;
   levelColor: number;
 }
+
+type RuntimeSkillMap = RpgPlayerState["skills"] & Partial<Record<SkillKey.Combat, RpgSkillState>>;
 
 const SKILL_DISPLAY: Record<SkillKey, SkillDisplay> = {
   [SkillKey.Lumberjacking]: { label: "Lumberjacking", levelColor: Colors.skillLevel.gather },
@@ -40,8 +44,7 @@ export function awardSkillXp(
   playerPos: { x: number; y: number },
   entityLayer: Container,
 ): boolean {
-  // `skills` is typed with the four known keys; `combat` is intentionally looser.
-  const skills = rpgState.skills as any;
+  const skills: RuntimeSkillMap | null = gameState.rpg.skills;
   const skill = skills?.[skillKey];
   if (!skill) return false;
 
@@ -49,15 +52,17 @@ export function awardSkillXp(
   if (newXp >= skill.nextXp) {
     const newLevel = skill.level + 1;
     const overflow = newXp - skill.nextXp;
-    rpgState.skills = {
+    const nextSkills: RuntimeSkillMap = {
       ...skills,
       [skillKey]: { level: newLevel, xp: overflow, nextXp: newLevel * 100 },
-    } as any;
+    };
+    setRpgSkills(nextSkills);
     const { label, levelColor } = SKILL_DISPLAY[skillKey];
-    spawnEnvFloatingText(vfx, `🎉 ${label} Level ${newLevel}!`, levelColor, playerPos, entityLayer);
+    spawnEnvFloatingText(vfx, `${label.toLowerCase()} level ${newLevel}`, levelColor, playerPos, entityLayer);
     return true;
   }
 
-  rpgState.skills = { ...skills, [skillKey]: { ...skill, xp: newXp } } as any;
+  const nextSkills: RuntimeSkillMap = { ...skills, [skillKey]: { ...skill, xp: newXp } };
+  setRpgSkills(nextSkills);
   return false;
 }

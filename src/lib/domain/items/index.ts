@@ -1,5 +1,5 @@
 /**
- * Public API for the item system. Everything outside `src/lib/rpg/items/`
+ * Public API for the item system. Everything outside `src/lib/domain/items/`
  * should import from here rather than reaching into individual modules.
  *
  * Internal modules import each other directly to avoid a barrel cycle.
@@ -13,6 +13,7 @@ export {
   carryClassOf,
   itemId,
   type CarryClass,
+  type ItemPhysicalProperties,
   type ItemId,
   type ItemDefinition,
   type ItemInstance,
@@ -43,10 +44,8 @@ export {
   RestoreThirst,
   RestoreHp,
   ClearAllStatuses,
-  ChanceOf,
   ChanceOfInventory,
   ChanceOfVitals,
-  type ItemEffect,
   type InventoryEffect,
   type VitalsEffect,
   type TransformEffect,
@@ -56,7 +55,6 @@ export {
   type RestoreThirstEffect,
   type RestoreHpEffect,
   type ClearAllStatusesEffect,
-  type ChanceEffect,
   type ChanceInventoryEffect,
   type ChanceVitalsEffect,
 } from "./item-effects";
@@ -68,6 +66,7 @@ export {
   getItem,
   buildItemTraitIndex,
   isStashable,
+  validateItemRegistryProblems,
   type ItemRegistry,
   type ItemTraitIndex,
 } from "./item-registry";
@@ -76,4 +75,4 @@ export {
 export { ITEM_DEFINITIONS, ITEM_TRAIT_INDEX, getItemDef } from "./item-definitions";
 
 // presentational helpers
-export { iconUrlFor, reactsInto } from "./item-view";
+export { reactsInto } from "./item-view";

@@ -19,7 +19,8 @@ import {
   playDepleteSound,
   playWaterBubble,
 } from "$lib/core/audio-synthesis";
-import { rpgState, setRpgState } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { applyRpgState, setRpgInventory } from "$lib/state/rpg-actions.svelte";
 import { getItemDef } from "$lib/domain/items";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
@@ -30,6 +31,7 @@ import { getItemQty, getEquippedWeaponId } from "$lib/domain/inventory-api";
 import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remote-sync";
 import { transformStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
+import { getStationDefinition } from "$lib/domain/stations";
 import {
   checkGatherTool,
   gatherInterval,
@@ -38,12 +40,20 @@ import {
   superGatherCooldown,
   superGatherCost,
 } from "$lib/domain/gathering/gather-system";
-import { rollGatherWound } from "$lib/domain/gathering/gather-risk";
+import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
 import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
 import type { InventoryEffect } from "$lib/domain/items/item-effects";
+import { emitPlayerHpDelta } from "$lib/ui/player-feedback";
+import {
+  createTreeFallHazard,
+  fallDirectionAwayFromPlayer,
+  isPointInTreeFallZone,
+} from "$lib/domain/hazards/tree-fall-hazard";
+import { learnAbout } from "$lib/domain/knowledge.svelte";
 
 const INTERACT_RANGE = 2;
+const CAMPFIRE_STATION = getStationDefinition("campfire");
 
 export class InteractionResource {
   public gatherInterval = 0.6;
@@ -55,7 +65,6 @@ export class InteractionResource {
   public triggerSuperGatherNextSwing = false;
   public gatheringTarget: Entity | null = null;
   public currentTarget: Entity | null = null;
-  public nodeKinds = new Map<string, "tree" | "ore" | "twig" | "stone">();
   public campfireRefuelTimer = 0;
   public campfireHeatRadius = 3.5;
   public campfireSprite: AnimatedSprite | null = null;
@@ -151,7 +160,7 @@ export function triggerSuperGatherSystem(
   if (interaction.triggerSuperGatherNextSwing) return; // already queued
   if (!zeroCooldowns && interaction.superGatherCooldownTimer > 0) return;
 
-  const sgLevel = rpgState.skills?.superGather?.level ?? 1;
+  const sgLevel = gameState.rpg.skills?.superGather?.level ?? 1;
   const currentCost = superGatherCost(interaction.superGatherStaminaCost, sgLevel);
 
   if (stamina.current < currentCost) {
@@ -184,7 +193,8 @@ export function handleHitFeedbackSystem(
   getParticleFXFrames: (name: any) => any[],
   getWoodItemTexture: () => any
 ): void {
-  const isTree = interaction.nodeKinds.get(entity.id) === "tree";
+  const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
+  const isTree = gatherable?.solidKind === "tree";
 
   if (isTree) {
     playChopSound();
@@ -355,7 +365,8 @@ export function depleteNodeSystem(
   const pos = entity.position!;
   const gx = Math.round(pos.x / TILE);
   const gy = Math.round(pos.y / TILE);
-  const wasTree = interaction.nodeKinds.get(entity.id) === "tree";
+  const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
+  const wasTree = gatherable?.solidKind === "tree";
   if (wasTree) {
     triggerQuestEvent(GameEvent.Harvest, entity.resource?.drop);
   }
@@ -367,7 +378,6 @@ export function depleteNodeSystem(
     entitySprites.delete(entity.id);
   }
   world.remove(entity);
-  interaction.nodeKinds.delete(entity.id);
   vfx.activeShakes.delete(entity.id);
   vfx.baseScales.delete(entity.id);
 
@@ -415,7 +425,18 @@ export function depleteNodeSystem(
   triggerCameraShake(vfx, 5, 0.18);
 
   if (wasTree) {
-    playFallSound();
+    const player = getPlayerEntity();
+    const treeCenter = { x: gx * TILE + TILE / 2, y: gy * TILE + TILE };
+    const playerCenter = player.position
+      ? { x: player.position.x + TILE / 2, y: player.position.y + TILE / 2 }
+      : treeCenter;
+    const hazard = createTreeFallHazard(
+      treeCenter,
+      fallDirectionAwayFromPlayer(treeCenter, playerCenter),
+    );
+
+    spawnEnvFloatingText(vfx, "tree cracking", Colors.ui.warning, player.position ?? pos, entityLayer);
+    triggerCameraShake(vfx, 2, hazard.dodgeWindowSec);
 
     const fallFrames = getTreeFrames().slice(1);
     const fallingSprite = new AnimatedSprite(fallFrames);
@@ -439,8 +460,23 @@ export function depleteNodeSystem(
       fallingSprite.destroy();
     };
 
-    entityLayer.addChild(fallingSprite);
-    fallingSprite.play();
+    setTimeout(() => {
+      playFallSound();
+      const latestPlayer = getPlayerEntity();
+      if (latestPlayer.position) {
+        const latestCenter = {
+          x: latestPlayer.position.x + TILE / 2,
+          y: latestPlayer.position.y + TILE / 2,
+        };
+        if (isPointInTreeFallZone(latestCenter, hazard)) {
+          emitPlayerHpDelta(-hazard.damage);
+          applyStatusEffect(StatusId.Cut, 25, "hazard:tree_fall");
+          spawnEnvFloatingText(vfx, "tree hit", Colors.ui.error, latestPlayer.position, entityLayer);
+        }
+      }
+      entityLayer.addChild(fallingSprite);
+      fallingSprite.play();
+    }, hazard.dodgeWindowSec * 1000);
   } else {
     playDepleteSound();
   }
@@ -478,8 +514,8 @@ export function triggerImmediateInteraction(
       const item = target.pickup.itemId;
       const qty = target.pickup.qty;
 
-      void syncPickup(item, target.id).then((r) => {
-        if (r.ok) setRpgState(r.data.playerState);
+      void syncPickup(item, target.id, qty).then((r) => {
+        if (r.ok) applyRpgState(r.data.playerState);
       });
 
       const itemName = getItemDef(item)?.name ?? item;
@@ -506,8 +542,8 @@ export function triggerImmediateInteraction(
     // items: it costs nothing, can't fail, and is the core loop's reason to
     // visit the station. A second interaction (while processing) reaches refuel.
     const processable =
-      !interaction.activeProcess && !interaction.refuelPendingConfirm && rpgState.inventory
-        ? findProcessableItem(rpgState.inventory, { kind: "campfire", ambientTemp: 100 })
+      !interaction.activeProcess && !interaction.refuelPendingConfirm && gameState.rpg.inventory && CAMPFIRE_STATION
+        ? findProcessableItem(gameState.rpg.inventory, CAMPFIRE_STATION)
         : null;
 
     if (processable) {
@@ -521,7 +557,7 @@ export function triggerImmediateInteraction(
       const itemName = getItemDef(processable.itemId)?.name ?? processable.itemId;
       spawnEnvFloatingText(
         vfx,
-        `💧 Boiling ${itemName}...`,
+        `boiling ${itemName}...`,
         Colors.vfx.campfireMsg,
         playerEntity.position!,
         entityLayer
@@ -537,7 +573,7 @@ export function triggerImmediateInteraction(
         interaction.refuelConfirmTimer = 2.5;
         spawnEnvFloatingText(
           vfx,
-          "🔥 Interact again to Confirm Refuel (5x Wood)",
+          "interact again to refuel (5x wood)",
           Colors.vfx.campfireMsg,
           playerEntity.position!,
           entityLayer
@@ -549,7 +585,7 @@ export function triggerImmediateInteraction(
       interaction.refuelConfirmTimer = 0;
 
       void syncRefuel().then((r) => {
-        if (r.ok) setRpgState(r.data.playerState);
+        if (r.ok) applyRpgState(r.data.playerState);
       });
 
       playCraftSound();
@@ -623,7 +659,7 @@ export function runInteractionSystem(
       const playerEntity = getPlayerEntity();
       spawnEnvFloatingText(
         vfx,
-        "🔥 Campfire heat starts to fade...",
+        "campfire heat starts to fade...",
         Colors.ui.warning,
         playerEntity.position!,
         entityLayer
@@ -645,7 +681,7 @@ export function runInteractionSystem(
     if (!inHeat) {
       spawnEnvFloatingText(
         vfx,
-        "💧 Process interrupted.",
+        "process interrupted.",
         Colors.ui.muted,
         playerEntity.position!,
         entityLayer
@@ -661,23 +697,23 @@ export function runInteractionSystem(
         playWaterBubble();
       }
       if (proc.remainingSec <= 0) {
-        if (rpgState.inventory) {
+        if (gameState.rpg.inventory) {
           const next = resolveProcessingCompletion(
-            rpgState.inventory,
+            gameState.rpg.inventory,
             proc.itemId,
             proc.effect,
             1,
             Math.random
           );
-          if (next !== rpgState.inventory) {
-            rpgState.inventory = next;
+          if (next !== gameState.rpg.inventory) {
+            setRpgInventory(next);
             const resultName =
               proc.effect.kind === "transform"
                 ? getItemDef(proc.effect.into)?.name ?? proc.effect.into
                 : "Result";
             spawnEnvFloatingText(
               vfx,
-              `💧 Process complete: ${resultName}`,
+              `process complete: ${resultName.toLowerCase()}`,
               Colors.ui.success,
               playerEntity.position!,
               entityLayer
@@ -685,12 +721,13 @@ export function runInteractionSystem(
             playCraftSound();
 
             if (proc.effect.kind === "transform") {
+              learnAbout(proc.itemId, "boilable");
               triggerQuestEvent(GameEvent.Boil, proc.effect.into);
             }
           } else {
             spawnEnvFloatingText(
               vfx,
-              "💧 The materials are gone.",
+              "the materials are gone.",
               Colors.ui.muted,
               playerEntity.position!,
               entityLayer
@@ -755,7 +792,7 @@ export function runInteractionSystem(
       vfx,
       playerEntity,
       entityLayer,
-      rpgState.profile === null
+      gameState.rpg.profile === null
     );
   }
 
@@ -781,9 +818,10 @@ export function runInteractionSystem(
     if (target) {
       if (target.resource) {
         const res = target.resource;
-        if (res.rpgLocationId && res.rpgAction) {
+        const gatherable = res.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
+        const expectedKind = gatherable?.requiredToolKind ?? (res.rpgAction ? requiredToolKind(res.rpgAction) : null);
+        if (expectedKind) {
           const weaponId = getEquippedWeaponId();
-          const expectedKind = requiredToolKind(res.rpgAction);
 
           const spawnFailText = (msg: string) => {
             const playerEntity = getPlayerEntity();
@@ -806,8 +844,8 @@ export function runInteractionSystem(
           if (!gate.ok) {
             const detail =
               gate.reason === "no_tool"
-                ? `No tool equipped! Equip a ${expectedKind} first.`
-                : `Wrong tool! Equip an ${expectedKind} to harvest this.`;
+                ? `no tool equipped; equip a ${expectedKind}.`
+                : `wrong tool; equip an ${expectedKind}.`;
             devConsoleLog(`[Error] ${detail}`);
             spawnFailText(`need ${expectedKind}`);
             onInteract(target);
@@ -817,10 +855,10 @@ export function runInteractionSystem(
         }
 
         interaction.gatheringTarget = target;
-        const isTree = interaction.nodeKinds.get(target.id) === "tree";
-        const skillKey = isTree ? SkillKey.Lumberjacking : SkillKey.Mining;
-        const skillLevel = rpgState.skills?.[skillKey]?.level ?? 1;
-        interaction.currentGatherInterval = gatherInterval(interaction.gatherInterval, skillLevel);
+        const skillKey = gatherable?.skillKey ?? SkillKey.Mining;
+        const skillLevel = gameState.rpg.skills?.[skillKey]?.level ?? 1;
+        const baseDuration = gatherable?.baseDurationSec ?? interaction.gatherInterval;
+        interaction.currentGatherInterval = gatherInterval(baseDuration, skillLevel);
         interaction.gatherCooldownTimer = 0;
       } else {
         triggerImmediateInteraction(
@@ -858,10 +896,12 @@ export function runInteractionSystem(
 
       setPlayerAnim("attack");
 
-      const isTree = interaction.nodeKinds.get(target.id) === "tree";
-      const skillKey = isTree ? SkillKey.Lumberjacking : SkillKey.Mining;
-      const skillLevel = rpgState.skills?.[skillKey]?.level ?? 1;
-      const scaledInterval = gatherInterval(interaction.gatherInterval, skillLevel);
+      const gatherable = res?.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
+      const isTree = gatherable?.solidKind === "tree";
+      const skillKey = gatherable?.skillKey ?? SkillKey.Mining;
+      const skillLevel = gameState.rpg.skills?.[skillKey]?.level ?? 1;
+      const baseDuration = gatherable?.baseDurationSec ?? interaction.gatherInterval;
+      const scaledInterval = gatherInterval(baseDuration, skillLevel);
       interaction.currentGatherInterval = scaledInterval;
       interaction.gatherCooldownTimer = scaledInterval;
 
@@ -869,21 +909,32 @@ export function runInteractionSystem(
       interaction.triggerSuperGatherNextSwing = false;
 
       const quantity = gatherQuantity(isSuper);
-      const dropName = res?.drop ?? "resource";
+      const dropName = gatherable?.yieldTable[0]?.itemId ?? res?.drop ?? "resource";
 
       onHit(target, dropName, quantity);
 
       // Bare-hand gathering (forage nodes with no tool requirement) can wound.
       // Tool-gated nodes always have a tool here, so they never trigger this.
-      const wound = rollGatherWound({
-        hasTool: !!getEquippedWeaponId(),
-        nodeKind: interaction.nodeKinds.get(target.id) ?? "forage",
-      });
+      const gatherRisk = gatherable
+        ? rollGatherRisk(
+            gatherable,
+            {
+              hasTool: !!getEquippedWeaponId(),
+            },
+            Math.random,
+          )
+        : null;
+      const wound = gatherRisk
+        ? {
+            status: gatherRisk.status,
+            durationSec: gatherRisk.durationSec,
+          }
+        : null;
       if (wound) {
         applyStatusEffect(wound.status, wound.durationSec, "hazard:gather");
         spawnEnvFloatingText(
           vfx,
-          wound.status === StatusId.Cut ? "🩸 Cut!" : "🩸 Bleeding!",
+          wound.status === StatusId.Cut ? "cut" : "bleeding",
           Colors.ui.error,
           getPlayerEntity().position!,
           entityLayer,
@@ -920,7 +971,7 @@ export function runInteractionSystem(
       if (res && res.rpgLocationId && res.rpgAction) {
         void syncGather(res.rpgAction, res.rpgLocationId, isSuper).then((r) => {
           if (r.ok) {
-            setRpgState(r.data.playerState);
+            applyRpgState(r.data.playerState);
             for (const mat of r.data.materialsGained) {
               devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
             }

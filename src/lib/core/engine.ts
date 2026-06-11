@@ -110,13 +110,10 @@ import {
   placeBuildingSystem,
   spawnBuildingSystem,
   isValidPlacement,
-} from "$lib/domain/building";
-import {
-  rpgState,
-  setRpgState,
-  cooldownsState,
-  debugConfig,
-} from "$lib/state/rpg-state.svelte";
+} from "$lib/core/systems/building-system";
+import { gameState } from "$lib/state/game-state.svelte";
+import { setRpgProfile } from "$lib/state/rpg-actions.svelte";
+import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 import { tickStamina, stamina } from "$lib/domain/stamina.svelte";
 import { superGatherCooldown } from "$lib/domain/gathering/gather-system";
 import { tickThirst, loadSurvival } from "$lib/domain/survival.svelte";
@@ -134,6 +131,7 @@ import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId, SkillKey, InputAction } from "$lib/domain/game-events";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/domain/skill-xp";
+import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 
 export class GameEngine {
   private app!: Application;
@@ -531,12 +529,12 @@ export class GameEngine {
       }
 
       // Update Svelte cooldown progress bars
-      const evadeLevel = rpgState.skills?.evade?.level ?? 1;
+      const evadeLevel = gameState.rpg.skills?.evade?.level ?? 1;
       const maxEvadeCd = Math.max(0.5, this.movementConfig.dashCooldown - (evadeLevel - 1) * 0.05);
       cooldownsState.evade = Math.max(0, this.movementResource.dashCooldownTimer);
       cooldownsState.evadeMax = maxEvadeCd;
 
-      const sgLevel = rpgState.skills?.superGather?.level ?? 1;
+      const sgLevel = gameState.rpg.skills?.superGather?.level ?? 1;
       const maxSgCd = superGatherCooldown(this.interactionResource.superGatherCooldown, sgLevel);
       cooldownsState.superGather = Math.max(0, this.interactionResource.superGatherCooldownTimer);
       cooldownsState.superGatherMax = maxSgCd;
@@ -604,7 +602,6 @@ export class GameEngine {
         this.vfxResource,
         dt,
         this.interactionResource.currentTarget,
-        this.interactionResource.nodeKinds,
         this.entitySprites
       );
 
@@ -661,7 +658,7 @@ export class GameEngine {
       position: { x: startX, y: startY + TILE, targetX: startX, targetY: startY + TILE },
       playerControlled: { speed: TILE * 6 },
       health: {
-        current: rpgState.profile?.hpCurrent ?? 100,
+        current: gameState.rpg.profile?.hpCurrent ?? 100,
         max: 100,
         faction: "player",
         invulnTimer: 0,
@@ -680,7 +677,7 @@ export class GameEngine {
     this.entityLayer.addChild(this.playerShadow);
 
     // Save starting loadout weapon
-    const startW = rpgState.profile?.loadout?.weapon;
+    const startW = gameState.rpg.profile?.loadout?.weapon;
     this.lastEquippedWeapon = startW ? (typeof startW === "string" ? startW : startW.itemId) : null;
 
     // Load matching player frames depending on starting loadout
@@ -787,15 +784,15 @@ export class GameEngine {
     this.entitySprites.set(EntityId.NpcVane, vaneSprite);
 
     // Scatter resource nodes
-    const gatheredPickups = rpgState.profile?.gatheredPickups ?? [];
+    const gatheredPickups = gameState.rpg.profile?.gatheredPickups ?? [];
     for (const spawn of this.mapResource.mapData.spawns) {
       if (gatheredPickups.includes(spawn.id)) continue;
-      this.spawnResource(spawn.id, spawn.x, spawn.y, spawn.type);
+      this.spawnResource(spawn.id, spawn.x, spawn.y, spawn.gatherableId);
     }
 
     // Restore constructed buildings
-    if (rpgState.profile && Array.isArray(rpgState.profile.buildings)) {
-      for (const b of rpgState.profile.buildings) {
+    if (gameState.rpg.profile && Array.isArray(gameState.rpg.profile.buildings)) {
+      for (const b of gameState.rpg.profile.buildings) {
         this.spawnBuilding(b.id, b.type, b.x, b.y);
       }
     }
@@ -853,100 +850,67 @@ export class GameEngine {
     }
   }
 
-  private spawnResource(id: string, gx: number, gy: number, kind: "tree" | "ore" | "twig" | "stone"): void {
+  private spawnResource(id: string, gx: number, gy: number, gatherableId: string): void {
     const ex = gx * TILE;
     const ey = gy * TILE;
 
-    const cellIdx = gy * this.mapResource.mapW + gx;
-    const cellType = this.mapResource.cells[cellIdx] ?? Cell.Meadows;
+    const gatherable = getGatherableDefinition(gatherableId);
+    if (!gatherable) return;
 
-    const isTree = kind === "tree";
-    const isTwig = kind === "twig";
-    const isStone = kind === "stone";
+    const nodeName = gatherable.displayName;
+    const drop = gatherable.yieldTable[0];
+    const dropName = drop?.itemId ?? "stick";
+    const dropQty = drop?.quantity ?? 1;
+    const rpgLocationId = gatherable.syncLocationId;
+    const rpgAction = gatherable.syncAction;
+    const isPickup = gatherable.interactionKind !== "repeated_action";
+    const isTree = gatherable.solidKind === "tree";
+    const spriteTex =
+      gatherable.renderKind === "wood_pickup"
+        ? getWoodItemTexture()
+        : gatherable.renderKind === "stone_pickup"
+          ? getRockVariantTexture(1)
+          : gatherable.renderKind === "flint_pickup"
+            ? getRockVariantTexture(2)
+            : gatherable.renderKind === "forage"
+              ? getBushTexture(1)
+              : gatherable.renderKind === "moss"
+                ? getBushTexture(2)
+                : gatherable.renderKind === "tree_crimson"
+                  ? getTreeVariantTexture(2)
+                  : gatherable.renderKind === "tree_frost"
+                    ? getTreeVariantTexture(3)
+                    : gatherable.renderKind === "tree_fungal"
+                      ? getTreeVariantTexture(4)
+                      : gatherable.renderKind === "rock_copper"
+                        ? getRockVariantTexture(2)
+                        : gatherable.renderKind === "rock_iron"
+                          ? getRockVariantTexture(3)
+                          : gatherable.renderKind === "rock_toxic"
+                            ? getRockVariantTexture(4)
+                            : gatherable.renderKind === "rock"
+                              ? getRockTexture()
+                              : getTreeTexture();
 
-    let nodeName = "";
-    let dropName = "";
-    let rpgLocationId = "";
-    let rpgAction: "forest" | "mine" | undefined;
-    let spriteTex;
-
-    if (isTwig) {
-      nodeName = "Loose Twigs";
-      dropName = "oak_wood";
-      spriteTex = getWoodItemTexture();
-    } else if (isStone) {
-      nodeName = "Loose Stones";
-      dropName = "stone";
-      spriteTex = getRockVariantTexture(1);
-    } else {
-      nodeName = isTree ? "Oak Tree" : "Stone Node";
-      dropName = isTree ? "oak_wood" : "stone";
-      rpgLocationId = isTree ? "oak_forest" : "stone_mine";
-      rpgAction = isTree ? "forest" : "mine";
-      spriteTex = isTree ? getTreeTexture() : getRockTexture();
-
-      if (cellType === Cell.ScorchedWastes) {
-        nodeName = "Copper Ore Vein";
-        dropName = "copper_ore";
-        rpgLocationId = "copper_mine";
-        spriteTex = getRockVariantTexture(2);
-      } else if (cellType === Cell.CrimsonGrove) {
-        if (isTree) {
-          nodeName = "Crimson Ash Tree";
-          dropName = "spruce_wood";
-          rpgLocationId = "crimson_grove";
-          spriteTex = getTreeVariantTexture(2);
-        } else {
-          nodeName = "Iron Ore Vein";
-          dropName = "iron_ore";
-          rpgLocationId = "iron_mine";
-          spriteTex = getRockVariantTexture(3);
-        }
-      } else if (cellType === Cell.FungalMire) {
-        if (isTree) {
-          nodeName = "Spore Mangrove Tree";
-          dropName = "palm_wood";
-          rpgLocationId = "fungal_mire";
-          spriteTex = getTreeVariantTexture(4);
-        } else {
-          nodeName = "Toxic Copper Node";
-          dropName = "copper_ore";
-          rpgLocationId = "copper_mine";
-          spriteTex = getRockVariantTexture(4);
-        }
-      } else if (cellType === Cell.Frostbane) {
-        if (isTree) {
-          nodeName = "Frost Pine Tree";
-          dropName = "pine_wood";
-          rpgLocationId = "frostbane_peak";
-          spriteTex = getTreeVariantTexture(3);
-        } else {
-          nodeName = "Glacial Silver Vein";
-          dropName = "silver_ore";
-          rpgLocationId = "silver_mine";
-          spriteTex = getRockVariantTexture(1);
-        }
-      }
-    }
-
-    if (isTwig || isStone) {
+    if (isPickup) {
       world.add({
         id,
         position: { x: ex, y: ey, targetX: ex, targetY: ey },
         collider: { isSolid: false },
         interactable: { name: nodeName, action: "pickup" },
-        pickup: { itemId: dropName, qty: 1 },
+        pickup: { itemId: dropName, qty: dropQty, gatherableId },
       });
-      this.interactionResource.nodeKinds.set(id, kind);
 
       const sprite = new Sprite(spriteTex);
       sprite.anchor.set(0.5, 1);
       sprite.x = ex + TILE / 2;
       sprite.y = ey + TILE;
-      if (isTwig) {
+      if (gatherable.renderKind === "wood_pickup") {
         sprite.scale.set((TILE * 0.45) / 64);
-      } else {
+      } else if (gatherable.renderKind === "stone_pickup" || gatherable.renderKind === "flint_pickup") {
         sprite.scale.set((TILE * 0.35) / 64);
+      } else {
+        sprite.scale.set((TILE * 0.4) / 64);
       }
       this.entityLayer.addChild(sprite);
       this.entitySprites.set(id, sprite);
@@ -957,15 +921,16 @@ export class GameEngine {
         collider: { isSolid: true },
         interactable: { name: nodeName, action: "gather" },
         resource: {
-          hp: 15,
-          maxHp: 15,
+          hp: gatherable?.depletion?.hp ?? 15,
+          maxHp: gatherable?.depletion?.hp ?? 15,
           drop: dropName,
+          gatherableId,
           rpgAction,
           rpgLocationId,
         },
       });
       this.mapResource.solidCoords.add(coordKey(gx, gy));
-      if (kind === "tree") {
+      if (gatherable.solidKind === "tree") {
         this.mapResource.customSolids.set(coordKey(gx, gy), {
           minX: ex + TILE * 0.35,
           maxX: ex + TILE * 0.65,
@@ -980,9 +945,8 @@ export class GameEngine {
           maxY: ey + TILE * 0.8,
         });
       }
-      this.interactionResource.nodeKinds.set(id, kind);
 
-      if (kind === "tree") {
+      if (isTree) {
         const tree = new Sprite(spriteTex);
         tree.anchor.set(0.5, 1);
         tree.x = ex + TILE / 2;
@@ -1092,10 +1056,10 @@ export class GameEngine {
 
   /** Mirror the player health component into the HUD-observed rpg state. */
   private syncPlayerHp(): void {
-    const profile = rpgState.profile;
+    const profile = gameState.rpg.profile;
     const hp = this.playerEntity.health?.current ?? 100;
     if (profile && profile.hpCurrent !== hp) {
-      rpgState.profile = { ...profile, hpCurrent: hp };
+      setRpgProfile({ ...profile, hpCurrent: hp });
     }
   }
 
@@ -1132,7 +1096,7 @@ export class GameEngine {
   private attackAnimLockTimer = 0;
 
   private getPlayerSpriteConfig(): { isWarrior: boolean; tool: PawnTool } {
-    const w = rpgState.profile?.loadout?.weapon;
+    const w = gameState.rpg.profile?.loadout?.weapon;
     const itemId = w ? (typeof w === "string" ? w : w.itemId) : null;
     if (!itemId) {
       return { isWarrior: false, tool: null };
@@ -1172,7 +1136,7 @@ export class GameEngine {
     if (state !== "attack" && this.attackAnimLockTimer > 0) return;
     if (state === "attack") this.attackAnimLockTimer = 0.28;
 
-    const currentWeapon = rpgState.profile?.loadout?.weapon;
+    const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
     const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
 
     if (this.playerAnimState === state && this.lastEquippedWeapon === currentWeaponId) return;
@@ -1349,11 +1313,12 @@ export class GameEngine {
     return `speed set to ${tilesPerSec} tiles/s`;
   }
 
-  public devSpawn(kind: "tree" | "ore", gx: number, gy: number): string {
+  public devSpawn(gatherableId: string, gx: number, gy: number): string {
+    if (!getGatherableDefinition(gatherableId)) return `unknown gatherable: ${gatherableId}`;
     if (!this.mapResource.inBounds(gx, gy)) return `out of bounds: ${gx},${gy}`;
     if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return `cell occupied: ${gx},${gy}`;
-    this.spawnResource(`dev_${kind}_${this.devSpawnSeq++}`, gx, gy, kind);
-    return `spawned ${kind} at ${gx},${gy}`;
+    this.spawnResource(`dev_${gatherableId}_${this.devSpawnSeq++}`, gx, gy, gatherableId);
+    return `spawned ${gatherableId} at ${gx},${gy}`;
   }
 
   public devSpawnEnemy(gx?: number, gy?: number): string {

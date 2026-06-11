@@ -6,7 +6,7 @@
  * persists layout state to localStorage.
  */
 import { onMount } from "svelte";
-import { uiPreferences, saveUiPreferences } from "$lib/state/rpg-state.svelte";
+import { uiPreferences, saveUiPreferences } from "$lib/state/runtime-ui-state.svelte";
 
 // Action keys type
 export type ActionId = "MOVE_UP" | "MOVE_DOWN" | "MOVE_LEFT" | "MOVE_RIGHT" | "HARVEST" | "CONSOLE" | "SPRINT";
@@ -208,7 +208,7 @@ function clearSlot(action: ActionId, slotIndex: number): void {
     role="presentation"
   >
     <div class="modal-header">
-      <h2>⚙️ Control Configuration</h2>
+      <h2>control configuration</h2>
       <button class="close-btn" onclick={(e) => { e.preventDefault(); onClose(); }} aria-label="Close Settings">×</button>
     </div>
 

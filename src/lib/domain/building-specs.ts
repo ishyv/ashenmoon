@@ -8,25 +8,88 @@
  * height can exceed the footprint (e.g. a tower's art is taller than its base).
  */
 import type { BuildingType } from "$lib/core/assets";
+import { ITEM_DEFINITIONS } from "$lib/domain/items";
+import { getStationDefinition, type StationId } from "$lib/domain/stations";
 
 export interface BuildingSpec {
+  /** lowercase player-facing label. */
+  displayName: string;
+  /** short lowercase player-facing description. */
+  description: string;
   /** collision + placement footprint, in tiles. */
   footprint: { w: number; h: number };
   /** which building art to draw (some types reuse another's texture). */
   textureType: BuildingType;
   /** rendered sprite size, in tiles. */
   sprite: { w: number; h: number };
+  /** inventory cost paid before the building is recorded. */
+  cost?: Record<string, number>;
+  /** optional station unlocked by this building. */
+  stationId?: StationId;
 }
 
 export const BUILDING_SPECS: Record<string, BuildingSpec> = {
-  wall: { footprint: { w: 1, h: 1 }, textureType: "house3", sprite: { w: 1, h: 1 } },
-  house1: { footprint: { w: 2, h: 2 }, textureType: "house1", sprite: { w: 2, h: 2 } },
-  tower: { footprint: { w: 2, h: 2 }, textureType: "tower", sprite: { w: 2, h: 3 } },
-  barracks: { footprint: { w: 2, h: 2 }, textureType: "barracks", sprite: { w: 2, h: 2 } },
+  wall: {
+    displayName: "wall",
+    description: "a one-tile barrier.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+  },
+  house1: {
+    displayName: "outpost house",
+    description: "a compact shelter from the older outpost kit.",
+    footprint: { w: 2, h: 2 },
+    textureType: "house1",
+    sprite: { w: 2, h: 2 },
+  },
+  tower: {
+    displayName: "tower",
+    description: "a tall watch structure from the older outpost kit.",
+    footprint: { w: 2, h: 2 },
+    textureType: "tower",
+    sprite: { w: 2, h: 3 },
+  },
+  barracks: {
+    displayName: "barracks",
+    description: "a larger old outpost structure.",
+    footprint: { w: 2, h: 2 },
+    textureType: "barracks",
+    sprite: { w: 2, h: 2 },
+  },
+  storage_pile: {
+    displayName: "storage pile",
+    description: "a rough place to keep gathered supplies off the wet ground.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { stick: 4, leaves: 6 },
+    stationId: "storage_pile",
+  },
+  drying_rack: {
+    displayName: "drying rack",
+    description: "a simple rack for one slow camp process.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { stick: 6, grass_fiber: 4 },
+    stationId: "drying_rack",
+  },
+  primitive_work_surface: {
+    displayName: "primitive work surface",
+    description: "a flat work spot for careful experiments.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { branch: 2, bark: 4 },
+    stationId: "primitive_work_surface",
+  },
 };
 
 /** Fallback for any type without an explicit spec (matches the old house1 default). */
 export const DEFAULT_BUILDING_SPEC: BuildingSpec = {
+  displayName: "unknown structure",
+  description: "a fallback structure.",
   footprint: { w: 2, h: 2 },
   textureType: "house1",
   sprite: { w: 2, h: 2 },
@@ -34,4 +97,30 @@ export const DEFAULT_BUILDING_SPEC: BuildingSpec = {
 
 export function getBuildingSpec(type: string): BuildingSpec {
   return BUILDING_SPECS[type] ?? DEFAULT_BUILDING_SPEC;
+}
+
+export function validateBuildingSpecs(specs: Record<string, BuildingSpec>): string[] {
+  const problems: string[] = [];
+
+  for (const [id, spec] of Object.entries(specs)) {
+    if (spec.footprint.w <= 0 || spec.footprint.h <= 0) {
+      problems.push(`${id} has invalid footprint`);
+    }
+    if (spec.sprite.w <= 0 || spec.sprite.h <= 0) {
+      problems.push(`${id} has invalid sprite size`);
+    }
+    if (spec.stationId && !getStationDefinition(spec.stationId)) {
+      problems.push(`${id} references missing station ${spec.stationId}`);
+    }
+    for (const [itemId, qty] of Object.entries(spec.cost ?? {})) {
+      if (!ITEM_DEFINITIONS[itemId]) {
+        problems.push(`${id} cost references missing item ${itemId}`);
+      }
+      if (!Number.isFinite(qty) || qty <= 0) {
+        problems.push(`${id} cost for ${itemId} must be positive`);
+      }
+    }
+  }
+
+  return problems;
 }

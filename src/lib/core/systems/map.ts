@@ -10,7 +10,6 @@ import {
   getRockVariantTexture,
   getWoodItemTexture,
 } from "$lib/core/assets";
-import { rpgState } from "$lib/state/rpg-state.svelte";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId } from "$lib/domain/game-events";
@@ -21,7 +20,7 @@ export interface SpawnNode {
   id: string;
   x: number;
   y: number;
-  type: "tree" | "ore" | "twig" | "stone";
+  gatherableId: string;
 }
 
 export class MapResource {
@@ -113,19 +112,37 @@ export function buildMapSystem(map: MapResource): void {
       if (cellType !== Cell.Water) {
         const cellHash = noiseGen.noise(x * 12.3 + 4.5, y * 5.6 + 7.8);
         if (cellHash < 0.055) {
-          let resourceType: "tree" | "ore" | null = null;
+          let resourceKind: "tree" | "ore" | null = null;
           if (cellType === Cell.ScorchedWastes) {
-            resourceType = "ore";
+            resourceKind = "ore";
           } else {
-            resourceType = (cellHash / 0.055) < 0.6 ? "tree" : "ore";
+            resourceKind = (cellHash / 0.055) < 0.6 ? "tree" : "ore";
           }
 
-          if (resourceType) {
+          if (resourceKind) {
+            const gatherableId =
+              cellType === Cell.ScorchedWastes
+                ? "copper_ore_vein"
+                : cellType === Cell.CrimsonGrove
+                  ? resourceKind === "tree"
+                    ? "crimson_ash_tree"
+                    : "iron_ore_vein"
+                  : cellType === Cell.FungalMire
+                    ? resourceKind === "tree"
+                      ? "spore_mangrove_tree"
+                      : "toxic_copper_node"
+                    : cellType === Cell.Frostbane
+                      ? resourceKind === "tree"
+                        ? "frost_pine_tree"
+                        : "glacial_silver_vein"
+                      : resourceKind === "tree"
+                        ? "oak_tree"
+                        : "stone_node";
             spawnsList.push({
-              id: `node_${resourceType}_${devSpawnIdSeq++}`,
+              id: `node_${gatherableId}_${devSpawnIdSeq++}`,
               x,
               y,
-              type: resourceType,
+              gatherableId,
             });
           }
         }
@@ -133,10 +150,29 @@ export function buildMapSystem(map: MapResource): void {
     }
   }
 
-  // Scattered twigs/stones around spawn
-  let twigCount = 0;
-  let stoneCount = 0;
-  for (let r = 3; r < 12 && (twigCount < 10 || stoneCount < 10); r++) {
+  // Scattered bare-hand materials around spawn.
+  const pickupCounts: Record<string, number> = {
+    stick_pickup: 0,
+    loose_stone_pickup: 0,
+    flint_shard_pickup: 0,
+    leaf_litter: 0,
+    bark_strip: 0,
+    grass_patch: 0,
+    moss_patch: 0,
+  };
+  const pickupTargets: Record<string, number> = {
+    stick_pickup: 10,
+    loose_stone_pickup: 8,
+    flint_shard_pickup: 5,
+    leaf_litter: 8,
+    bark_strip: 6,
+    grass_patch: 8,
+    moss_patch: 5,
+  };
+  const pickupKinds = Object.keys(pickupTargets);
+  const hasNeededPickups = () => pickupKinds.some((kind) => pickupCounts[kind] < pickupTargets[kind]);
+
+  for (let r = 3; r < 14 && hasNeededPickups(); r++) {
     for (let theta = 0; theta < 360; theta += 15) {
       const rad = (theta * Math.PI) / 180;
       const x = Math.round(spawnX + r * Math.cos(rad));
@@ -149,19 +185,14 @@ export function buildMapSystem(map: MapResource): void {
         if (alreadySpawned) continue;
 
         const hash = noiseGen.noise(x * 17.1 + 8.3, y * 9.2 + 2.7);
-        if (hash < 0.4 && twigCount < 10) {
+        const normalizedHash = Math.abs(hash % 1);
+        const gatherableId = pickupKinds[Math.floor(normalizedHash * pickupKinds.length)] ?? "stick_pickup";
+        if ((pickupCounts[gatherableId] ?? 0) < (pickupTargets[gatherableId] ?? 0)) {
           spawnsList.push({
-            id: `pickup_twig_${twigCount++}`,
+            id: `pickup_${gatherableId}_${pickupCounts[gatherableId]++}`,
             x,
             y,
-            type: "twig",
-          });
-        } else if (hash >= 0.4 && hash < 0.8 && stoneCount < 10) {
-          spawnsList.push({
-            id: `pickup_stone_${stoneCount++}`,
-            x,
-            y,
-            type: "stone",
+            gatherableId,
           });
         }
       }

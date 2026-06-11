@@ -7,7 +7,10 @@
 
 import { devConsole } from "$lib/ui/debug/dev-console";
 import type { GameEngine } from "$lib/core/engine";
-import { rpgState, devEquip, devGiveItem, devSetHp, cooldownsState, debugConfig } from "$lib/state/rpg-state.svelte";
+import { gameState } from "$lib/state/game-state.svelte";
+import { devEquip, devGiveItem, devSetHp } from "$lib/state/dev-rpg-actions";
+import { setRpgInventory, setRpgProfile, setRpgSkills } from "$lib/state/rpg-actions.svelte";
+import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 import { type SpendMode, setStamina, spendStamina, stamina, staminaConfig } from "$lib/domain/stamina.svelte";
 import { setThirst, thirst, thirstConfig } from "$lib/domain/survival.svelte";
 import {
@@ -63,15 +66,15 @@ export function registerDevCommands(engine: GameEngine): void {
 
   devConsole.register({
     name: "spawn",
-    help: "spawn <tree|ore> <gx> <gy> : spawn a resource node",
+    help: "spawn <gatherableId> <gx> <gy> : spawn a resource node",
     run: (args) => {
-      const kind = args[0];
+      const gatherableId = args[0];
       const gx = int(args[1]);
       const gy = int(args[2]);
-      if ((kind !== "tree" && kind !== "ore") || gx === null || gy === null) {
-        return "usage: spawn <tree|ore> <gx> <gy>";
+      if (!gatherableId || gx === null || gy === null) {
+        return "usage: spawn <gatherableId> <gx> <gy>";
       }
-      return engine.devSpawn(kind, gx, gy);
+      return engine.devSpawn(gatherableId, gx, gy);
     },
   });
 
@@ -284,9 +287,9 @@ export function registerDevCommands(engine: GameEngine): void {
       return `hp set to ${n}`;
     },
     reset: () => {
-      rpgState.profile = null;
-      rpgState.inventory = null;
-      return "rpgState cleared (will re-fetch on next server interaction)";
+      setRpgProfile(null);
+      setRpgInventory(null);
+      return "rpg state cleared (will re-fetch on next server interaction)";
     },
   };
 
@@ -295,15 +298,15 @@ export function registerDevCommands(engine: GameEngine): void {
     help: "rpg [equip <id> | unequip | give <id> [qty] | hp <n> | reset] : patch local rpg state",
     run: (args) => {
       if (!args[0]) {
-        const weapon = rpgState.profile?.loadout?.weapon;
+        const weapon = gameState.rpg.profile?.loadout?.weapon;
         const weaponLabel =
           weapon === null || weapon === undefined
             ? "none"
             : typeof weapon === "string"
               ? weapon
               : `${weapon.itemId} (dur ${weapon.durability})`;
-        const slotCount = Object.keys(rpgState.inventory?.slots ?? {}).length;
-        return `weapon: ${weaponLabel}  |  inventory: ${slotCount} slot(s)  |  hp: ${rpgState.profile?.hpCurrent ?? "—"}`;
+        const slotCount = Object.keys(gameState.rpg.inventory?.slots ?? {}).length;
+        return `weapon: ${weaponLabel}  |  inventory: ${slotCount} slot(s)  |  hp: ${gameState.rpg.profile?.hpCurrent ?? "—"}`;
       }
       const sub = rpgSub[args[0]];
       return sub
@@ -320,7 +323,7 @@ export function registerDevCommands(engine: GameEngine): void {
       if (!skillName || qty === null || qty <= 0) {
         return "usage: skill addxp <lumberjacking|mining|evade|supergather> <qty>";
       }
-      const skills = rpgState.skills;
+      const skills = gameState.rpg.skills;
       if (!skills) return "skills state not initialized";
       const key = mapSkillName(skillName);
       if (!key) {
@@ -339,10 +342,10 @@ export function registerDevCommands(engine: GameEngine): void {
         currentNextXp = currentLvl * 100;
       }
       
-      rpgState.skills = {
-        ...rpgState.skills,
+      setRpgSkills({
+        ...skills,
         [key]: { level: currentLvl, xp: currentXp, nextXp: currentNextXp },
-      } as any;
+      });
       return `added ${qty} XP to ${key}. Now Level ${currentLvl} (${currentXp}/${currentNextXp} XP)`;
     },
     setlevel: (a) => {
@@ -351,17 +354,17 @@ export function registerDevCommands(engine: GameEngine): void {
       if (!skillName || lvl === null || lvl <= 0) {
         return "usage: skill setlevel <lumberjacking|mining|evade|supergather> <lvl>";
       }
-      const skills = rpgState.skills;
+      const skills = gameState.rpg.skills;
       if (!skills) return "skills state not initialized";
       const key = mapSkillName(skillName);
       if (!key) {
         return `invalid skill: ${skillName}. Choose from: lumberjacking, mining, evade, supergather`;
       }
       const newNextXp = lvl * 100;
-      rpgState.skills = {
-        ...rpgState.skills,
+      setRpgSkills({
+        ...skills,
         [key]: { level: lvl, xp: 0, nextXp: newNextXp },
-      } as any;
+      });
       return `${key} level set to ${lvl}`;
     },
   };
@@ -371,8 +374,8 @@ export function registerDevCommands(engine: GameEngine): void {
     help: "skill [addxp <skill> <qty> | setlevel <skill> <lvl>] : manage skill levels and progression",
     run: (args) => {
       if (!args[0]) {
-        if (!rpgState.skills) return "skills state not initialized";
-        return Object.entries(rpgState.skills)
+        if (!gameState.rpg.skills) return "skills state not initialized";
+        return Object.entries(gameState.rpg.skills)
           .map(([k, s]) => `${k}: Lvl ${s.level} (${s.xp}/${s.nextXp} XP)`)
           .join(" | ");
       }

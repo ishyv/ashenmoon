@@ -15,7 +15,10 @@ import SkillTreePanel from "$lib/ui/panels/SkillTreePanel.svelte";
 import DialogueBox from "$lib/ui/elements/DialogueBox.svelte";
 import QuestTracker from "$lib/ui/panels/QuestTracker.svelte";
 import IntroOverlay from "$lib/ui/elements/IntroOverlay.svelte";
-import { setRpgState, activeEnvironment, uiPreferences, loadUiPreferences, setEnvironment } from "$lib/state/rpg-state.svelte";
+import { activeEnvironment, setEnvironment } from "$lib/state/environment-state.svelte";
+import { uiPreferences, loadUiPreferences } from "$lib/state/runtime-ui-state.svelte";
+import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { markGameStateHydrated } from "$lib/state/game-state.svelte";
 
 let { data } = $props();
 
@@ -52,6 +55,18 @@ function handleContextMenu(name: string, action: string, screenX: number, screen
 
 function closeContextMenu() {
   contextMenu = null;
+}
+
+function toggleSkills() {
+  showSkills = !showSkills;
+}
+
+function toggleInventory() {
+  showInventory = !showInventory;
+}
+
+function openSettings() {
+  showSettings = true;
 }
 
 function handleGlobalKeyDown(e: KeyboardEvent) {
@@ -93,8 +108,9 @@ $effect(() => {
 onMount(async () => {
   loadUiPreferences();
   if (data.playerState) {
-    setRpgState(data.playerState);
+    applyRpgState(data.playerState);
   }
+  markGameStateHydrated();
   if (!containerEl) return;
   engine = new GameEngine({
     container: containerEl,
@@ -121,7 +137,7 @@ onMount(async () => {
       if (res.ok) {
         const payload = await res.json();
         if (payload.mutated) {
-          setRpgState(payload.playerState);
+          applyRpgState(payload.playerState);
           
           for (const rx of payload.reactions) {
             let msg = "";
@@ -130,24 +146,24 @@ onMount(async () => {
             let pType: "smoke" | "bubble" | "sizzle" = "smoke";
 
             if (rx.event === "ignited") {
-              msg = `🔥 ${rx.itemId} burned into ${rx.resultItemId}!`;
+              msg = `${rx.itemId} burned into ${rx.resultItemId}.`;
               color = 0xff5555;
               pColor = 0xff3300;
               pType = "smoke";
             } else if (rx.event === "melted") {
-              msg = `💧 ${rx.itemId} melted into ${rx.resultItemId}!`;
+              msg = `${rx.itemId} melted into ${rx.resultItemId}.`;
               color = 0x55aaff;
               pColor = 0x3388ff;
               pType = "bubble";
             } else if (rx.event === "rotted") {
-              msg = `⏱️ ${rx.itemId} decayed into ${rx.resultItemId}!`;
+              msg = `${rx.itemId} decayed into ${rx.resultItemId}.`;
               color = 0xaaaaaa;
               pColor = 0x777777;
               pType = "sizzle";
             }
 
             if (rx.equippedSlot) {
-              msg = `⚠️ Equipped ${rx.equippedSlot} (${rx.itemId}) ${rx.event}! Added ${rx.resultItemId} to stash.`;
+              msg = `equipped ${rx.equippedSlot} (${rx.itemId}) ${rx.event}; added ${rx.resultItemId} to stash.`;
             }
 
             engine?.spawnEnvFloatingText(msg, color);
@@ -186,14 +202,14 @@ onDestroy(() => {
 
   <!-- Top-Right Settings Gear Button -->
   <div class="top-bar">
-    <button class="settings-trigger-btn" onclick={() => (showSkills = !showSkills)} title="Open Skill Progression">
-      🎒 Skills
+    <button class="settings-trigger-btn" onclick={toggleSkills} title="Open Skill Progression">
+      skills
     </button>
-    <button class="settings-trigger-btn" onclick={() => (showInventory = !showInventory)} title="Open Stash Inventory">
-      🎒 Stash
+    <button class="settings-trigger-btn" onclick={toggleInventory} title="Open Stash Inventory">
+      stash
     </button>
-    <button class="settings-trigger-btn" onclick={() => (showSettings = true)} title="Configure Controls">
-      ⚙ Controls
+    <button class="settings-trigger-btn" onclick={openSettings} title="Configure Controls">
+      controls
     </button>
   </div>
 
@@ -273,7 +289,7 @@ onDestroy(() => {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background: #3d2c1a;
+    background: var(--color-world-soil, CanvasText);
   }
 
   .shell {
@@ -413,7 +429,7 @@ onDestroy(() => {
     background: rgba(255, 220, 120, 0.15);
     border-color: rgba(255, 220, 120, 0.75);
     box-shadow: 0 0 8px rgba(255, 220, 120, 0.15);
-    color: #ffffff;
+    color: var(--color-text, white);
   }
 
   @keyframes pop {

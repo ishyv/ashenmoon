@@ -773,9 +773,19 @@ export function getRockTexture(): Texture {
 // Decorations
 // ---------------------------------------------------------------------------
 
-/** Bush decoration sprite. Variant 1–4. Require BUNDLE_TERRAIN_DECO. */
-export function getBushTexture(variant: 1 | 2 | 3 | 4): Texture {
-  return cachedTexture(ASSET_PATHS.decorations.bushes[variant - 1]!);
+const bushFrameCache = new Map<string, Texture[]>();
+
+/** Single frame from a bush spritesheet. Variant 1–4, frame 0-based. Require BUNDLE_TERRAIN_DECO. */
+export function getBushTexture(variant: 1 | 2 | 3 | 4, frame = 0): Texture {
+  const path = ASSET_PATHS.decorations.bushes[variant - 1]!;
+  let frames = bushFrameCache.get(path);
+  if (!frames) {
+    const tex = requireTexture(path);
+    const frameH = tex.source.height;
+    frames = sliceSheet(path, frameH, frameH);
+    bushFrameCache.set(path, frames);
+  }
+  return frames[frame % frames.length] ?? requireTexture(path);
 }
 
 /** Cloud sprite. Variant 1–8. Require BUNDLE_TERRAIN_DECO. */

@@ -3,14 +3,13 @@
  * pickup, refuel, and build that must survive a reload goes through here.
  *
  * WHY this is isolated: today these POST to the local SvelteKit `/api/rpg/*`
- * route handlers, which persist via `rpg-service` (MongoDB, or the in-memory
- * offline store). Keeping all of it behind one module means the storage
+ * route handlers, which persist via `rpgService`. Keeping all of it behind one module means the storage
  * strategy can change in ONE place without touching any gameplay system. Do not
  * call `fetch` for game state outside this file.
  *
  * Scope: this seam owns the server-backed core (profile/inventory/skills).
  * Locally persisted slices (survival, statuses, knowledge) go through
- * `src/lib/state/save-load.ts` instead.
+ * `src/lib/state/persistence/save-load.ts` instead.
  *
  * Behavior contract: fire-and-forget from the caller's view. Failures resolve to
  * `{ ok: false, error }` rather than throwing; callers surface their own
@@ -58,8 +57,9 @@ export function syncGather(
 export function syncPickup(
   itemId: string,
   pickupId: string,
+  quantity = 1,
 ): Promise<SyncResult<{ playerState: RpgPlayerState }>> {
-  return postJson("/api/rpg/gather", { action: "pickup", locationId: itemId, pickupId });
+  return postJson("/api/rpg/gather", { action: "pickup", locationId: itemId, pickupId, quantity });
 }
 
 /** Refuel the campfire (consumes wood server-side). */

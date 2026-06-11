@@ -27,6 +27,31 @@ function validateItemRegistry(items: ItemRegistry): void {
   }
 }
 
+export function validateItemRegistryProblems(items: ItemRegistry): string[] {
+  const problems: string[] = [];
+  for (const [key, item] of Object.entries(items)) {
+    if (key !== item.id) problems.push(`item key ${key} does not match id ${item.id}`);
+    if (!item.physical) problems.push(`item ${item.id} is missing physical data`);
+    else {
+      if (item.physical.weight <= 0) problems.push(`item ${item.id} weight must be > 0`);
+      if (!["pocket", "pack", "haul"].includes(item.physical.carryClass)) {
+        problems.push(`item ${item.id} has invalid carry class`);
+      }
+      if (item.physical.stackLimit !== undefined && item.physical.stackLimit <= 0) {
+        problems.push(`item ${item.id} stackLimit must be > 0`);
+      }
+    }
+
+    for (const trait of item.traits) {
+      const effect = "effect" in trait ? trait.effect : null;
+      if (effect?.kind === "transform" && !items[effect.into]) {
+        problems.push(`item ${item.id} transforms into missing item ${effect.into}`);
+      }
+    }
+  }
+  return problems;
+}
+
 /**
  * Sets of item ids grouped by the trait they carry, plus the `haul` set for
  * items too large to stash. Built once from the registry so reaction ticks and

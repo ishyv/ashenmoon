@@ -1,4 +1,11 @@
-import { Category, Rarity, type CarryClass, type ItemDefinition, type ItemId } from "./item-types";
+import {
+  Category,
+  DEFAULT_CARRY_CLASS,
+  Rarity,
+  type ItemDefinition,
+  type ItemId,
+  type ItemPhysicalProperties,
+} from "./item-types";
 import type { ItemTrait } from "./item-traits";
 
 /**
@@ -10,8 +17,7 @@ interface ItemBaseInput {
   description: string;
   rarity: Rarity;
   category: Category;
-  /** Optional carry class; defaults to `pack` when omitted. */
-  carry?: CarryClass;
+  physical?: Partial<ItemPhysicalProperties>;
 }
 
 /**
@@ -25,7 +31,16 @@ export function Item(base: ItemBaseInput): ItemDefinition & {
   with: (...traits: ItemTrait[]) => ItemDefinition;
 } {
   const definition: ItemDefinition = {
-    ...base,
+    id: base.id,
+    name: base.name,
+    description: base.description,
+    rarity: base.rarity,
+    category: base.category,
+    physical: {
+      carryClass: base.physical?.carryClass ?? DEFAULT_CARRY_CLASS,
+      weight: base.physical?.weight ?? 1,
+      stackLimit: base.physical?.stackLimit,
+    },
     traits: [],
   };
 

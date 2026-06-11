@@ -32,7 +32,7 @@ export enum EntityId {
 }
 
 /**
- * Keys into `rpgState.skills`. `Combat` is optional — the backend may not define
+ * Keys into `gameState.rpg.skills`. `Combat` is optional — the backend may not define
  * it yet, so writers must treat its absence as a safe no-op (see the engine's
  * `awardCombatXp`).
  */

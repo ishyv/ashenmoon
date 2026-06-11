@@ -7,7 +7,7 @@ budget is one person, so the bar for inclusion is:
 2. The diff is reviewable in one sitting.
 3. It respects the architecture in
    [`docs/ASHENMOON_AGENT_PROJECT_ORGANIZATION_RULES.md`](docs/ASHENMOON_AGENT_PROJECT_ORGANIZATION_RULES.md):
-   game rules live in `src/lib/rpg/` (pure) and `src/lib/state/`, never in
+   game rules live in `src/lib/domain/` (pure) and `src/lib/state/`, never in
    `.svelte` or Pixi files.
 
 ## Before you start
@@ -33,7 +33,7 @@ bun run build    # must succeed
 bun run test     # vitest; pure system logic must have tests
 ```
 
-Any new pure rule logic (`src/lib/rpg/**`) ships with a colocated `*.test.ts`.
+Any new pure rule logic (`src/lib/domain/**`) ships with a colocated `*.test.ts`.
 
 ## Code style
 
@@ -51,11 +51,11 @@ Any new pure rule logic (`src/lib/rpg/**`) ships with a colocated `*.test.ts`.
 
 ## Architecture notes
 
-- Pure game rules belong in `src/lib/rpg/` and are framework-free and unit
+- Pure game rules belong in `src/lib/domain/` and are framework-free and unit
   tested.
 - Reactive `.svelte.ts` orchestrators (survival, quests, rpg-state) call pure
   systems and then persist; they do not own rules.
-- Extend items via the trait/effect DSL in `src/lib/rpg/items/`, not per-item
+- Extend items via the trait/effect DSL in `src/lib/domain/items/`, not per-item
   `onUse` callbacks.
 
 ## Commit messages
