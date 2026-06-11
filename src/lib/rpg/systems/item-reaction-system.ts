@@ -1,65 +1,40 @@
-import { ITEM_DEFINITIONS, ITEM_TRAIT_INDEX } from "../items/item-definitions";
-import type { TemperatureSensitiveTrait } from "../items/item-traits";
-import { applyItemEffectToInventory } from "./item-effect-system";
+/**
+ * Reactive binding between live game state and the pure reaction processors.
+ * Listens for environment changes and applies temperature / ambient-ignition
+ * reactions to the player's inventory. All decision logic lives in the pure
+ * `item-reactions.ts`; this file only wires it to `rpgState` and the event bus.
+ *
+ * Layering note: importing `rpgState` (game layer) here is an existing seam, the
+ * reaction *rules* themselves stay pure and game-free in `item-reactions.ts`.
+ */
+import { processFlammableReactions, processTemperatureReactions } from "./item-reactions";
 import { onEnvironmentChanged, type EnvironmentChangedEvent } from "./environment-system";
 import { rpgState } from "../../game/rpg-state.svelte";
 
-/**
- * Type guard for identifying temperature sensitive traits within an item definition.
- */
-function isTemperatureSensitiveTrait(
-  trait: TemperatureSensitiveTrait | { kind: string },
-): trait is TemperatureSensitiveTrait {
-  return trait.kind === "temperature_sensitive";
-}
-
-/**
- * Processes inventory reactions triggered by ambient temperature changes.
- * Iterates through relevant items indexed by trait to minimize performance overhead.
- */
-function processTemperatureChange(currentTemp: number): void {
+/** Applies temperature + ambient-ignition reactions when the environment shifts. */
+export function onEnvironmentChangedEvent(event: EnvironmentChangedEvent): void {
   const inventory = rpgState.inventory;
   if (!inventory) return;
+  if (event.previous.temperature === event.current.temperature) return;
 
-  let nextInventory = inventory;
+  const temperature = event.current.temperature;
+  let next = inventory;
 
-  // Optimized loop: only checks items known to be temperature sensitive
-  for (const itemId of ITEM_TRAIT_INDEX.temperatureSensitive) {
-    const slot = nextInventory.slots[itemId];
-    if (!slot || !("qty" in slot) || slot.qty <= 0) continue;
+  next = processTemperatureReactions(next, temperature).inventory;
 
-    const definition = ITEM_DEFINITIONS[itemId];
-    if (!definition) continue;
+  // Ambient ignition: items carried in a pack ignite only when the surrounding
+  // air itself reaches their ignition point (a blight/ember zone). Radiant heat
+  // from a nearby campfire is a separate, placed-near-fire path.
+  next = processFlammableReactions(next, {
+    location: "pack",
+    ambientTemp: temperature,
+    nearFire: false,
+  }).inventory;
 
-    const trait = definition.traits.find(isTemperatureSensitiveTrait);
-    if (!trait) continue;
-
-    // Check hazard boundaries
-    const tooHot = currentTemp > trait.maxSafeTemp;
-    const tooCold = currentTemp < trait.minSafeTemp;
-    if (!tooHot && !tooCold) continue;
-
-    // Apply the defined effect (e.g., transform, destroy)
-    const updatedInventory = applyItemEffectToInventory(nextInventory, itemId, trait.effect);
-    if (updatedInventory !== nextInventory) {
-      nextInventory = updatedInventory;
-    }
-  }
-
-  // Update global state only if mutations occurred
-  if (nextInventory !== inventory) {
-    rpgState.inventory = nextInventory;
+  if (next !== inventory) {
+    rpgState.inventory = next;
   }
 }
 
-/**
- * Event handler for environment updates.
- */
-export function onEnvironmentChangedEvent(event: EnvironmentChangedEvent): void {
-  if (event.previous.temperature !== event.current.temperature) {
-    processTemperatureChange(event.current.temperature);
-  }
-}
-
-// Global listener registration for the item reaction system
+// Global listener registration for the item reaction system.
 onEnvironmentChanged(onEnvironmentChangedEvent);
