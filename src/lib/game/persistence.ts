@@ -2,12 +2,15 @@
  * The single seam between the game and persisted RPG state. Every gather,
  * pickup, refuel, and build that must survive a reload goes through here.
  *
- * WHY this is isolated: today these POST to the bot's `/api/rpg/*` endpoints,
- * which write MongoDB. That is heavier than single-player needs. Keeping all of
- * it behind one module means the storage strategy can change in ONE place —
- * e.g. localStorage for single-player, and a real API only once P2P multiplayer
- * exists — without touching any gameplay system. Do not call `fetch` for game
- * state outside this file.
+ * WHY this is isolated: today these POST to the local SvelteKit `/api/rpg/*`
+ * route handlers, which persist via `rpg-service` (MongoDB, or the in-memory
+ * offline store). Keeping all of it behind one module means the storage
+ * strategy can change in ONE place without touching any gameplay system. Do not
+ * call `fetch` for game state outside this file.
+ *
+ * Scope: this seam owns the server-backed core (profile/inventory/skills).
+ * Locally persisted slices (survival, statuses, knowledge) go through
+ * `src/lib/state/save-load.ts` instead.
  *
  * Behavior contract: fire-and-forget from the caller's view. Failures resolve to
  * `{ ok: false, error }` rather than throwing; callers surface their own

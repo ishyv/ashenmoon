@@ -18,6 +18,8 @@ import { StatusId } from "$lib/rpg/systems/status-types";
 import { applyStatusEffect } from "./status-effects.svelte";
 import { emitPlayerFeedback } from "./player-feedback";
 import { StorageKeys } from "./game-events";
+import { loadSlice, saveSlice } from "$lib/state/save-load";
+import type { SurvivalSnapshot } from "$lib/state/player-state";
 
 export const thirstConfig = $state<ThirstConfig>({ ...DEFAULT_THIRST_CONFIG });
 
@@ -72,25 +74,13 @@ export function setThirst(value: number): void {
 }
 
 export function loadSurvival(): void {
-  if (typeof window === "undefined") return;
-  try {
-    const stored = localStorage.getItem(StorageKeys.survival);
-    if (!stored) return;
-    const parsed = JSON.parse(stored);
-    if (parsed && typeof parsed === "object" && typeof parsed.thirst === "number") {
-      thirst.current = Math.max(0, Math.min(thirstConfig.max, parsed.thirst));
-      wasParched = thirst.current <= 0;
-    }
-  } catch (e) {
-    console.error("Failed to load survival state:", e);
+  const snap = loadSlice<SurvivalSnapshot | null>(StorageKeys.survival, null);
+  if (snap && typeof snap.thirst === "number") {
+    thirst.current = Math.max(0, Math.min(thirstConfig.max, snap.thirst));
+    wasParched = thirst.current <= 0;
   }
 }
 
 function saveSurvival(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(StorageKeys.survival, JSON.stringify({ thirst: thirst.current }));
-  } catch (e) {
-    console.error("Failed to save survival state:", e);
-  }
+  saveSlice<SurvivalSnapshot>(StorageKeys.survival, { thirst: thirst.current });
 }

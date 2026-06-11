@@ -23,6 +23,7 @@ import {
 import { GameEvent, StorageKeys } from "./game-events";
 import { triggerQuestEvent } from "./quests.svelte";
 import { emitPlayerFeedback } from "./player-feedback";
+import { loadSlice, saveSlice } from "$lib/state/save-load";
 
 export const statusState = $state<{ active: ActiveStatus[] }>({ active: [] });
 
@@ -96,31 +97,20 @@ export function tickStatusEffects(dt: number): { hpDelta: number } {
 }
 
 export function loadStatuses(): void {
-  if (typeof window === "undefined") return;
-  try {
-    const stored = localStorage.getItem(StorageKeys.statuses);
-    if (!stored) return;
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return;
-    statusState.active = parsed.filter(
-      (s): s is ActiveStatus =>
-        s &&
-        typeof s === "object" &&
-        typeof s.id === "string" &&
-        isStatusId(s.id) &&
-        typeof s.remainingSec === "number" &&
-        s.remainingSec > 0,
+  const stored = loadSlice<unknown[]>(StorageKeys.statuses, []);
+  if (!Array.isArray(stored)) return;
+  statusState.active = stored.filter((s): s is ActiveStatus => {
+    if (!s || typeof s !== "object") return false;
+    const rec = s as Record<string, unknown>;
+    return (
+      typeof rec.id === "string" &&
+      isStatusId(rec.id) &&
+      typeof rec.remainingSec === "number" &&
+      rec.remainingSec > 0
     );
-  } catch (e) {
-    console.error("Failed to load statuses:", e);
-  }
+  });
 }
 
 function saveStatuses(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(StorageKeys.statuses, JSON.stringify(statusState.active));
-  } catch (e) {
-    console.error("Failed to save statuses:", e);
-  }
+  saveSlice(StorageKeys.statuses, statusState.active);
 }
