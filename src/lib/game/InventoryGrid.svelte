@@ -6,6 +6,19 @@ import { playCraftSound } from "./audio-synthesis";
 import { canConsume, consumeItem, getConsumeVerb } from "./consume-actions";
 import { CRAFT_RECIPES, type CraftRecipe } from "$lib/rpg/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/rpg/crafting/crafting-system";
+import { inspect as inspectKnowledge } from "./knowledge.svelte";
+import type { KnowledgeProperty } from "$lib/rpg/knowledge/item-knowledge";
+
+// lowercase per design law; shown in the inspect panel's field notes.
+const KNOWLEDGE_LABELS: Record<KnowledgeProperty, string> = {
+  edible: "edible",
+  thirst_value: "quenches thirst",
+  toxicity: "can sicken you",
+  flammable: "flammable",
+  perishable: "perishable",
+  heat_sensitive: "heat-sensitive",
+  boilable: "boilable",
+};
 
 let { engine, onClose } = $props<{ engine: any; onClose: () => void }>();
 
@@ -110,6 +123,8 @@ function startBuildPlacement(recipe: typeof buildRecipes[0]) {
 
 
 let selectedItem = $state<string | null>(null);
+// Knowledge inspect view-model for the selected item (known vs unknown facts).
+const inspectNotes = $derived(selectedItem ? inspectKnowledge(selectedItem) : null);
 let decayProgress = $state<Record<string, number>>({});
 let decayInterval: any;
 
@@ -292,6 +307,20 @@ onDestroy(() => {
             {/if}
           </div>
         </div>
+
+        {#if inspectNotes && (inspectNotes.known.length > 0 || inspectNotes.unknown.length > 0)}
+          <div class="field-notes">
+            <span class="notes-title">field notes</span>
+            <div class="notes-list">
+              {#each inspectNotes.known as prop}
+                <span class="note known">{KNOWLEDGE_LABELS[prop]}</span>
+              {/each}
+              {#each inspectNotes.unknown as _unknown}
+                <span class="note unknown">? ? ?</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
 
         {#if meta.category === "tool"}
           <div class="inspect-actions">
@@ -711,6 +740,34 @@ onDestroy(() => {
 
   .inspect-actions {
     margin-top: 0.5rem;
+  }
+
+  .field-notes {
+    margin-top: 0.5rem;
+  }
+  .notes-title {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    opacity: 0.55;
+  }
+  .notes-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+  }
+  .note {
+    font-size: 0.78rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-sm, 2px);
+  }
+  .note.known {
+    opacity: 0.92;
+  }
+  .note.unknown {
+    opacity: 0.38;
+    letter-spacing: 0.12em;
   }
 
   .inspect-btn {

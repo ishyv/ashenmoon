@@ -127,6 +127,7 @@ import {
   loadStatuses,
 } from "./status-effects.svelte";
 import { registerPlayerFeedback, registerPlayerHp } from "./player-feedback";
+import { loadKnowledge } from "./knowledge.svelte";
 import { triggerQuestEvent, dialogueState } from "./quests.svelte";
 import { Colors } from "./colors";
 import { coordKey } from "./coord-utils";
@@ -262,6 +263,7 @@ export class GameEngine {
       // feedback + hp sinks so state modules can reach the canvas/player.
       loadSurvival();
       loadStatuses();
+      loadKnowledge();
       registerPlayerFeedback((text, tone) => {
         const color =
           tone === "danger"

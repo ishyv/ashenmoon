@@ -61,4 +61,5 @@ export const StorageKeys = {
   uiPreferences: "ashenmoor_ui_preferences",
   survival: "ashenmoor_survival",
   statuses: "ashenmoor_statuses",
+  knowledge: "ashenmoor_knowledge",
 } as const;

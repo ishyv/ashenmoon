@@ -19,6 +19,8 @@ import { emitPlayerFeedback, emitPlayerHpDelta } from "./player-feedback";
 import { triggerQuestEvent } from "./quests.svelte";
 import { GameEvent } from "./game-events";
 import { playPickupSound } from "./audio-synthesis";
+import { learnAbout } from "./knowledge.svelte";
+import { propertiesFromConsume } from "$lib/rpg/knowledge/knowledge-unlock";
 
 /** Whether one unit of this item can be consumed right now. */
 export function canConsume(itemId: string): boolean {
@@ -59,26 +61,34 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
     "info",
   );
 
+  let harmed = false;
+  let restoredThirst = false;
   for (const command of outcome.holderCommands) {
     switch (command.kind) {
       case "restore_thirst":
         restoreThirst(command.amount);
+        restoredThirst = true;
         break;
       case "restore_hp":
         emitPlayerHpDelta(command.amount);
         break;
       case "damage":
         emitPlayerHpDelta(-command.amount);
+        harmed = true;
         break;
       case "add_status":
         // source = the consumed item, so knowledge auto-memory can attribute it.
         applyStatusEffect(command.status, command.durationSec, itemId);
+        harmed = true;
         break;
       case "clear_all_statuses":
         clearAllStatusEffects();
         break;
     }
   }
+
+  // Discovery: consuming an item teaches what you just experienced of it.
+  learnAbout(itemId, ...propertiesFromConsume({ harmed, restoredThirst }));
 
   triggerQuestEvent(GameEvent.Consume, itemId);
   return true;
