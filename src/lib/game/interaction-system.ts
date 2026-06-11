@@ -25,9 +25,17 @@ import { Colors } from "./colors";
 import { getPlayerEntity } from "./entity-queries";
 import { awardSkillXp } from "./skill-xp";
 import { SkillKey, InputAction, EntityId, GameEvent } from "./game-events";
-import { getItemQty, getEquippedWeaponId, isToolType, findBoilableItem } from "./inventory-api";
+import { getItemQty, getEquippedWeaponId, findBoilableItem } from "./inventory-api";
 import { syncGather, syncPickup, syncRefuel } from "./persistence";
 import { transformStackQty } from "$lib/rpg/systems/inventory-system";
+import {
+  checkGatherTool,
+  gatherInterval,
+  gatherQuantity,
+  requiredToolKind,
+  superGatherCooldown,
+  superGatherCost,
+} from "$lib/rpg/gathering/gather-system";
 
 const INTERACT_RANGE = 2;
 
@@ -132,7 +140,7 @@ export function triggerSuperGatherSystem(
   if (!zeroCooldowns && interaction.superGatherCooldownTimer > 0) return;
 
   const sgLevel = rpgState.skills?.superGather?.level ?? 1;
-  const currentCost = Math.max(15, interaction.superGatherStaminaCost - (sgLevel - 1) * 2);
+  const currentCost = superGatherCost(interaction.superGatherStaminaCost, sgLevel);
 
   if (stamina.current < currentCost) {
     spawnEnvFloatingText(vfx, "⚡️ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
@@ -141,7 +149,7 @@ export function triggerSuperGatherSystem(
 
   spendStamina(currentCost, "burst");
 
-  const currentCooldown = Math.max(0.5, interaction.superGatherCooldown - (sgLevel - 1) * 0.15);
+  const currentCooldown = superGatherCooldown(interaction.superGatherCooldown, sgLevel);
   interaction.superGatherCooldownTimer = currentCooldown;
 
   interaction.triggerSuperGatherNextSwing = true;
@@ -746,7 +754,7 @@ export function runInteractionSystem(
         const res = target.resource;
         if (res.rpgLocationId && res.rpgAction) {
           const weaponId = getEquippedWeaponId();
-          const expectedKind = res.rpgAction === "mine" ? "pickaxe" : "axe";
+          const expectedKind = requiredToolKind(res.rpgAction);
 
           const spawnFailText = (msg: string) => {
             const playerEntity = getPlayerEntity();
@@ -765,16 +773,13 @@ export function runInteractionSystem(
             entityLayer.addChild(textObj);
           };
 
-          if (!weaponId) {
-            devConsoleLog(`[Error] No tool equipped! Equip a ${expectedKind} first.`);
-            spawnFailText(`need ${expectedKind}`);
-            onInteract(target);
-            interaction.gatherCooldownTimer = interaction.gatherInterval;
-            return;
-          }
-
-          if (!isToolType(weaponId, expectedKind)) {
-            devConsoleLog(`[Error] Wrong tool! Equip an ${expectedKind} to harvest this.`);
+          const gate = checkGatherTool(weaponId, expectedKind);
+          if (!gate.ok) {
+            const detail =
+              gate.reason === "no_tool"
+                ? `No tool equipped! Equip a ${expectedKind} first.`
+                : `Wrong tool! Equip an ${expectedKind} to harvest this.`;
+            devConsoleLog(`[Error] ${detail}`);
             spawnFailText(`need ${expectedKind}`);
             onInteract(target);
             interaction.gatherCooldownTimer = interaction.gatherInterval;
@@ -786,7 +791,7 @@ export function runInteractionSystem(
         const isTree = interaction.nodeKinds.get(target.id) === "tree";
         const skillKey = isTree ? SkillKey.Lumberjacking : SkillKey.Mining;
         const skillLevel = rpgState.skills?.[skillKey]?.level ?? 1;
-        interaction.currentGatherInterval = Math.max(0.15, interaction.gatherInterval * Math.pow(0.95, skillLevel - 1));
+        interaction.currentGatherInterval = gatherInterval(interaction.gatherInterval, skillLevel);
         interaction.gatherCooldownTimer = 0;
       } else {
         triggerImmediateInteraction(
@@ -827,14 +832,14 @@ export function runInteractionSystem(
       const isTree = interaction.nodeKinds.get(target.id) === "tree";
       const skillKey = isTree ? SkillKey.Lumberjacking : SkillKey.Mining;
       const skillLevel = rpgState.skills?.[skillKey]?.level ?? 1;
-      const scaledInterval = Math.max(0.15, interaction.gatherInterval * Math.pow(0.95, skillLevel - 1));
+      const scaledInterval = gatherInterval(interaction.gatherInterval, skillLevel);
       interaction.currentGatherInterval = scaledInterval;
       interaction.gatherCooldownTimer = scaledInterval;
 
       const isSuper = interaction.triggerSuperGatherNextSwing;
       interaction.triggerSuperGatherNextSwing = false;
 
-      const quantity = isSuper ? 2 : 1;
+      const quantity = gatherQuantity(isSuper);
       const dropName = res?.drop ?? "resource";
 
       onHit(target, dropName, quantity);

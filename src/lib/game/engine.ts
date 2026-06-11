@@ -119,6 +119,7 @@ import {
   ITEM_METADATA,
 } from "./rpg-state.svelte";
 import { tickStamina, stamina } from "./stamina.svelte";
+import { superGatherCooldown } from "$lib/rpg/gathering/gather-system";
 import { tickThirst, loadSurvival } from "./survival.svelte";
 import {
   tickStatusEffects,
@@ -533,7 +534,7 @@ export class GameEngine {
       cooldownsState.evadeMax = maxEvadeCd;
 
       const sgLevel = rpgState.skills?.superGather?.level ?? 1;
-      const maxSgCd = Math.max(0.5, this.interactionResource.superGatherCooldown - (sgLevel - 1) * 0.15);
+      const maxSgCd = superGatherCooldown(this.interactionResource.superGatherCooldown, sgLevel);
       cooldownsState.superGather = Math.max(0, this.interactionResource.superGatherCooldownTimer);
       cooldownsState.superGatherMax = maxSgCd;
 

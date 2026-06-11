@@ -8,6 +8,7 @@ import { rpgState } from "./rpg-state.svelte";
 import type { RpgPlayerState } from "./rpg-types";
 import { ITEM_DEFINITIONS } from "$lib/rpg/items/item-definitions";
 import type { BoilableTrait } from "$lib/rpg/items/item-traits";
+import { matchesToolKind } from "$lib/rpg/gathering/gather-system";
 
 type WeaponSlot = RpgPlayerState["profile"]["loadout"]["weapon"];
 
@@ -41,8 +42,7 @@ export function getEquippedWeaponId(): string | null {
  * pickaxe pass as an axe and chop trees.)
  */
 export function isToolType(itemId: string, kind: "axe" | "pickaxe"): boolean {
-  if (kind === "pickaxe") return itemId.includes("pickaxe");
-  return itemId.includes("axe") && !itemId.includes("pickaxe");
+  return matchesToolKind(itemId, kind);
 }
 
 /**
