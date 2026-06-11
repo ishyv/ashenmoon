@@ -23,6 +23,19 @@ export const activeQuests = $state<{
 }>({
   currentQuestId: null, // null until Vane gives the first quest
   quests: {
+    lost_in_woods: {
+      id: "lost_in_woods",
+      title: "Lost in the Woods",
+      description:
+        "No camp, no tools, a dry throat. Boil filthy water clean, drink it, and keep a fire alive.",
+      completed: false,
+      rewardClaimed: false,
+      objectives: [
+        { id: "boil_water", label: "Boil Dirty Water clean", current: 0, target: 1, completed: false },
+        { id: "drink_water", label: "Drink Clean Water", current: 0, target: 1, completed: false },
+        { id: "warm_fire", label: "Tend the campfire", current: 0, target: 1, completed: false },
+      ],
+    },
     scavenger_tools: {
       id: "scavenger_tools",
       title: "Scavenger's Tools",
@@ -95,7 +108,13 @@ export function triggerQuestEvent(action: string, itemId?: string, amount = 1): 
     if (obj.completed) continue;
 
     let match = false;
-    if (action === GameEvent.Pickup && obj.id === "gather_twigs" && itemId === "oak_wood") {
+    if (action === GameEvent.Boil && obj.id === "boil_water" && itemId === "clean_water") {
+      match = true;
+    } else if (action === GameEvent.Consume && obj.id === "drink_water" && itemId === "clean_water") {
+      match = true;
+    } else if (action === GameEvent.Refuel && obj.id === "warm_fire") {
+      match = true;
+    } else if (action === GameEvent.Pickup && obj.id === "gather_twigs" && itemId === "oak_wood") {
       match = true;
     } else if (action === GameEvent.Pickup && obj.id === "gather_stones" && itemId === "stone") {
       match = true;

@@ -36,6 +36,9 @@ import {
   superGatherCooldown,
   superGatherCost,
 } from "$lib/rpg/gathering/gather-system";
+import { rollGatherWound } from "$lib/rpg/gathering/gather-risk";
+import { applyStatusEffect } from "./status-effects.svelte";
+import { StatusId } from "$lib/rpg/systems/status-types";
 
 const INTERACT_RANGE = 2;
 
@@ -843,6 +846,23 @@ export function runInteractionSystem(
       const dropName = res?.drop ?? "resource";
 
       onHit(target, dropName, quantity);
+
+      // Bare-hand gathering (forage nodes with no tool requirement) can wound.
+      // Tool-gated nodes always have a tool here, so they never trigger this.
+      const wound = rollGatherWound({
+        hasTool: !!getEquippedWeaponId(),
+        nodeKind: interaction.nodeKinds.get(target.id) ?? "forage",
+      });
+      if (wound) {
+        applyStatusEffect(wound.status, wound.durationSec, "hazard:gather");
+        spawnEnvFloatingText(
+          vfx,
+          wound.status === StatusId.Cut ? "🩸 Cut!" : "🩸 Bleeding!",
+          Colors.ui.error,
+          getPlayerEntity().position!,
+          entityLayer,
+        );
+      }
 
       // Award XP. awardSkillXp no-ops if a skill isn't loaded, so no guard needed.
       const xpPos = getPlayerEntity().position!;
