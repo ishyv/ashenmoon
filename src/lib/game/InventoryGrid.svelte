@@ -4,86 +4,17 @@ import { rpgState, ITEM_METADATA, setRpgState } from "./rpg-state.svelte";
 import { triggerQuestEvent } from "./quests.svelte";
 import { playCraftSound } from "./audio-synthesis";
 import { canConsume, consumeItem, getConsumeVerb } from "./consume-actions";
+import { CRAFT_RECIPES, type CraftRecipe } from "$lib/rpg/crafting/recipes";
+import { canCraft as canCraftRecipe } from "$lib/rpg/crafting/crafting-system";
 
 let { engine, onClose } = $props<{ engine: any; onClose: () => void }>();
 
 let activeTab = $state("stash"); // "stash" | "crafting" | "building"
 let hoveredItem = $state<string | null>(null);
 
-const recipes = [
-  {
-    id: "flint_axe",
-    name: "Flint Axe",
-    description: "A basic woodsman tool. Used to harvest Oak Trees.",
-    costs: [
-      { itemId: "oak_wood", name: "Loose Twigs", required: 5 },
-      { itemId: "stone", name: "Loose Stones", required: 3 }
-    ]
-  },
-  {
-    id: "flint_pickaxe",
-    name: "Flint Pickaxe",
-    description: "A basic mining tool. Used to harvest ore veins.",
-    costs: [
-      { itemId: "oak_wood", name: "Loose Twigs", required: 5 },
-      { itemId: "stone", name: "Loose Stones", required: 3 }
-    ]
-  },
-  {
-    id: "stone_block",
-    name: "Stone Block",
-    description: "Refined block of cut stone. Used in outpost construction.",
-    costs: [
-      { itemId: "stone", name: "Raw Stone", required: 3 }
-    ]
-  },
-  {
-    id: "oak_plank",
-    name: "Oak Plank",
-    description: "Smooth plank of sawed oak wood. Used in outpost construction.",
-    costs: [
-      { itemId: "oak_wood", name: "Raw Oak Wood", required: 3 }
-    ]
-  },
-  {
-    id: "charcoal",
-    name: "Charcoal",
-    description: "Slow-burned wood. Smelted to melt metals in the campfire.",
-    costs: [
-      { itemId: "oak_wood", name: "Oak Wood", required: 2 }
-    ]
-  },
-  {
-    id: "copper_ingot",
-    name: "Copper Ingot",
-    description: "Pure smelted copper bar. Requires standing near the Campfire's heat.",
-    requiresCampfire: true,
-    costs: [
-      { itemId: "copper_ore", name: "Copper Ore", required: 3 },
-      { itemId: "charcoal", name: "Charcoal", required: 1 }
-    ]
-  },
-  {
-    id: "iron_ingot",
-    name: "Iron Ingot",
-    description: "Refined ingot of strong iron metal. Requires standing near the Campfire's heat.",
-    requiresCampfire: true,
-    costs: [
-      { itemId: "iron_ore", name: "Iron Ore", required: 3 },
-      { itemId: "charcoal", name: "Charcoal", required: 2 }
-    ]
-  },
-  {
-    id: "silver_ingot",
-    name: "Silver Ingot",
-    description: "Glistening sterling silver bar. Requires standing near the Campfire's heat.",
-    requiresCampfire: true,
-    costs: [
-      { itemId: "silver_ore", name: "Silver Ore", required: 3 },
-      { itemId: "charcoal", name: "Charcoal", required: 3 }
-    ]
-  }
-];
+// Crafting recipes are owned by the pure rpg layer (single source of truth);
+// see src/lib/rpg/crafting/. The UI only renders them and previews craftability.
+const recipes = CRAFT_RECIPES;
 
 const buildRecipes = [
   {
@@ -132,12 +63,10 @@ function getMaterialQty(itemId: string): number {
   return "qty" in slot ? (slot.qty ?? 0) : 0;
 }
 
-function canCraft(recipe: typeof recipes[0]): boolean {
-  if (recipe.requiresCampfire) {
-    const isNear = engine ? engine.isNearCampfire() : false;
-    if (!isNear) return false;
-  }
-  return recipe.costs.every(c => getMaterialQty(c.itemId) >= c.required);
+function canCraft(recipe: CraftRecipe): boolean {
+  if (!rpgState.inventory) return false;
+  const isNear = engine ? engine.isNearCampfire() : false;
+  return canCraftRecipe(rpgState.inventory.slots, recipe.id, { isNearCampfire: isNear });
 }
 
 function canBuild(recipe: typeof buildRecipes[0]): boolean {
