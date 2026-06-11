@@ -13,7 +13,7 @@ import {
   type KnowledgeProperty,
   type PlayerKnowledge,
 } from "$lib/rpg/knowledge/item-knowledge";
-import { ITEM_DEFINITIONS } from "$lib/rpg/items/item-definitions";
+import { ITEM_DEFINITIONS } from "$lib/rpg/items";
 import { loadSlice, saveSlice } from "$lib/state/save-load";
 import { StorageKeys } from "./game-events";
 

@@ -1,5 +1,6 @@
 <script lang="ts">
-import { rpgState, ITEM_METADATA, setRpgState } from "./rpg-state.svelte";
+import { rpgState, setRpgState } from "./rpg-state.svelte";
+import { getItemDef, iconUrlFor } from "$lib/rpg/items";
 
 let hoveredSlot = $state<string | null>(null);
 
@@ -45,7 +46,7 @@ const weapon = $derived(() => {
 
 const weaponMeta = $derived(() => {
   const w = weapon();
-  return w ? ITEM_METADATA[w.itemId] : null;
+  return w ? getItemDef(w.itemId) ?? null : null;
 });
 </script>
 
@@ -79,15 +80,15 @@ const weaponMeta = $derived(() => {
       >
         {#if weapon()}
           {@const meta = weaponMeta()}
-          {#if meta?.iconUrl}
-            <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" onerror={(e) => {
+          {#if meta}
+            <img src={iconUrlFor(meta.id)} alt={meta.name} class="item-icon-img" onerror={(e) => {
               const img = e.currentTarget as HTMLImageElement;
               img.style.display = 'none';
               const fallback = img.nextElementSibling as HTMLElement;
               if (fallback) fallback.style.display = 'inline';
             }} />
           {/if}
-          <span class="slot-icon" style={meta?.iconUrl ? "display:none" : ""}>⛏️</span>
+          <span class="slot-icon" style={meta ? "display:none" : ""}>⛏️</span>
         {:else}
           <span class="slot-placeholder">🗡️</span>
         {/if}

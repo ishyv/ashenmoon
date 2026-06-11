@@ -1,7 +1,6 @@
-import { Category, Rarity, itemId, type LegacyItemMetadata, type ItemDefinition } from "./item-types";
+import { Category, Rarity, itemId, type ItemDefinition } from "./item-types";
 import { Item } from "./item-builder";
-import { defineItems } from "./item-registry";
-import { buildItemTraitIndex } from "./item-validation";
+import { buildItemTraitIndex, defineItems } from "./item-registry";
 import { AddStatus, ChanceOf, ClearAllStatuses, RestoreHp, RestoreThirst, TransformInto } from "./item-effects";
 import { Boilable, Consumable, Decayable, Flammable, TemperatureSensitive } from "./item-traits";
 import { StatusId } from "../systems/status-types";
@@ -281,58 +280,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
 });
 
 export const ITEM_TRAIT_INDEX = buildItemTraitIndex(ITEM_DEFINITIONS);
-export const ITEM_METADATA = projectLegacyItemMetadata(ITEM_DEFINITIONS);
 
-function projectLegacyItemMetadata(items: Record<string, ItemDefinition>): Record<string, LegacyItemMetadata> {
-  return Object.fromEntries(
-    Object.entries(items).map(([id, item]) => [
-      id,
-      {
-        name: item.name,
-        description: item.description,
-        rarity: item.rarity,
-        category: item.category,
-        iconUrl: `/assets/rpg/icons/${id}.png`,
-        ...(item.traits.some((trait) => trait.kind === "flammable")
-          ? (() => {
-              const trait = item.traits.find((candidate) => candidate.kind === "flammable");
-              if (!trait || trait.kind !== "flammable") return {};
-              return {
-                flammable: {
-                  ignitionTemp: trait.ignitionTemp,
-                  burnDurationSec: trait.burnDurationSec,
-                  transformsInto: trait.effect.kind === "transform" ? trait.effect.into : id,
-                },
-              };
-            })()
-          : {}),
-        ...(item.traits.some((trait) => trait.kind === "temperature_sensitive")
-          ? (() => {
-              const trait = item.traits.find((candidate) => candidate.kind === "temperature_sensitive");
-              if (!trait || trait.kind !== "temperature_sensitive") return {};
-              return {
-                temperatureSensitive: {
-                  maxSafeTemp: trait.maxSafeTemp,
-                  minSafeTemp: trait.minSafeTemp,
-                  onExceeded: "melt",
-                  transformsInto: trait.effect.kind === "transform" ? trait.effect.into : undefined,
-                },
-              };
-            })()
-          : {}),
-        ...(item.traits.some((trait) => trait.kind === "decayable")
-          ? (() => {
-              const trait = item.traits.find((candidate) => candidate.kind === "decayable");
-              if (!trait || trait.kind !== "decayable") return {};
-              return {
-                decayable: {
-                  lifespanSec: trait.lifespanSec,
-                  transformsInto: trait.effect.kind === "transform" ? trait.effect.into : id,
-                },
-              };
-            })()
-          : {}),
-      },
-    ]),
-  ) as Record<string, LegacyItemMetadata>;
+/** Looks up a canonical item definition by id, or `undefined` if unknown. */
+export function getItemDef(id: string): ItemDefinition | undefined {
+  return ITEM_DEFINITIONS[id];
 }

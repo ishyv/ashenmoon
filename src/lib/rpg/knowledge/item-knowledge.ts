@@ -4,8 +4,7 @@
  * makes you sick teaches its toxicity), not handed over up front. These pure
  * helpers own the store shape, queries, and the inspect view-model.
  */
-import type { ItemDefinition } from "../items/item-types";
-import type { ItemEffect } from "../items/item-effects";
+import type { ItemDefinition, ItemEffect } from "../items";
 
 /** A discoverable fact about an item. */
 export type KnowledgeProperty =

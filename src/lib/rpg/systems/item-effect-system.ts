@@ -1,4 +1,4 @@
-import type { ItemEffect } from "../items/item-effects";
+import type { ItemEffect } from "../items";
 import { removeStackItem, transformStackItem, type Inventory } from "./inventory-system";
 
 export function applyItemEffectToInventory(

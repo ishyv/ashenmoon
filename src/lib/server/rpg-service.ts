@@ -1,6 +1,6 @@
 import type { RpgPlayerState, RpgGatherResult, RpgEnvironmentTickResult, RpgContentSnapshot } from "../game/rpg-types";
 import { getGameDb } from "./db";
-import { ITEM_DEFINITIONS } from "../rpg/items/item-definitions";
+import { ITEM_DEFINITIONS } from "../rpg/items";
 
 // Simple fallback state if MongoDB is not available or during startup
 let inMemoryPlayerStates: Record<string, RpgPlayerState> = {};

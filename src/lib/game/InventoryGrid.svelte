@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount, onDestroy } from "svelte";
-import { rpgState, ITEM_METADATA, setRpgState } from "./rpg-state.svelte";
+import { rpgState, setRpgState } from "./rpg-state.svelte";
+import { getItemDef, iconUrlFor, reactsInto, traitOf } from "$lib/rpg/items";
 import { triggerQuestEvent } from "./quests.svelte";
 import { playCraftSound } from "./audio-synthesis";
 import { canConsume, consumeItem, getConsumeVerb } from "./consume-actions";
@@ -140,8 +141,7 @@ function getStashUsage(): number {
 }
 
 async function equipTool(itemId: string) {
-  const meta = ITEM_METADATA[itemId];
-  if (meta?.category !== "tool") return;
+  if (getItemDef(itemId)?.category !== "tool") return;
 
   try {
     const res = await fetch("/api/rpg/equip", {
@@ -182,8 +182,7 @@ const itemsList = $derived(() => {
 $effect(() => {
   const list = itemsList();
   for (const item of list) {
-    const meta = ITEM_METADATA[item.itemId];
-    if (meta?.decayable && decayProgress[item.itemId] === undefined) {
+    if (traitOf(getItemDef(item.itemId), "decayable") && decayProgress[item.itemId] === undefined) {
       // Seed with random freshness between 50% and 90%
       decayProgress[item.itemId] = 50 + Math.random() * 40;
     }
@@ -193,9 +192,9 @@ $effect(() => {
 onMount(() => {
   decayInterval = setInterval(() => {
     for (const [itemId, progress] of Object.entries(decayProgress)) {
-      const meta = ITEM_METADATA[itemId];
-      if (meta?.decayable) {
-        const rate = 100 / meta.decayable.lifespanSec;
+      const decayable = traitOf(getItemDef(itemId), "decayable");
+      if (decayable) {
+        const rate = 100 / decayable.lifespanSec;
         decayProgress[itemId] = Math.max(0, progress - rate);
       }
     }
@@ -209,22 +208,25 @@ onDestroy(() => {
 
 <div class="inventory-container">
   <!-- Interactive Item Inspect Panel -->
-  {#if selectedItem && ITEM_METADATA[selectedItem]}
-    {@const meta = ITEM_METADATA[selectedItem]}
+  {#if selectedItem && getItemDef(selectedItem)}
+    {@const meta = getItemDef(selectedItem)!}
+    {@const flammable = traitOf(meta, "flammable")}
+    {@const tempSensitive = traitOf(meta, "temperature_sensitive")}
+    {@const decayable = traitOf(meta, "decayable")}
     <div class="inspect-panel {meta.rarity}">
       <button class="close-inspect-btn" onclick={() => (selectedItem = null)}>×</button>
-      
+
       <div class="inspect-header">
         <div class="inspect-visual {meta.rarity}">
-          {#if meta.iconUrl}
-            <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" onerror={(e) => {
+          {#if iconUrlFor(meta.id)}
+            <img src={iconUrlFor(meta.id)} alt={meta.name} class="item-icon-img" onerror={(e) => {
               const img = e.currentTarget as HTMLImageElement;
               img.style.display = 'none';
               const fallback = img.nextElementSibling as HTMLElement;
               if (fallback) fallback.style.display = 'inline';
             }} />
           {/if}
-          <span style={meta.iconUrl ? "display:none" : ""}>
+          <span style="display:none">
             {#if meta.category === "tool"}
               ⛏️
             {:else if meta.category === "timber"}
@@ -268,37 +270,37 @@ onDestroy(() => {
         <div class="inspect-section">
           <span class="section-heading">ENVIRONMENTAL BEHAVIORS</span>
           <div class="behavior-pills">
-            {#if meta.flammable}
+            {#if flammable}
               <div class="behavior-pill hot">
                 <span class="pill-icon">🔥</span>
                 <div class="pill-info">
                   <span class="pill-title">Flammable</span>
-                  <span class="pill-desc">Ignites at {meta.flammable.ignitionTemp}°C &rarr; {meta.flammable.transformsInto}</span>
+                  <span class="pill-desc">Ignites at {flammable.ignitionTemp}°C &rarr; {reactsInto(flammable.effect, meta.id)}</span>
                 </div>
               </div>
             {/if}
 
-            {#if meta.temperatureSensitive}
+            {#if tempSensitive}
               <div class="behavior-pill warning">
                 <span class="pill-icon">❄️</span>
                 <div class="pill-info">
                   <span class="pill-title">Temp-Sensitive</span>
-                  <span class="pill-desc">Range: {meta.temperatureSensitive.minSafeTemp}°C to {meta.temperatureSensitive.maxSafeTemp}°C</span>
+                  <span class="pill-desc">Range: {tempSensitive.minSafeTemp}°C to {tempSensitive.maxSafeTemp}°C</span>
                 </div>
               </div>
             {/if}
 
-            {#if meta.decayable}
+            {#if decayable}
               <div class="behavior-pill decay">
                 <span class="pill-icon">⏱️</span>
                 <div class="pill-info">
                   <span class="pill-title">Organic Decay</span>
-                  <span class="pill-desc">Freshness: {Math.round(decayProgress[selectedItem] ?? 100)}% &rarr; {meta.decayable.transformsInto}</span>
+                  <span class="pill-desc">Freshness: {Math.round(decayProgress[selectedItem] ?? 100)}% &rarr; {reactsInto(decayable.effect, meta.id)}</span>
                 </div>
               </div>
             {/if}
 
-            {#if !meta.flammable && !meta.temperatureSensitive && !meta.decayable}
+            {#if !flammable && !tempSensitive && !decayable}
               <div class="behavior-pill stable">
                 <span class="pill-icon">🛡️</span>
                 <div class="pill-info">
@@ -380,7 +382,7 @@ onDestroy(() => {
         {:else}
           <div class="grid">
             {#each itemsList() as { itemId, qty }}
-              {@const meta = ITEM_METADATA[itemId]}
+              {@const meta = getItemDef(itemId)}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
@@ -390,15 +392,15 @@ onDestroy(() => {
                 onclick={() => (selectedItem = itemId)}
               >
                 <div class="item-visual">
-                  {#if meta?.iconUrl}
-                    <img src={meta.iconUrl} alt={meta?.name} class="item-icon-img" onerror={(e) => {
+                  {#if meta}
+                    <img src={iconUrlFor(meta.id)} alt={meta.name} class="item-icon-img" onerror={(e) => {
                       const img = e.currentTarget as HTMLImageElement;
                       img.style.display = 'none';
                       const fallback = img.nextElementSibling as HTMLElement;
                       if (fallback) fallback.style.display = 'inline';
                     }} />
                   {/if}
-                  <span style={meta?.iconUrl ? "display:none" : ""}>
+                  <span style={meta ? "display:none" : ""}>
                     {#if meta?.category === "tool"}
                       ⛏️
                     {:else if meta?.category === "timber"}
@@ -420,7 +422,7 @@ onDestroy(() => {
                 {/if}
 
                 <!-- Local decay progress bar overlay -->
-                {#if meta?.decayable && decayProgress[itemId] !== undefined}
+                {#if traitOf(meta, "decayable") && decayProgress[itemId] !== undefined}
                   <div class="decay-bar">
                     <div
                       class="decay-fill {decayProgress[itemId] < 20 ? 'critical' : decayProgress[itemId] < 50 ? 'warning' : 'fresh'}"
@@ -520,8 +522,8 @@ onDestroy(() => {
 
     <!-- Quick Hover Tooltip -->
     <div class="tooltip-container">
-      {#if hoveredItem && ITEM_METADATA[hoveredItem]}
-        {@const meta = ITEM_METADATA[hoveredItem]}
+      {#if hoveredItem && getItemDef(hoveredItem)}
+        {@const meta = getItemDef(hoveredItem)!}
         <div class="tooltip {meta.rarity}">
           <div class="tooltip-name">{meta.name}</div>
           <div class="tooltip-row">

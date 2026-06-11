@@ -78,22 +78,3 @@ export interface ItemInstance {
   createdAt?: number;
   metadata?: Record<string, unknown>;
 }
-
-/**
- * Interface for legacy metadata compatibility during the migration phase.
- */
-export interface LegacyItemMetadata {
-  name: string;
-  description: string;
-  rarity: "common" | "uncommon" | "rare" | "legendary";
-  category: "mineral" | "timber" | "tool" | "component" | "herb" | "reagent";
-  flammable?: { ignitionTemp: number; burnDurationSec: number; transformsInto: string };
-  temperatureSensitive?: {
-    maxSafeTemp: number;
-    minSafeTemp: number;
-    onExceeded: "melt" | "spoil" | "ignite";
-    transformsInto?: string;
-  };
-  decayable?: { lifespanSec: number; transformsInto: string };
-  iconUrl?: string;
-}

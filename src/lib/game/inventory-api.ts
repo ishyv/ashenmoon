@@ -6,8 +6,7 @@
  */
 import { rpgState } from "./rpg-state.svelte";
 import type { RpgPlayerState } from "./rpg-types";
-import { ITEM_DEFINITIONS } from "$lib/rpg/items/item-definitions";
-import type { BoilableTrait } from "$lib/rpg/items/item-traits";
+import { ITEM_DEFINITIONS, type BoilableTrait } from "$lib/rpg/items";
 import { matchesToolKind } from "$lib/rpg/gathering/gather-system";
 
 type WeaponSlot = RpgPlayerState["profile"]["loadout"]["weapon"];

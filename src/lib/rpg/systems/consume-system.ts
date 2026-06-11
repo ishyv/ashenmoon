@@ -7,9 +7,7 @@
  * routing holder commands to survival/status/health state.
  */
 
-import type { ItemDefinition } from "../items/item-types";
-import type { ItemEffect } from "../items/item-effects";
-import type { ConsumableTrait } from "../items/item-traits";
+import type { ItemDefinition, ItemEffect, ConsumableTrait } from "../items";
 import type { StatusId } from "./status-types";
 
 export type HolderCommand =

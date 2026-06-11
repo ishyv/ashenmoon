@@ -6,7 +6,7 @@
  * dev-give flow); server persistence is a deliberate follow-up.
  */
 
-import { ITEM_DEFINITIONS } from "$lib/rpg/items/item-definitions";
+import { ITEM_DEFINITIONS } from "$lib/rpg/items";
 import { getConsumableTrait, resolveConsume } from "$lib/rpg/systems/consume-system";
 import { removeStackQty } from "$lib/rpg/systems/inventory-system";
 import { rpgState } from "./rpg-state.svelte";

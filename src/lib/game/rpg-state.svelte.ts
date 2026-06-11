@@ -2,8 +2,6 @@ import type { RpgPlayerState } from "./rpg-types";
 import { emitEnvironmentChanged, type EnvironmentState } from "$lib/rpg/systems/environment-system";
 import "$lib/rpg/systems/item-reaction-system";
 import { StorageKeys } from "./game-events";
-export { ITEM_METADATA } from "$lib/rpg/items/item-definitions";
-export type { LegacyItemMetadata as ItemMetadata } from "$lib/rpg/items/item-types";
 
 export interface RpgState {
   profile: RpgPlayerState["profile"] | null;

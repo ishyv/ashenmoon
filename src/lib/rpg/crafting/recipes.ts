@@ -5,7 +5,7 @@
  *
  * Pure data + validation. No Svelte, no Pixi, no network.
  */
-import { ITEM_DEFINITIONS } from "../items/item-definitions";
+import { ITEM_DEFINITIONS } from "../items";
 
 /** A single material requirement for a recipe. `itemId` is an inventory slot key. */
 export interface RecipeCost {

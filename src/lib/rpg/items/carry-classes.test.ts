@@ -8,7 +8,7 @@ import {
   type ItemDefinition,
 } from "./item-types";
 import { ITEM_DEFINITIONS, ITEM_TRAIT_INDEX } from "./item-definitions";
-import { isStashable } from "./item-validation";
+import { isStashable } from "./item-registry";
 import { canEnterGrid } from "../systems/inventory-system";
 
 function def(carry?: CarryClass): ItemDefinition {

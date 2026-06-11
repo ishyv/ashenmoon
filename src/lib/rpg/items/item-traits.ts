@@ -1,4 +1,5 @@
 import type { ItemEffect } from "./item-effects";
+import type { ItemDefinition } from "./item-types";
 
 /**
  * Union of all capabilities an item can possess.
@@ -129,4 +130,18 @@ export function Boilable(input: {
     kind: "boilable",
     ...input,
   };
+}
+
+/**
+ * Returns the trait of the given kind carried by a definition, or `undefined`.
+ * The result is narrowed to the concrete trait interface so callers read its
+ * fields without a manual `kind` check.
+ */
+export function traitOf<K extends ItemTrait["kind"]>(
+  def: ItemDefinition | undefined,
+  kind: K,
+): Extract<ItemTrait, { kind: K }> | undefined {
+  return def?.traits.find(
+    (trait): trait is Extract<ItemTrait, { kind: K }> => trait.kind === kind,
+  );
 }

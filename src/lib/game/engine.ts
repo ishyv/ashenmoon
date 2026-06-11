@@ -116,7 +116,6 @@ import {
   setRpgState,
   cooldownsState,
   debugConfig,
-  ITEM_METADATA,
 } from "./rpg-state.svelte";
 import { tickStamina, stamina } from "./stamina.svelte";
 import { superGatherCooldown } from "$lib/rpg/gathering/gather-system";

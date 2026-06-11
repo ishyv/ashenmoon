@@ -7,9 +7,7 @@
  * state and environment events; everything decision-making lives here so it can
  * be unit tested in isolation.
  */
-import { ITEM_DEFINITIONS, ITEM_TRAIT_INDEX } from "../items/item-definitions";
-import type { ItemRegistry } from "../items/item-registry";
-import type { ItemTraitIndex } from "../items/item-validation";
+import { ITEM_DEFINITIONS, ITEM_TRAIT_INDEX, type ItemRegistry, type ItemTraitIndex } from "../items";
 import { applyItemEffectToInventory } from "./item-effect-system";
 import type { Inventory } from "./inventory-system";
 import {

@@ -29,7 +29,7 @@
 
 import { Assets, Rectangle, Texture } from "pixi.js";
 
-const BASE = "/assets/rpg/tiny-swords";
+const BASE = "/assets/tiny-swords";
 
 // ---------------------------------------------------------------------------
 // Types

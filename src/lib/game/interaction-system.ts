@@ -19,7 +19,8 @@ import {
   playDepleteSound,
   playWaterBubble,
 } from "./audio-synthesis";
-import { rpgState, setRpgState, ITEM_METADATA } from "./rpg-state.svelte";
+import { rpgState, setRpgState } from "./rpg-state.svelte";
+import { getItemDef } from "$lib/rpg/items";
 import { spendStamina, stamina } from "./stamina.svelte";
 import { Colors } from "./colors";
 import { getPlayerEntity } from "./entity-queries";
@@ -473,7 +474,7 @@ export function triggerImmediateInteraction(
         if (r.ok) setRpgState(r.data.playerState);
       });
 
-      const itemName = ITEM_METADATA[item]?.name ?? item;
+      const itemName = getItemDef(item)?.name ?? item;
       const playerEntity = getPlayerEntity();
       spawnEnvFloatingText(vfx, `+${qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
       triggerQuestEvent(GameEvent.Pickup, item, qty);
@@ -505,7 +506,7 @@ export function triggerImmediateInteraction(
         bubbleTimer: 0,
       };
       playWaterBubble();
-      const itemName = ITEM_METADATA[boilable.itemId]?.name ?? boilable.itemId;
+      const itemName = getItemDef(boilable.itemId)?.name ?? boilable.itemId;
       spawnEnvFloatingText(
         vfx,
         `💧 Boiling ${itemName}...`,
@@ -651,7 +652,7 @@ export function runInteractionSystem(
           const next = transformStackQty(rpgState.inventory, boil.itemId, boil.intoItemId, 1);
           if (next !== rpgState.inventory) {
             rpgState.inventory = next;
-            const intoName = ITEM_METADATA[boil.intoItemId]?.name ?? boil.intoItemId;
+            const intoName = getItemDef(boil.intoItemId)?.name ?? boil.intoItemId;
             spawnEnvFloatingText(
               vfx,
               `💧 The water bubbles clean. +1 ${intoName}`,
