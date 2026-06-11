@@ -1,0 +1,95 @@
+/**
+ * Core type definitions for the Ashenmoon standalone RPG engine.
+ */
+
+export interface RpgContentSnapshot {
+  items: Record<string, unknown>;
+  materials: Record<string, unknown>;
+  locations: Record<string, unknown>;
+  tools: Record<string, unknown>;
+  craftingRecipes: Record<string, unknown>;
+  processingRecipes: Record<string, unknown>;
+}
+
+export interface RpgSkillState {
+  level: number;
+  xp: number;
+  nextXp: number;
+}
+
+export interface RpgPlayerState {
+  profile: {
+    hpCurrent: number;
+    stashSize: number;
+    loadout: {
+      weapon:
+        | {
+            instanceId: string;
+            itemId: string;
+            durability: number;
+          }
+        | string
+        | null;
+      shield: any;
+      helmet: any;
+      chest: any;
+      pants: any;
+      boots: any;
+      ring: any;
+      necklace: any;
+    };
+    buildings?: {
+      id: string;
+      type: string;
+      x: number;
+      y: number;
+    }[];
+    gatheredPickups?: string[];
+  };
+  inventory: {
+    slots: Record<
+      string,
+      | { qty: number }
+      | {
+          instances: {
+            instanceId: string;
+            durability: number;
+          }[];
+        }
+    >;
+  };
+  skills: {
+    lumberjacking: RpgSkillState;
+    mining: RpgSkillState;
+    evade: RpgSkillState;
+    superGather: RpgSkillState;
+  };
+}
+
+export interface RpgGatherResult {
+  userId: string;
+  locationId: string;
+  locationName: string;
+  tier: number;
+  toolId: string;
+  materialsGained: { id: string; quantity: number }[];
+  remainingDurability: number;
+  toolBroken: boolean;
+  playerState: RpgPlayerState;
+}
+
+/** Describes a single triggered reaction event in the player environment. */
+export interface RpgReactionTriggered {
+  itemId: string;
+  event: "ignited" | "melted" | "rotted";
+  resultItemId: string;
+  quantity: number;
+  equippedSlot?: string;
+}
+
+/** State payload returned after processing an environmental tick. */
+export interface RpgEnvironmentTickResult {
+  mutated: boolean;
+  reactions: RpgReactionTriggered[];
+  playerState: RpgPlayerState;
+}

@@ -6,7 +6,7 @@
  * typing here never moves the player.
  */
 import { onMount, tick } from "svelte";
-import { devConsole, type LogLine } from "$lib/game/dev-console";
+import { devConsole, type LogLine } from "$lib/ui/debug/dev-console";
 
 let open = $state(false);
 let input = $state("");

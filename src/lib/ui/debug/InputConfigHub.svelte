@@ -6,7 +6,7 @@
  * persists layout state to localStorage.
  */
 import { onMount } from "svelte";
-import { uiPreferences, saveUiPreferences } from "$lib/game/rpg-state.svelte";
+import { uiPreferences, saveUiPreferences } from "$lib/state/rpg-state.svelte";
 
 // Action keys type
 export type ActionId = "MOVE_UP" | "MOVE_DOWN" | "MOVE_LEFT" | "MOVE_RIGHT" | "HARVEST" | "CONSOLE" | "SPRINT";

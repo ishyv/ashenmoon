@@ -1,9 +1,39 @@
-import type { RpgPlayerState, RpgGatherResult, RpgEnvironmentTickResult, RpgContentSnapshot } from "../game/rpg-types";
-import { getGameDb } from "./db";
-import { ITEM_DEFINITIONS } from "../rpg/items";
+import type { RpgPlayerState, RpgGatherResult, RpgEnvironmentTickResult, RpgContentSnapshot } from "$lib/domain/rpg-types";
+import { ITEM_DEFINITIONS } from "$lib/domain/items";
+import { loadLocalData, saveLocalData } from "./local-db";
 
-// Simple fallback state if MongoDB is not available or during startup
-let inMemoryPlayerStates: Record<string, RpgPlayerState> = {};
+/**
+ * Root structure for the unified local save.
+ */
+interface GlobalSave {
+  playerStates: Record<string, RpgPlayerState>;
+  rpgContent?: RpgContentSnapshot;
+}
+
+// In-memory cache for fast access, backed by local-db.
+let globalSaveCache: GlobalSave | null = null;
+
+async function getGlobalSave(): Promise<GlobalSave> {
+  if (!globalSaveCache) {
+    try {
+      const data = await loadLocalData<GlobalSave>();
+      globalSaveCache = data ?? { playerStates: {} };
+      if (!globalSaveCache.playerStates) {
+        globalSaveCache.playerStates = {};
+      }
+    } catch (err) {
+      console.warn("RPG Service: Failed to load save file, falling back to empty state.", err);
+      globalSaveCache = { playerStates: {} };
+    }
+  }
+  return globalSaveCache;
+}
+
+async function persistGlobalSave(): Promise<void> {
+  if (globalSaveCache) {
+    await saveLocalData(globalSaveCache);
+  }
+}
 
 export function createDefaultSkills(): RpgPlayerState["skills"] {
   return {
@@ -52,35 +82,17 @@ let activeRpgContentSnapshot: RpgContentSnapshot = {
 
 export const rpgService = {
   async getPlayerState(userId: string): Promise<RpgPlayerState> {
-    try {
-      const db = await getGameDb();
-      const doc = await db.collection("player_states").findOne({ userId });
-      if (doc && doc.state) {
-        return doc.state as RpgPlayerState;
-      }
-    } catch (err) {
-      console.warn("MongoDB not available, using in-memory player state:", err);
+    const save = await getGlobalSave();
+    if (!save.playerStates[userId]) {
+      save.playerStates[userId] = createDefaultPlayerState();
     }
-
-    if (!inMemoryPlayerStates[userId]) {
-      inMemoryPlayerStates[userId] = createDefaultPlayerState();
-    }
-    return inMemoryPlayerStates[userId];
+    return save.playerStates[userId];
   },
 
   async savePlayerState(userId: string, state: RpgPlayerState): Promise<void> {
-    try {
-      const db = await getGameDb();
-      await db.collection("player_states").updateOne(
-        { userId },
-        { $set: { userId, state } },
-        { upsert: true }
-      );
-      return;
-    } catch (err) {
-      console.warn("MongoDB not available, saving in-memory player state:", err);
-    }
-    inMemoryPlayerStates[userId] = state;
+    const save = await getGlobalSave();
+    save.playerStates[userId] = state;
+    await persistGlobalSave();
   },
 
   async gather(
@@ -276,31 +288,14 @@ export const rpgService = {
   },
 
   async getRpgContent(): Promise<RpgContentSnapshot> {
-    try {
-      const db = await getGameDb();
-      const doc = await db.collection("rpg_content").findOne({ id: "active_snapshot" });
-      if (doc && doc.snapshot) {
-        return doc.snapshot as RpgContentSnapshot;
-      }
-    } catch (err) {
-      console.warn("MongoDB not available, using in-memory RPG snapshot:", err);
-    }
-    return activeRpgContentSnapshot;
+    const save = await getGlobalSave();
+    return save.rpgContent ?? activeRpgContentSnapshot;
   },
 
   async saveRpgContent(snapshot: RpgContentSnapshot): Promise<RpgContentSnapshot> {
-    try {
-      const db = await getGameDb();
-      await db.collection("rpg_content").updateOne(
-        { id: "active_snapshot" },
-        { $set: { id: "active_snapshot", snapshot } },
-        { upsert: true }
-      );
-      return snapshot;
-    } catch (err) {
-      console.warn("MongoDB not available, saving in-memory RPG snapshot:", err);
-    }
-    activeRpgContentSnapshot = snapshot;
+    const save = await getGlobalSave();
+    save.rpgContent = snapshot;
+    await persistGlobalSave();
     return snapshot;
   },
 };

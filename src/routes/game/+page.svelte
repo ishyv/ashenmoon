@@ -1,21 +1,21 @@
 <script lang="ts">
 import { onMount, onDestroy } from "svelte";
-import { GameEngine, type HudState } from "$lib/game/engine";
-import type { Entity } from "$lib/game/ecs-miniplex";
-import { registerDevCommands } from "$lib/game/dev-commands";
+import { GameEngine, type HudState } from "$lib/core/engine";
+import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import { registerDevCommands } from "$lib/ui/debug/dev-commands";
 import DevConsole from "$lib/ui/debug/DevConsole.svelte";
-import { devConsole } from "$lib/game/dev-console";
-import GameHud from "$lib/game/GameHud.svelte";
+import { devConsole } from "$lib/ui/debug/dev-console";
+import GameHud from "$lib/ui/hud/GameHud.svelte";
 import InputConfigHub, { type Bindings } from "$lib/ui/debug/InputConfigHub.svelte";
-import EquipmentPanel from "$lib/game/EquipmentPanel.svelte";
-import InventoryGrid from "$lib/game/InventoryGrid.svelte";
-import EnvironmentGauge from "$lib/game/EnvironmentGauge.svelte";
-import SkillHotbar from "$lib/game/SkillHotbar.svelte";
-import SkillTreePanel from "$lib/game/SkillTreePanel.svelte";
-import DialogueBox from "$lib/game/DialogueBox.svelte";
-import QuestTracker from "$lib/game/QuestTracker.svelte";
-import IntroOverlay from "$lib/game/IntroOverlay.svelte";
-import { setRpgState, activeEnvironment, uiPreferences, loadUiPreferences, setEnvironment } from "$lib/game/rpg-state.svelte";
+import EquipmentPanel from "$lib/ui/panels/EquipmentPanel.svelte";
+import InventoryGrid from "$lib/ui/panels/InventoryGrid.svelte";
+import EnvironmentGauge from "$lib/ui/hud/EnvironmentGauge.svelte";
+import SkillHotbar from "$lib/ui/elements/SkillHotbar.svelte";
+import SkillTreePanel from "$lib/ui/panels/SkillTreePanel.svelte";
+import DialogueBox from "$lib/ui/elements/DialogueBox.svelte";
+import QuestTracker from "$lib/ui/panels/QuestTracker.svelte";
+import IntroOverlay from "$lib/ui/elements/IntroOverlay.svelte";
+import { setRpgState, activeEnvironment, uiPreferences, loadUiPreferences, setEnvironment } from "$lib/state/rpg-state.svelte";
 
 let { data } = $props();
 

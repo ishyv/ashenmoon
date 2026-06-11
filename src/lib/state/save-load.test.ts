@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { loadSlice, saveSlice, clearSlice } from "./save-load";
-import { isVersioned, migrateSlice, SAVE_VERSION } from "./migrations";
+import { loadSlice, saveSlice, clearSlice } from "$lib/state/persistence/save-load";
+import { isVersioned, migrateSlice, SAVE_VERSION } from "$lib/state/persistence/migrations";
 
 beforeEach(() => localStorage.clear());
 

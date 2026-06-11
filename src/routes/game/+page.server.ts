@@ -1,5 +1,5 @@
 import { rpgService } from "$lib/server/rpg-service";
-import type { RpgPlayerState } from "$lib/game/rpg-types";
+import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import type { PageServerLoad } from "./$types";
 
 /**

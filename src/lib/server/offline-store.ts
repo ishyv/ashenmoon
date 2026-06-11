@@ -1,4 +1,4 @@
-import type { RpgPlayerState } from "../game/rpg-types";
+import type { RpgPlayerState } from "$lib/domain/rpg-types";
 
 export let offlinePlayerState: any = {
   profile: {

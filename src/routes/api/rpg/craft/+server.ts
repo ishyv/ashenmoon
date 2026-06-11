@@ -1,6 +1,6 @@
 import { json } from "@sveltejs/kit";
 import { offlinePlayerState } from "$lib/server/offline-store";
-import { resolveCraft, type CraftFailureReason } from "$lib/rpg/crafting/crafting-system";
+import { resolveCraft, type CraftFailureReason } from "$lib/domain/crafting/crafting-system";
 import type { RequestHandler } from "./$types";
 
 const FAILURE_MESSAGE: Record<CraftFailureReason, string> = {

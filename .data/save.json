@@ -1,0 +1,34 @@
+{
+  "playerStates": {
+    "mock_user": {
+      "rpg": {
+        "skills": {
+          "lumberjacking": {
+            "level": 1,
+            "xp": 0,
+            "nextXp": 100
+          },
+          "mining": {
+            "level": 1,
+            "xp": 0,
+            "nextXp": 100
+          },
+          "evade": {
+            "level": 1,
+            "xp": 0,
+            "nextXp": 100
+          },
+          "superGather": {
+            "level": 1,
+            "xp": 0,
+            "nextXp": 100
+          }
+        }
+      },
+      "survival": {
+        "thirst": 100,
+        "wasParched": false
+      }
+    }
+  }
+}

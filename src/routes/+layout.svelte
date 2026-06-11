@@ -1,5 +1,5 @@
 <script lang="ts">
-import "../app.css";
+import "$lib/../app.css";
 import { AppShell, ArcaneVein, GridOverlay, HexGrid, ShimmerCloud, Toast } from "@hyvnt/hyvui";
 import { fade } from "svelte/transition";
 import { page } from "$app/stores";

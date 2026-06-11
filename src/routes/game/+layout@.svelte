@@ -1,5 +1,5 @@
 <script lang="ts">
-import "./../../app.css";
+import "$lib/../app.css";
 import type { Snippet } from "svelte";
 
 interface Props {
