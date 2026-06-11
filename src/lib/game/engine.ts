@@ -128,6 +128,7 @@ import {
 } from "./status-effects.svelte";
 import { registerPlayerFeedback, registerPlayerHp } from "./player-feedback";
 import { loadKnowledge } from "./knowledge.svelte";
+import { loadRecipes } from "./crafting.svelte";
 import { triggerQuestEvent, dialogueState } from "./quests.svelte";
 import { Colors } from "./colors";
 import { coordKey } from "./coord-utils";
@@ -264,6 +265,7 @@ export class GameEngine {
       loadSurvival();
       loadStatuses();
       loadKnowledge();
+      loadRecipes();
       registerPlayerFeedback((text, tone) => {
         const color =
           tone === "danger"

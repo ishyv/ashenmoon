@@ -8,6 +8,7 @@ import { CRAFT_RECIPES, type CraftRecipe } from "$lib/rpg/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/rpg/crafting/crafting-system";
 import { inspect as inspectKnowledge } from "./knowledge.svelte";
 import type { KnowledgeProperty } from "$lib/rpg/knowledge/item-knowledge";
+import { learnRecipe } from "./crafting.svelte";
 
 // lowercase per design law; shown in the inspect panel's field notes.
 const KNOWLEDGE_LABELS: Record<KnowledgeProperty, string> = {
@@ -99,6 +100,7 @@ async function craftItem(recipe: typeof recipes[0]) {
       const newState = await res.json();
       setRpgState(newState);
       playCraftSound();
+      learnRecipe(recipe.id);
       triggerQuestEvent("craft", recipe.id);
     } else {
       const err = await res.json();
