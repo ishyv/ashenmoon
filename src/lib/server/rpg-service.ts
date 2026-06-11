@@ -1,5 +1,5 @@
 import type { RpgPlayerState, RpgGatherResult, RpgEnvironmentTickResult, RpgContentSnapshot } from "../game/rpg-types";
-import { getDashboardDb } from "./db";
+import { getGameDb } from "./db";
 import { ITEM_DEFINITIONS } from "../rpg/items/item-definitions";
 
 // Simple fallback state if MongoDB is not available or during startup
@@ -53,7 +53,7 @@ let activeRpgContentSnapshot: RpgContentSnapshot = {
 export const rpgService = {
   async getPlayerState(userId: string): Promise<RpgPlayerState> {
     try {
-      const db = await getDashboardDb();
+      const db = await getGameDb();
       const doc = await db.collection("player_states").findOne({ userId });
       if (doc && doc.state) {
         return doc.state as RpgPlayerState;
@@ -70,7 +70,7 @@ export const rpgService = {
 
   async savePlayerState(userId: string, state: RpgPlayerState): Promise<void> {
     try {
-      const db = await getDashboardDb();
+      const db = await getGameDb();
       await db.collection("player_states").updateOne(
         { userId },
         { $set: { userId, state } },
@@ -277,7 +277,7 @@ export const rpgService = {
 
   async getRpgContent(): Promise<RpgContentSnapshot> {
     try {
-      const db = await getDashboardDb();
+      const db = await getGameDb();
       const doc = await db.collection("rpg_content").findOne({ id: "active_snapshot" });
       if (doc && doc.snapshot) {
         return doc.snapshot as RpgContentSnapshot;
@@ -290,7 +290,7 @@ export const rpgService = {
 
   async saveRpgContent(snapshot: RpgContentSnapshot): Promise<RpgContentSnapshot> {
     try {
-      const db = await getDashboardDb();
+      const db = await getGameDb();
       await db.collection("rpg_content").updateOne(
         { id: "active_snapshot" },
         { $set: { id: "active_snapshot", snapshot } },

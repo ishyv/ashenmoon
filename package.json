@@ -42,7 +42,6 @@
     "dotenv": "^17.4.2",
     "lucide-svelte": "^0.468.0",
     "miniplex": "^2.0.0",
-    "monaco-editor": "^0.55.1",
     "mongodb": "^6.21.0",
     "pixi.js": "^8.19.0",
     "tailwindcss": "^4.3.0",

@@ -41,4 +41,5 @@ SECURITY.md
 
 .vite-guide.log
 .vite-guide.err.log
+.cursor
 

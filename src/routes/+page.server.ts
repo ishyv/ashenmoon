@@ -1,5 +1,5 @@
 import { redirect } from "@sveltejs/kit";
 
 export function load() {
-  throw redirect(303, "/rpg/play");
+  throw redirect(303, "/game");
 }

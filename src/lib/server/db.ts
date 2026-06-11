@@ -4,7 +4,7 @@ import { requireEnv } from "./auth";
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
-export async function getDashboardDb(): Promise<Db> {
+export async function getGameDb(): Promise<Db> {
   if (db) {
     return db;
   }
@@ -31,7 +31,7 @@ export async function getDashboardDb(): Promise<Db> {
   return db;
 }
 
-export async function closeDashboardDb(): Promise<void> {
+export async function closeGameDb(): Promise<void> {
   await client?.close();
   client = null;
   db = null;

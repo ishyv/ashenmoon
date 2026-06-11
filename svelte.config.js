@@ -6,9 +6,6 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
-    alias: {
-      "$shared/bridge-types": "./src/lib/shared/bridge-types.ts",
-    },
   },
 };
 
