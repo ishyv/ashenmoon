@@ -1,4 +1,6 @@
 import type { ItemRegistry } from "./item-registry";
+import { carryClassOf, type ItemDefinition } from "./item-types";
+import { canEnterGrid } from "../systems/inventory-system";
 
 export interface ItemTraitIndex {
   temperatureSensitive: Set<string>;
@@ -6,6 +8,8 @@ export interface ItemTraitIndex {
   decayable: Set<string>;
   consumable: Set<string>;
   boilable: Set<string>;
+  /** Items whose carry class is `haul` (cannot enter the grid). */
+  haul: Set<string>;
 }
 
 export function buildItemTraitIndex(items: ItemRegistry): ItemTraitIndex {
@@ -15,9 +19,13 @@ export function buildItemTraitIndex(items: ItemRegistry): ItemTraitIndex {
     decayable: new Set(),
     consumable: new Set(),
     boilable: new Set(),
+    haul: new Set(),
   };
 
   for (const item of Object.values(items)) {
+    if (!canEnterGrid(carryClassOf(item))) {
+      index.haul.add(item.id);
+    }
     for (const trait of item.traits) {
       switch (trait.kind) {
         case "temperature_sensitive":
@@ -40,4 +48,9 @@ export function buildItemTraitIndex(items: ItemRegistry): ItemTraitIndex {
   }
 
   return index;
+}
+
+/** Whether an item may be stashed in the grid (false for haul-class items). */
+export function isStashable(def: ItemDefinition): boolean {
+  return canEnterGrid(carryClassOf(def));
 }

@@ -1,4 +1,13 @@
-import type { ItemId } from "../items/item-types";
+import type { CarryClass, ItemId } from "../items/item-types";
+
+/**
+ * Whether an item of the given carry class may occupy a stash/grid slot. Haul
+ * items are too large for the grid, they are carried physically or placed in
+ * the world, never stashed.
+ */
+export function canEnterGrid(carryClass: CarryClass): boolean {
+  return carryClass !== "haul";
+}
 
 export interface StackSlot {
   readonly qty: number;

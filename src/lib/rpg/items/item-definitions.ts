@@ -214,6 +214,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Translucent white flower found near Blight zones. Wilts within hours of picking.",
     rarity: Rarity.Rare,
     category: Category.Herb,
+    carry: "pocket",
   }).with(
     Decayable({
       lifespanSec: 60,
@@ -240,6 +241,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Water that has been boiled and condensed to remove essence taint.",
     rarity: Rarity.Common,
     category: Category.Component,
+    carry: "pocket",
   }).with(
     Consumable({
       verb: "drink",
@@ -252,6 +254,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     description: "Murky water with debris drifting in it. It smells faintly of rot.",
     rarity: Rarity.Common,
     category: Category.Component,
+    carry: "pocket",
   }).with(
     Consumable({
       verb: "drink",

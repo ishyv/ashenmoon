@@ -1,4 +1,4 @@
-import { Category, Rarity, type ItemDefinition, type ItemId } from "./item-types";
+import { Category, Rarity, type CarryClass, type ItemDefinition, type ItemId } from "./item-types";
 import type { ItemTrait } from "./item-traits";
 
 /**
@@ -10,6 +10,8 @@ interface ItemBaseInput {
   description: string;
   rarity: Rarity;
   category: Category;
+  /** Optional carry class; defaults to `pack` when omitted. */
+  carry?: CarryClass;
 }
 
 /**
