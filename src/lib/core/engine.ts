@@ -108,6 +108,14 @@ import {
   spawnBuildingSystem,
   isValidPlacement,
 } from "$lib/core/systems/building/building-system";
+import {
+  CraftingResource,
+  openCraftingOverlay,
+  closeCraftingOverlay,
+  updateCraftingOverlaySystem,
+  handleCraftingClick,
+} from "$lib/core/systems/crafting/crafting-overlay-system";
+import { trayReading } from "$lib/state/crafting-session.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgProfile, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
@@ -174,6 +182,7 @@ export class GameEngine {
   public interactionResource = new InteractionResource();
   public focusedGatherResource = new FocusedGatherResource();
   public buildingResource = new BuildingResource();
+  public craftingResource = new CraftingResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
 
@@ -573,7 +582,41 @@ export class GameEngine {
             );
           }
         }
+      } else if (this.craftingResource.isOpen) {
+        // Crafting overlay is open — swallow all action inputs, run overlay update
+        const reading = trayReading();
+        if (this.inputResource.pendingAttack) {
+          handleCraftingClick(
+            this.craftingResource,
+            this.inputResource.mouseWorld.x,
+            this.inputResource.mouseWorld.y,
+          );
+          this.inputResource.pendingAttack = false;
+        }
+        this.inputResource.pendingInteract = false;
+        this.inputResource.pendingFellSweep = false;
+        updateCraftingOverlaySystem(
+          this.craftingResource,
+          this.vfxResource,
+          this.entityLayer,
+          dt,
+          reading,
+          this.playerEntity.position!,
+        );
+        // Walk-away auto-close
+        const dx = this.playerEntity.position!.x - this.craftingResource.campfireWorldPos.x;
+        const dy = this.playerEntity.position!.y - this.craftingResource.campfireWorldPos.y;
+        const distTiles = Math.hypot(dx, dy) / TILE;
+        if (distTiles > this.interactionResource.campfireHeatRadius) {
+          this.cancelCrafting();
+        }
       } else if (!focusedGatherActive) {
+        // Consume requestCrafting from campfire handler
+        if (this.interactionResource.requestCrafting) {
+          this.interactionResource.requestCrafting = false;
+          openCraftingOverlay(this.craftingResource, this.entityLayer);
+        }
+
         // Run interactions updates
         runInteractionSystem(
           world,
@@ -1185,6 +1228,7 @@ export class GameEngine {
     this.entityLayer.addChild(campfireContainer);
     this.interactionResource.campfireSprite = campfire;
     this.entitySprites.set(EntityId.Campfire, campfireContainer);
+    this.craftingResource.campfireWorldPos = { x: startX + TILE / 2, y: startY + TILE / 2 };
 
     world.add({
       id: EntityId.Campfire,
@@ -1589,6 +1633,14 @@ export class GameEngine {
     this.buildingResource.onPlacementCancelCb?.();
     this.buildingResource.onPlacementCancelCb = undefined;
     this.buildingResource.onPlacementCompleteCb = undefined;
+  }
+
+  public startCrafting(): void {
+    this.craftingResource.requestOpen = true;
+  }
+
+  public cancelCrafting(): void {
+    closeCraftingOverlay(this.craftingResource, this.entityLayer);
   }
 
   public spawnEnvFloatingText(text: string, color: number = Colors.ui.info): void {

@@ -22,6 +22,7 @@ import { loadGameState } from "$lib/state/game-state.svelte";
 import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
 import { dialogueState } from "$lib/domain/quests.svelte";
+import { craftSession } from "$lib/state/crafting-session.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 
@@ -118,6 +119,21 @@ $effect(() => {
 $effect(() => {
   if (!overlayStack.has(OverlayId.Dialogue) && dialogueState.activeNpc) {
     dialogueState.activeNpc = null;
+  }
+});
+
+// --- Crafting ↔ stack sync -----------------------------------------------
+// craftSession.open is owned by the engine via openCraft/closeCraft.
+// These effects bridge it into the overlay stack so Escape closes the crucible.
+
+$effect(() => {
+  if (craftSession.open) overlayStack.push(OverlayId.Crafting);
+  else                   overlayStack.close(OverlayId.Crafting);
+});
+
+$effect(() => {
+  if (!overlayStack.has(OverlayId.Crafting) && craftSession.open) {
+    engine?.cancelCrafting();
   }
 });
 

@@ -165,6 +165,12 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         return;
       }
 
+      // No processable item and not mid-confirm: open the crafting crucible.
+      if (!interaction.refuelPendingConfirm) {
+        interaction.requestCrafting = true;
+        return;
+      }
+
       const woodQty = getItemQty("oak_wood");
       if (woodQty >= 5) {
         if (!interaction.refuelPendingConfirm) {
@@ -295,6 +301,8 @@ export class InteractionResource {
   public campfireSprite: AnimatedSprite | null = null;
   public refuelPendingConfirm = false;
   public refuelConfirmTimer = 0;
+  /** Set by campfire handler to open the crafting overlay; consumed by engine. */
+  public requestCrafting = false;
   /** Active item process (boiling, smelting); null when nothing is processing. */
   public activeProcess: {
     stationId: StationId;

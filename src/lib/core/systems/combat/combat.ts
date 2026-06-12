@@ -41,6 +41,7 @@ import {
   flashEntity,
   spawnDamageNumber,
   spawnSlashArc,
+  spawnCrosscutSlash,
   spawnEnvFloatingText,
   triggerCameraShake,
 } from "$lib/core/vfx/vfx";
@@ -52,6 +53,17 @@ import { Colors } from "$lib/utils/colors";
 import { gameState } from "$lib/state/game-state.svelte";
 import { PLAYER_BODY } from "$lib/domain/collision";
 import { createInitialFellSweepChargeState, type FellSweepChargeState } from "$lib/domain/combat/fell-sweep";
+import {
+  clearCrosscutState,
+  createInitialCrosscutComboState,
+  DEFAULT_CROSSCUT_COMBO_CONFIG,
+  storeFirstCrosscutClick,
+  tryResolveCrosscutCombo,
+  type CrosscutComboConfig,
+  type CrosscutComboResult,
+  type CrosscutComboState,
+  type CrosscutGrade,
+} from "$lib/domain/combat/crosscut-combo";
 
 export { trackMovementCombo } from "./kite-combo";
 export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
@@ -121,6 +133,9 @@ export class CombatResource {
   public kiteStacksDecayTimer = 0;
   public kiteParticleTimer = 0;
   public currentTimeMs = 0;
+  public crosscutState: CrosscutComboState = createInitialCrosscutComboState();
+  public crosscutConfig: CrosscutComboConfig = { ...DEFAULT_CROSSCUT_COMBO_CONFIG };
+  public lastCrosscutWeaponId: string | null = null;
   public directionalMomentumState: DirectionalMomentumComboState = {
     isActive: false,
     lockedDirection: null,

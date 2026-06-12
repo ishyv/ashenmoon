@@ -73,6 +73,18 @@ export interface Entity {
    */
   knockback?: { vx: number; vy: number; timer: number };
 
+  /**
+   * Minimal hostile bleed state. This is intentionally separate from the
+   * player status system; enemies only need ticking combat damage in this slice.
+   */
+  bleed?: {
+    remainingSec: number;
+    tickEverySec: number;
+    tickTimer: number;
+    damagePerTick: number;
+    sourceId?: string;
+  };
+
   /** Generic locomotion speed (world px/sec) for AI-driven movers. */
   mover?: { speed: number };
 
