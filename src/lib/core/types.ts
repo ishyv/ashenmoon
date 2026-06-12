@@ -139,8 +139,7 @@ export interface ShockwaveRing {
   maxLife: number;
   color: number;
 }
-
-export interface ActiveShake {
+export interface ActiveShake {
   duration: number;
   time: number;
   xOffset: number;
@@ -149,4 +148,10 @@ export interface ActiveShake {
 export interface BaseScale {
   x: number;
   y: number;
+}
+
+export interface CrosscutIndicator {
+  graphic: Graphics;
+  life: number;
+  maxLife: number;
 }

@@ -1,4 +1,5 @@
 import { BUILDING_SPECS, getBuildingSpec } from "$lib/domain/building-specs";
+import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
 import { StorageKeys } from "$lib/domain/game-events";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
@@ -235,14 +236,18 @@ function pickup(itemId: string, pickupId: string, quantity = 1): GatherSync {
 }
 
 function refuel(): GatherSync {
+  let consumed = false;
   const playerState = mutateAndSave((state) => {
     const slots = { ...state.inventory.slots };
-    if (getQty(slots.oak_wood) >= 5) {
-      removeQty(slots, "oak_wood", 5);
+    const fuel = chooseFuelOption(fuelInventoryFromSlots(slots));
+    if (!fuel) {
+      throw new Error("Insufficient fuel");
     }
+    removeQty(slots, fuel.itemId, fuel.qty);
+    consumed = true;
     state.inventory = { slots };
   });
-  return { materialsGained: [], toolBroken: false, playerState };
+  return { materialsGained: consumed ? [{ id: "fuel", quantity: 1 }] : [], toolBroken: false, playerState };
 }
 
 function gather(action: "mine" | "forest", locationId: string): GatherSync {

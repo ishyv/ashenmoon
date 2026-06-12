@@ -6,6 +6,19 @@
  * Pure data + validation. No Svelte, no Pixi, no network.
  */
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
+import type { ProcessType, StationId } from "$lib/domain/stations";
+
+export type CraftingCategory =
+  | "survival"
+  | "tools"
+  | "medicine"
+  | "food"
+  | "fuel_fire"
+  | "material_processing"
+  | "structures"
+  | "knowledge";
+
+export type CraftingContextId = "hand" | "campfire" | "placement" | StationId;
 
 /** A single material requirement for a recipe. `itemId` is an inventory slot key. */
 export interface RecipeCost {
@@ -20,6 +33,13 @@ export interface CraftRecipe {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  readonly category?: CraftingCategory;
+  readonly requiredContext?: CraftingContextId;
+  readonly process?: ProcessType;
+  readonly durationSec?: number;
+  readonly discoverable?: boolean;
+  readonly discoveryText?: string;
+  readonly feedbackTags?: readonly string[];
   /** When true, crafting requires the player to stand near a lit campfire. */
   readonly requiresCampfire?: boolean;
   readonly costs: readonly RecipeCost[];
@@ -28,13 +48,20 @@ export interface CraftRecipe {
 }
 
 /** Recipe input shape before defaults are applied. */
-type RecipeInput = Omit<CraftRecipe, "output"> & {
+type RecipeInput = Omit<CraftRecipe, "category" | "discoverable" | "feedbackTags" | "output"> & {
+  readonly category?: CraftingCategory;
+  readonly discoverable?: boolean;
+  readonly feedbackTags?: readonly string[];
   readonly output?: { readonly itemId: string; readonly qty: number };
 };
 
 function withDefaults(recipe: RecipeInput): CraftRecipe {
   return {
     ...recipe,
+    category: recipe.category ?? "material_processing",
+    requiredContext: recipe.requiredContext ?? (recipe.requiresCampfire ? "campfire" : "hand"),
+    discoverable: recipe.discoverable ?? true,
+    feedbackTags: recipe.feedbackTags ?? [],
     output: recipe.output ?? { itemId: recipe.id, qty: 1 },
   };
 }
@@ -44,6 +71,26 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     id: "flint_axe",
     name: "Flint Axe",
     description: "a crude cutting tool for taking down small trees.",
+    category: "tools",
+    requiredContext: "hand",
+    process: "assemble",
+    feedbackTags: ["binding", "tool"],
+    costs: [
+      { itemId: "stick", name: "stick", required: 1 },
+      { itemId: "flint_shard", name: "flint shard", required: 1 },
+      { itemId: "grass_fiber", name: "grass fiber", required: 1 },
+    ],
+  },
+  {
+    id: "crude_knife",
+    name: "Crude Knife",
+    description: "a small flint edge lashed to a stick for cutting and scraping.",
+    category: "tools",
+    requiredContext: "primitive_work_surface",
+    process: "assemble",
+    durationSec: 5,
+    discoveryText: "The flint bites cleanly once it is bound tight.",
+    feedbackTags: ["binding", "tool", "sharp"],
     costs: [
       { itemId: "stick", name: "stick", required: 1 },
       { itemId: "flint_shard", name: "flint shard", required: 1 },
@@ -54,6 +101,10 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     id: "flint_pickaxe",
     name: "Flint Pickaxe",
     description: "a crude mining tool for later stone work.",
+    category: "tools",
+    requiredContext: "hand",
+    process: "assemble",
+    feedbackTags: ["binding", "tool"],
     costs: [
       { itemId: "stick", name: "stick", required: 1 },
       { itemId: "flint_shard", name: "flint shard", required: 1 },
@@ -64,12 +115,16 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     id: "stone_block",
     name: "Stone Block",
     description: "Refined block of cut stone. Used in outpost construction.",
+    category: "material_processing",
+    process: "assemble",
     costs: [{ itemId: "stone", name: "Raw Stone", required: 3 }],
   },
   {
     id: "oak_plank",
     name: "Oak Plank",
     description: "Smooth plank of sawed oak wood. Used in outpost construction.",
+    category: "material_processing",
+    process: "assemble",
     costs: [{ itemId: "oak_wood", name: "Raw Oak Wood", required: 3 }],
   },
   {
@@ -77,16 +132,63 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     name: "Charcoal",
     description: "slow-burned wood for steady heat.",
     requiresCampfire: true,
+    category: "fuel_fire",
+    requiredContext: "campfire",
+    process: "burn",
+    feedbackTags: ["smoke", "ash", "fire"],
     costs: [{ itemId: "oak_wood", name: "Oak Wood", required: 2 }],
+  },
+  {
+    id: "tinder_bundle",
+    name: "Tinder Bundle",
+    description: "dry leaves and bark bundled into a starter nest.",
+    category: "fuel_fire",
+    requiredContext: "hand",
+    process: "assemble",
+    feedbackTags: ["dry", "fire"],
+    costs: [
+      { itemId: "leaves", name: "dry leaves", required: 2 },
+      { itemId: "bark", name: "bark", required: 1 },
+    ],
+  },
+  {
+    id: "firewood_bundle",
+    name: "Firewood Bundle",
+    description: "branches tied into a longer-burning fuel bundle.",
+    category: "fuel_fire",
+    requiredContext: "hand",
+    process: "assemble",
+    feedbackTags: ["binding", "fuel"],
+    costs: [
+      { itemId: "branch", name: "branch", required: 2 },
+      { itemId: "grass_fiber", name: "grass fiber", required: 1 },
+    ],
   },
   {
     id: "weak_medicine",
     name: "Weak Medicine",
     description: "a bitter moss tea that steadies sickness and thirst.",
     requiresCampfire: true,
+    category: "medicine",
+    requiredContext: "campfire",
+    process: "boil",
+    feedbackTags: ["herbal", "steam"],
     costs: [
       { itemId: "clean_water", name: "clean water", required: 1 },
       { itemId: "moss", name: "moss", required: 1 },
+    ],
+  },
+  {
+    id: "binding_cord",
+    name: "Binding Cord",
+    description: "fiber and bark twisted into usable cord.",
+    category: "material_processing",
+    requiredContext: "hand",
+    process: "assemble",
+    feedbackTags: ["binding"],
+    costs: [
+      { itemId: "grass_fiber", name: "grass fiber", required: 2 },
+      { itemId: "bark", name: "bark", required: 1 },
     ],
   },
   {
@@ -95,6 +197,9 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     description:
       "Pure smelted copper bar. Requires standing near the Campfire's heat.",
     requiresCampfire: true,
+    category: "material_processing",
+    requiredContext: "campfire",
+    process: "heat",
     costs: [
       { itemId: "copper_ore", name: "Copper Ore", required: 3 },
       { itemId: "charcoal", name: "Charcoal", required: 1 },
@@ -106,6 +211,9 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     description:
       "Refined ingot of strong iron metal. Requires standing near the Campfire's heat.",
     requiresCampfire: true,
+    category: "material_processing",
+    requiredContext: "campfire",
+    process: "heat",
     costs: [
       { itemId: "iron_ore", name: "Iron Ore", required: 3 },
       { itemId: "charcoal", name: "Charcoal", required: 2 },
@@ -117,6 +225,9 @@ const RAW_RECIPES: readonly RecipeInput[] = [
     description:
       "Glistening sterling silver bar. Requires standing near the Campfire's heat.",
     requiresCampfire: true,
+    category: "material_processing",
+    requiredContext: "campfire",
+    process: "heat",
     costs: [
       { itemId: "silver_ore", name: "Silver Ore", required: 3 },
       { itemId: "charcoal", name: "Charcoal", required: 3 },
@@ -157,6 +268,9 @@ export function validateCraftRecipes(
 
     if (recipe.costs.length === 0) {
       problems.push(`recipe ${recipe.id} has no costs`);
+    }
+    if (recipe.requiredContext === "campfire" && !recipe.requiresCampfire) {
+      // Not invalid: newer recipe data uses requiredContext as the canonical field.
     }
     for (const cost of recipe.costs) {
       if (cost.required <= 0) {

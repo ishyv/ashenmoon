@@ -20,9 +20,12 @@ import { InputAction } from "$lib/domain/game-events";
 vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
   spawnSlashArc: vi.fn(),
+  spawnCrosscutSlash: vi.fn(),
   triggerCameraShake: vi.fn(),
   flashEntity: vi.fn(),
   spawnDamageNumber: vi.fn(),
+  spawnCrosscutIndicator: vi.fn(),
+  clearCrosscutIndicators: vi.fn(),
 }));
 
 class MockInputResource extends InputResource {
@@ -181,6 +184,7 @@ describe("Combat System - Directional Momentum Combo", () => {
     expect(state.lockedDirection).toBe("right");
 
     // Change direction to left before second attack
+    combat.crosscutState.cooldownUntilMs = Number.POSITIVE_INFINITY;
     inputs.pressed.clear();
     inputs.pressed.add(InputAction.MoveLeft);
     inputs.mouseWorld = { x: -100, y: 32 };

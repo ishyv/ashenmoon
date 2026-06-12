@@ -86,7 +86,7 @@ export class InputResource {
     if (!this.isMouseHeld) return;
     this.primarySwipeCurrentScreen = { ...args.screen };
     this.primarySwipeCurrentWorld = { ...args.world };
-    this.updatePointerAttackTracking(args.nowMs ?? performance.now());
+    this.updatePointerAttackTracking(args.nowMs ?? this.mouseDownAt);
   }
 
   public updatePointerAttackTracking(nowMs = performance.now()): void {

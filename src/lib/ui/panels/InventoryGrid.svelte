@@ -43,9 +43,12 @@ const inspectNotes = $derived(selectedItem ? inspectKnowledge(selectedItem) : nu
 const stashLimit = $derived(gameState.rpg.profile?.stashSize ?? 20);
 
 const buildRecipes: BuildRecipeView[] = [
+  "campfire",
   "storage_pile",
   "drying_rack",
   "primitive_work_surface",
+  "crude_shelter",
+  "marker_sign",
 ].map((id) => {
   const spec = BUILDING_SPECS[id];
   return {
@@ -164,6 +167,7 @@ function canCraft(recipe: CraftRecipe): boolean {
   if (!gameState.rpg.inventory) return false;
   return canCraftRecipe(gameState.rpg.inventory.slots, recipe.id, {
     isNearCampfire: engine?.isNearCampfire() ?? false,
+    availableStations: engine?.nearbyStationIds?.() ?? [],
   });
 }
 
@@ -174,7 +178,10 @@ function canBuild(recipe: BuildRecipeView): boolean {
 async function craftItem(recipe: CraftRecipe): Promise<void> {
   if (!canCraft(recipe)) return;
   try {
-    applyRpgState(localRpgCommands.craft(recipe.id, { isNearCampfire: engine?.isNearCampfire() ?? false }));
+    applyRpgState(localRpgCommands.craft(recipe.id, {
+      isNearCampfire: engine?.isNearCampfire() ?? false,
+      availableStations: engine?.nearbyStationIds?.() ?? [],
+    }));
     playSound("craft");
     
     // Clear items in mix if we successfully crafted something
@@ -276,6 +283,7 @@ async function runExperiment() {
           {clearExperiment}
           {canCraft}
           {craftItem}
+          isNearCampfire={() => engine?.isNearCampfire() ?? false}
         />
       {:else}
         <BuildingPanel

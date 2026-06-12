@@ -152,7 +152,7 @@ export function applyKiteComboFinisher(
   const effectiveHalfAngle = config.arcHalfAngle * 0.35;
   const effectiveDamage = Math.round(config.damage * 1.4 * damageMult);
   
-  const useStaminaCost = config.staminaCost + (4 + 2 * currentStacks) * currentStacks;
+  const useStaminaCost = Math.max(1, config.staminaCost - (2 + kiteLevel) * (currentStacks - 1));
 
   let arcColor: number = Colors.combat.kiteArc;
   if (currentStacks === 1) {

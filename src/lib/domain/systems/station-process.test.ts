@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { findProcessForStation, validateStationProcesses, type StationProcess } from "./station-process";
+import {
+  createStationProcessRuntime,
+  findProcessForStation,
+  tickStationProcessRuntime,
+  validateStationProcesses,
+  type StationProcess,
+} from "./station-process";
 import type { Inventory } from "./inventory-system";
 
 describe("findProcessForStation", () => {
@@ -58,5 +64,36 @@ describe("validateStationProcesses", () => {
       "station process bad_process duration must be positive",
       "station process bad_process output quantity must be positive",
     ]);
+  });
+});
+
+describe("station process runtime", () => {
+  const dryingProcess: StationProcess = {
+    id: "dry_test",
+    stationId: "drying_rack",
+    inputs: { raw_meat: 1 },
+    processType: "dry",
+    durationSec: 10,
+    outputItemId: "dried_meat",
+    outputQty: 1,
+  };
+
+  it("advances normal processes toward completion", () => {
+    const runtime = createStationProcessRuntime(dryingProcess, "rack_1");
+
+    const next = tickStationProcessRuntime(runtime, 3, { raining: false });
+
+    expect(next.elapsedSec).toBe(3);
+    expect(next.remainingSec).toBe(7);
+  });
+
+  it("reverses exposed drying progress while raining", () => {
+    const runtime = createStationProcessRuntime(dryingProcess, "rack_1");
+    const partlyDry = tickStationProcessRuntime(runtime, 4, { raining: false });
+
+    const rainedOn = tickStationProcessRuntime(partlyDry, 2, { raining: true });
+
+    expect(rainedOn.elapsedSec).toBe(3);
+    expect(rainedOn.remainingSec).toBe(7);
   });
 });

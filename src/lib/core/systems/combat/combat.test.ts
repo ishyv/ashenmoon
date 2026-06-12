@@ -24,6 +24,8 @@ vi.mock("$lib/core/vfx/vfx", () => ({
   triggerCameraShake: vi.fn(),
   flashEntity: vi.fn(),
   spawnDamageNumber: vi.fn(),
+  spawnCrosscutIndicator: vi.fn(),
+  clearCrosscutIndicators: vi.fn(),
 }));
 
 vi.mock("$lib/audio/audio-engine", () => ({
@@ -174,7 +176,7 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
       onEnemyKilled,
     );
 
-    expect(stamina.current).toBe(stamBefore - 14); // First combo increments to 1 stack first, costing 14
+    expect(stamina.current).toBe(stamBefore - 8); // First combo increments to 1 stack first, costing 8
     expect(combat.kiteStacks).toBe(1); // Stacks is 1
 
     // Reset cooldown to allow second swing
@@ -209,8 +211,8 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
       onEnemyKilled,
     );
 
-    // Second combo increments to 2 stacks first, costing 24. 86 - 24 = 62
-    expect(stamina.current).toBe(62);
+    // Second combo increments to 2 stacks first, costing 5. 92 - 5 = 87
+    expect(stamina.current).toBe(87);
     expect(combat.kiteStacks).toBe(2); // Stacks is 2
   });
 
@@ -367,11 +369,11 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
 
     // 2. Stamina calculation:
     // Started at 50.
-    // Cost at stack 2: 8 + (4 + 2 * 2) * 2 = 24
+    // Cost at stack 2: Math.max(1, 8 - 3 * 1) = 5
     // Hit lands -> recovers: 15 + 5 * 2 = 25
-    // Net change: -24 + 25 = +1
-    // Ending stamina should be 50 + 1 = 51
-    expect(stamina.current).toBe(51);
+    // Net change: -5 + 25 = +20
+    // Ending stamina should be 50 + 20 = 70
+    expect(stamina.current).toBe(70);
 
     // 3. HP calculation:
     // Started at 100.

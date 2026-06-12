@@ -2,6 +2,8 @@ import { World } from "miniplex";
 import type { InteractionId } from "$lib/domain/interactions";
 import type { StationId } from "$lib/domain/stations";
 import type { AiState, AnimState, Faction } from "$lib/core/types";
+import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import type { CampfireState } from "$lib/domain/camp/camp-state";
 
 /**
  * Game entity component structure.
@@ -50,6 +52,19 @@ export interface Entity {
   /** Station marker for generic station/process interactions. */
   station?: {
     stationId: StationId;
+  };
+
+  /** Runtime state for a player-built or scenario campfire. */
+  campfire?: CampfireState;
+
+  /** First Camp wildlife marker. Behavior is owned by animal-ecology-system. */
+  animal?: {
+    speciesId: AnimalSpeciesId;
+    behavior: AnimalBehaviorState;
+    hunger: number;
+    threatened: boolean;
+    attackCooldownSec: number;
+    home: { x: number; y: number };
   };
 
   // --- Combat components -----------------------------------------------------

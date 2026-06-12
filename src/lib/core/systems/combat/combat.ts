@@ -45,6 +45,8 @@ import {
   spawnFourfoldFinisherSlash,
   spawnEnvFloatingText,
   triggerCameraShake,
+  spawnCrosscutIndicator,
+  clearCrosscutIndicators,
 } from "$lib/core/vfx/vfx";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { getPlayerStats } from "$lib/domain/stats.svelte";
@@ -379,6 +381,12 @@ function crosscutText(grade: CrosscutGrade): string {
   }
 }
 
+function clearCrosscut(combat: CombatResource, vfx: VFXResource, entityLayer: Container) {
+  clearCrosscutState(combat.crosscutState);
+  clearCrosscutIndicators(vfx, entityLayer);
+}
+
+
 function maybeApplyCrosscutBleed(
   target: Entity,
   result: CrosscutComboResult,
@@ -518,7 +526,7 @@ export function playerAttackSystem(
   if (combat.lastCrosscutWeaponId === null) {
     combat.lastCrosscutWeaponId = currentWeaponId;
   } else if (combat.lastCrosscutWeaponId !== currentWeaponId) {
-    clearCrosscutState(combat.crosscutState);
+    clearCrosscut(combat, vfx, entityLayer);
     clearFourfoldSlashState(combat.fourfoldState);
     combat.lastCrosscutWeaponId = currentWeaponId;
   }
@@ -529,7 +537,7 @@ export function playerAttackSystem(
     (player.knockback?.timer ?? 0) > 0 ||
     (player.health?.current ?? 1) <= 0
   ) {
-    clearCrosscutState(combat.crosscutState);
+    clearCrosscut(combat, vfx, entityLayer);
     clearFourfoldSlashState(combat.fourfoldState);
   }
 
@@ -750,6 +758,11 @@ export function playerAttackSystem(
       playerPosition: { x: pcx, y: pcy },
       nowMs: combat.currentTimeMs,
     });
+    const nextWindowMs = Math.max(
+      combat.crosscutConfig.minComboWindowMs,
+      combat.crosscutConfig.comboWindowMs * Math.pow(combat.crosscutConfig.windowDecayRate, combat.crosscutState.stacks)
+    );
+    spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, nextWindowMs / 1000);
   } else if (!isKiteCombo) {
     combat.lastBasicAttackAtMs = combat.currentTimeMs;
   }
@@ -821,17 +834,19 @@ export function playerAttackSystem(
     handleKiteComboHit(combat, player, vfx, entityLayer, hitCount);
   } else if (!isCrosscut) {
     if (crosscutResult.reason && crosscutResult.reason !== "no_starter" && crosscutResult.reason !== "cooldown") {
-      if (crosscutResult.reason === "expired" && combat.crosscutState.stacks === 0) {
-        clearCrosscutState(combat.crosscutState);
+      if (crosscutResult.reason === "expired") {
+        combat.crosscutState.cooldownUntilMs = combat.currentTimeMs + combat.crosscutConfig.comboCooldownMs;
+        clearCrosscut(combat, vfx, entityLayer);
         storeFirstCrosscutClick(combat.crosscutState, {
           clickWorldPosition: inputs.mouseWorld,
           playerPosition: { x: pcx, y: pcy },
           nowMs: combat.currentTimeMs,
           config: combat.crosscutConfig,
         });
+        spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, combat.crosscutConfig.comboWindowMs / 1000);
       } else {
         combat.crosscutState.cooldownUntilMs = combat.currentTimeMs + combat.crosscutConfig.comboCooldownMs;
-        clearCrosscutState(combat.crosscutState);
+        clearCrosscut(combat, vfx, entityLayer);
       }
     } else if (crosscutResult.reason === "no_starter") {
       storeFirstCrosscutClick(combat.crosscutState, {
@@ -840,6 +855,7 @@ export function playerAttackSystem(
         nowMs: combat.currentTimeMs,
         config: combat.crosscutConfig,
       });
+      spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, combat.crosscutConfig.comboWindowMs / 1000);
     }
   }
 }

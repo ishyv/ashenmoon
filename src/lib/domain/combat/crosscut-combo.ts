@@ -90,20 +90,20 @@ export interface TryResolveCrosscutComboInput {
 const RAD_TO_DEG = 180 / Math.PI;
 
 export const DEFAULT_CROSSCUT_COMBO_CONFIG: CrosscutComboConfig = {
-  comboWindowMs: 650,
+  comboWindowMs: 950,
   minFirstClickDistancePx: 32,
   minSecondClickDistancePx: 32,
   minDistanceBetweenClicksPx: 8,
   perfectAngleDegrees: 90,
-  excellentToleranceDegrees: 12,
-  goodToleranceDegrees: 24,
-  minimumToleranceDegrees: 36,
+  excellentToleranceDegrees: 10,
+  goodToleranceDegrees: 18,
+  minimumToleranceDegrees: 22,
   staminaCosts: {
-    weak: 6,
-    good: 8,
-    excellent: 10,
+    weak: 10,
+    good: 5,
+    excellent: 1,
   },
-  comboCooldownMs: 1200,
+  comboCooldownMs: 1,
   effects: {
     weak: {
       damageMultiplier: 1.15,
@@ -219,6 +219,18 @@ export function storeFirstCrosscutClick(
   return true;
 }
 
+export function getSegmentAxis(dir: Vec2): "horizontal" | "vertical" | "diagonal" {
+  const thetaDeg = Math.abs(Math.atan2(dir.y, dir.x) * 180 / Math.PI);
+  const errorH = Math.min(thetaDeg, 180 - thetaDeg);
+  const errorV = Math.abs(90 - thetaDeg);
+  const errorD1 = Math.abs(45 - thetaDeg);
+  const errorD2 = Math.abs(135 - thetaDeg);
+  const minErr = Math.min(errorH, errorV, errorD1, errorD2);
+  if (minErr === errorH) return "horizontal";
+  if (minErr === errorV) return "vertical";
+  return "diagonal";
+}
+
 export function tryResolveCrosscutCombo(
   input: TryResolveCrosscutComboInput,
 ): CrosscutComboResult {
@@ -253,16 +265,21 @@ export function tryResolveCrosscutCombo(
     return { triggered: false, reason: "second_click_too_close" };
   }
 
+  const thetaDeg = Math.abs(Math.atan2(currentDirection.y, currentDirection.x) * RAD_TO_DEG);
+  const errorH = Math.min(thetaDeg, 180 - thetaDeg);
+  const errorV = Math.abs(90 - thetaDeg);
+  const errorD1 = Math.abs(45 - thetaDeg);
+  const errorD2 = Math.abs(135 - thetaDeg);
+  const angleErrorDegrees = Math.min(errorH, errorV, errorD1, errorD2);
+
+  const grade = getCrosscutGrade(angleErrorDegrees, config);
+  if (!grade) {
+    return { triggered: false, reason: "bad_angle" };
+  }
+
   const angleDegrees = state.firstDirection
     ? getAngleBetweenDegrees(state.firstDirection, currentDirection)
     : config.perfectAngleDegrees;
-  const angleErrorDegrees = state.firstDirection
-    ? Math.abs(config.perfectAngleDegrees - angleDegrees)
-    : 0;
-  const grade = state.firstDirection ? getCrosscutGrade(angleErrorDegrees, config) : "excellent";
-  if (!grade) {
-    return { triggered: false, reason: "bad_angle", angleDegrees, angleErrorDegrees };
-  }
 
   const staminaCost = config.staminaCosts[grade];
   if (input.currentStamina < staminaCost) {

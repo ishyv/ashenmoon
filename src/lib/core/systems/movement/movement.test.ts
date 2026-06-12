@@ -10,6 +10,8 @@ vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
   spawnEnvParticles: vi.fn(),
   triggerCameraShake: vi.fn(),
+  spawnCrosscutIndicator: vi.fn(),
+  clearCrosscutIndicators: vi.fn(),
 }));
 
 class TestInputResource extends InputResource {

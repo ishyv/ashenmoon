@@ -3,6 +3,7 @@ import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import { getCampfireHeatRadiusTiles } from "$lib/core/systems/camp/campfire-runtime-system";
 import {
   type VFXResource,
   spawnEnvFloatingText,
@@ -28,7 +29,6 @@ import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/g
 import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
 import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
-import type { InventoryEffect } from "$lib/domain/items/item-effects";
 import { emitPlayerHpDelta } from "$lib/ui/player-feedback";
 import {
   createTreeFallHazard,
@@ -37,7 +37,12 @@ import {
 } from "$lib/domain/hazards/tree-fall-hazard";
 import { learnAbout } from "$lib/domain/knowledge.svelte";
 import { learnRecipe } from "$lib/domain/crafting.svelte";
-import { findProcessForStation } from "$lib/domain/systems/station-process";
+import {
+  findProcessForStation,
+  tickStationProcessRuntime,
+  type StationProcessRuntime,
+  type StationProcessTickContext,
+} from "$lib/domain/systems/station-process";
 import { InteractionDispatcher } from "$lib/core/runtime/interactions";
 import type { RuntimeResourceMap } from "$lib/core/runtime/runtime";
 
@@ -166,25 +171,13 @@ export class InteractionResource {
   public currentGatherInterval = 0.6;
   public gatheringTarget: Entity | null = null;
   public currentTarget: Entity | null = null;
-  public campfireRefuelTimer = 0;
-  public campfireHeatRadius = 3.5;
   public campfireSprite: AnimatedSprite | null = null;
   public refuelPendingConfirm = false;
   public refuelConfirmTimer = 0;
   /** Set by campfire handler to open the crafting overlay; consumed by engine. */
   public requestCrafting = false;
   /** Active item process (boiling, smelting); null when nothing is processing. */
-  public activeProcess: {
-    stationId: StationId;
-    targetEntityId: string;
-    itemId: string;
-    outputItemId: string;
-    outputQty: number;
-    remainingSec: number;
-    bubbleTimer: number;
-    inputs: Record<string, number>;
-    effect?: InventoryEffect;
-  } | null = null;
+  public activeProcess: StationProcessRuntime | null = null;
 }
 
 
@@ -654,26 +647,9 @@ export function runInteractionSystem(
   isDashing: boolean,
   onHit: (entity: Entity, yieldName: string, quantity: number) => void,
   map?: MapResource,
-  onStationInteract?: (target: Entity) => void
+  onStationInteract?: (target: Entity) => void,
+  stationTickContext: StationProcessTickContext = { raining: false },
 ): void {
-  if (interaction.campfireRefuelTimer > 0) {
-    interaction.campfireRefuelTimer -= dt;
-    if (interaction.campfireRefuelTimer <= 0) {
-      interaction.campfireHeatRadius = 3.5;
-      if (interaction.campfireSprite) {
-        interaction.campfireSprite.scale.set((TILE * 0.8) / 48);
-      }
-      const playerEntity = getPlayerEntity();
-      spawnEnvFloatingText(
-        vfx,
-        "campfire heat starts to fade...",
-        Colors.ui.warning,
-        playerEntity.position!,
-        entityLayer
-      );
-    }
-  }
-
   // Advance an active process; walking out of the heat cancels it.
   if (interaction.activeProcess) {
     const playerEntity = getPlayerEntity();
@@ -684,7 +660,7 @@ export function runInteractionSystem(
     if (stationEntity?.position && playerEntity.position) {
       const dx = (stationEntity.position.x - playerEntity.position.x) / TILE;
       const dy = (stationEntity.position.y - playerEntity.position.y) / TILE;
-      const maxDist = proc.stationId === "campfire" ? interaction.campfireHeatRadius : 2.5;
+      const maxDist = proc.stationId === "campfire" ? getCampfireHeatRadiusTiles(stationEntity) : 2.5;
       inRange = Math.hypot(dx, dy) <= maxDist;
     }
 
@@ -698,10 +674,11 @@ export function runInteractionSystem(
       );
       interaction.activeProcess = null;
     } else {
-      proc.remainingSec -= dt;
-      proc.bubbleTimer -= dt;
-      if (proc.bubbleTimer <= 0 && stationEntity?.position) {
-        proc.bubbleTimer = 0.8;
+      const tickedProc = tickStationProcessRuntime(proc, dt, stationTickContext);
+      interaction.activeProcess = tickedProc;
+
+      if (tickedProc.bubbleTimer <= 0 && stationEntity?.position) {
+        interaction.activeProcess = { ...tickedProc, bubbleTimer: 0.8 };
         if (proc.stationId === "campfire") {
           spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", stationEntity.position, entityLayer);
           playSound("station.boil");
@@ -711,11 +688,11 @@ export function runInteractionSystem(
           playSound("pickup");
         }
       }
-      if (proc.remainingSec <= 0) {
+      if (tickedProc.remainingSec <= 0) {
         if (gameState.rpg.inventory) {
           let inv = gameState.rpg.inventory;
           let hasIngredients = true;
-          const inputs = proc.inputs || (proc.itemId ? { [proc.itemId]: 1 } : {});
+          const inputs = proc.inputs;
           for (const [inId, reqQty] of Object.entries(inputs)) {
             const slot = inv.slots[inId];
             if (!slot || !("qty" in slot) || slot.qty < reqQty) {
@@ -728,8 +705,8 @@ export function runInteractionSystem(
             for (const [inId, reqQty] of Object.entries(inputs)) {
               inv = removeStackQty(inv, inId, reqQty);
             }
-            const outId = proc.outputItemId || (proc.effect?.kind === "transform" ? proc.effect.into : "charcoal");
-            const outQty = proc.outputQty || 1;
+            const outId = proc.outputItemId;
+            const outQty = proc.outputQty;
             const targetSlot = inv.slots[outId];
             const targetQty = targetSlot && "qty" in targetSlot ? targetSlot.qty : 0;
             inv = {

@@ -13,6 +13,7 @@ import { Cell } from "$lib/core/types";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { getBuildingSpec } from "$lib/domain/building-specs";
+import { createCampfireState } from "$lib/domain/camp/camp-state";
 import { CollisionFootprints, computeRenderZ, resolveCollisionAabb } from "$lib/domain/collision";
 import {
   isValidBuildingPlacement,
@@ -85,10 +86,21 @@ export function spawnBuildingSystem(
   const spec = getBuildingSpec(type);
   const { w, h } = spec.footprint;
 
+  const station = spec.stationId ? { stationId: spec.stationId } : undefined;
+  const campfire = spec.stationId === "campfire" ? createCampfireState({ isLit: false }) : undefined;
+  const interactable = spec.stationId
+    ? { name: spec.displayName, action: "process" as const }
+    : type === "crude_shelter" || type === "marker_sign"
+      ? { name: spec.displayName, action: "process" as const }
+      : undefined;
+
   world.add({
     id,
     position: { x: ex, y: ey, targetX: ex, targetY: ey },
     collider: { isSolid: true },
+    ...(station ? { station } : {}),
+    ...(campfire ? { campfire } : {}),
+    ...(interactable ? { interactable } : {}),
   });
 
   for (let dy = 0; dy < h; dy++) {
@@ -145,7 +157,7 @@ export async function placeBuildingSystem(
 
   applyRpgState(result.data);
 
-  const id = `building_${type}_${Date.now()}`;
+  const id = result.data.profile.buildings?.at(-1)?.id ?? `building_${type}_${Date.now()}`;
   spawnBuildingSystem(id, type, gx, gy, world, map, entityLayer, entitySprites, getBuildingTexture);
 
   playSound("build.place");

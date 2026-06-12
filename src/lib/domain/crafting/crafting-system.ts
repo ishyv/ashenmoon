@@ -4,7 +4,8 @@
  * no I/O. The UI calls these for preview; the API calls them for execution, so
  * the two can never drift.
  */
-import { type CraftRecipe, getRecipe } from "./recipes";
+import { type CraftRecipe, getRecipe, type CraftingContextId } from "./recipes";
+import type { StationId } from "$lib/domain/stations";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 
 /** A stackable inventory slot. Equipment-style instance slots are ignored by crafting. */
@@ -17,16 +18,20 @@ export type CraftSlots = Readonly<Record<string, InventorySlot>>;
 /** Crafting context not derivable from the inventory alone. */
 export interface CraftContext {
   readonly isNearCampfire: boolean;
+  readonly stationId?: StationId;
+  readonly availableStations?: readonly StationId[];
 }
 
 export type CraftFailureReason =
   | "unknown_recipe"
+  | "requires_station"
   | "requires_campfire"
   | "insufficient_materials";
 
 export interface CraftFailure {
   readonly ok: false;
   readonly reason: CraftFailureReason;
+  readonly requiredContext?: CraftingContextId;
   /** Populated when reason is "insufficient_materials". */
   readonly missing?: readonly { itemId: string; required: number; have: number }[];
 }
@@ -61,6 +66,23 @@ export function checkCraft(
 
   if (recipe.requiresCampfire && !ctx.isNearCampfire) {
     return { ok: false, reason: "requires_campfire" };
+  }
+
+  if (recipe.requiredContext === "campfire" && !ctx.isNearCampfire) {
+    return { ok: false, reason: "requires_campfire" };
+  }
+
+  if (
+    recipe.requiredContext &&
+    recipe.requiredContext !== "hand" &&
+    recipe.requiredContext !== "campfire" &&
+    recipe.requiredContext !== "placement"
+  ) {
+    const stationId = recipe.requiredContext;
+    const hasContext = ctx.stationId === stationId || (ctx.availableStations ?? []).includes(stationId);
+    if (!hasContext) {
+      return { ok: false, reason: "requires_station", requiredContext: stationId };
+    }
   }
 
   const missing = recipe.costs

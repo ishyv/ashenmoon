@@ -1,5 +1,8 @@
+import type { StationId } from "$lib/domain/stations";
+
 export interface InventoryEngine {
   isNearCampfire(): boolean;
+  nearbyStationIds?(): StationId[];
   startBuildingPlacement(type: string, onConfirm: () => void, onCancel: () => void): void;
   startItemPlacement(itemId: string, onConfirm: () => void, onCancel: () => void): void;
 }
@@ -17,4 +20,3 @@ export interface BuildRecipeView {
 }
 
 export type InventoryTab = "stash" | "crafting" | "building";
-

@@ -1,11 +1,20 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
-import { STATION_PROCESSES } from "$lib/domain/systems/station-process";
+import { stationProcessVerb, STATION_PROCESSES } from "$lib/domain/systems/station-process";
 import { getItemDef } from "$lib/domain/items";
-import { gameState } from "$lib/state/game-state.svelte";
+import { getFuelSummary } from "$lib/domain/camp/fuel";
 import { getItemQty } from "$lib/domain/inventory-api";
+import { getStationDefinition } from "$lib/domain/stations";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import type { StationProcessRuntime } from "$lib/domain/systems/station-process";
+
+interface StationPanelEngine {
+  interactionResource: { activeProcess: StationProcessRuntime | null };
+  startStationProcess(entityId: string, processId: string): void;
+  refuelCampfire(entityId: string): void;
+  cancelStationProcess(): void;
+}
 
 let {
   entity,
@@ -14,7 +23,7 @@ let {
   onOpenCrafting,
 }: {
   entity: Entity;
-  engine: any;
+  engine: StationPanelEngine | null;
   onClose: () => void;
   onOpenCrafting?: () => void;
 } = $props();
@@ -24,17 +33,10 @@ const stationId = $derived(
 );
 
 const stationTitle = $derived(
-  stationId === "campfire"
-    ? "Campfire Crucible"
-    : stationId === "drying_rack"
-      ? "Drying Rack"
-      : stationId === "primitive_work_surface"
-        ? "Primitive Work Surface"
-        : "Station"
+  stationId ? (getStationDefinition(stationId)?.name ?? "Station") : "Station"
 );
 
-// We keep a reactive tick for activeProcess remaining time
-let activeProc = $state<any>(null);
+let activeProc = $state<StationProcessRuntime | null>(null);
 
 onMount(() => {
   if (!engine) return;
@@ -47,6 +49,9 @@ onMount(() => {
 
 const processes = $derived(
   STATION_PROCESSES.filter((p) => p.stationId === stationId)
+);
+const activeProcForEntity = $derived(
+  activeProc?.targetEntityId === entity.id ? activeProc : null
 );
 
 function getOwnedQty(itemId: string): number {
@@ -75,19 +80,19 @@ function cancelProcess() {
   <div class="station-container">
     
     <!-- Active Process Progress -->
-    {#if activeProc && activeProc.targetEntityId === entity.id}
-      {@const originalProc = STATION_PROCESSES.find(p => p.outputItemId === activeProc.outputItemId && p.stationId === activeProc.stationId)}
+    {#if activeProcForEntity}
+      {@const originalProc = STATION_PROCESSES.find(p => p.outputItemId === activeProcForEntity.outputItemId && p.stationId === activeProcForEntity.stationId)}
       {@const totalDuration = originalProc?.durationSec ?? 10}
-      {@const progressPercent = Math.max(0, Math.min(100, ((totalDuration - activeProc.remainingSec) / totalDuration) * 100))}
+      {@const progressPercent = Math.max(0, Math.min(100, ((totalDuration - activeProcForEntity.remainingSec) / totalDuration) * 100))}
       
       <section class="active-process-section">
         <h4 class="section-title">active process</h4>
         <div class="active-process-card">
           <div class="process-info">
             <span class="process-name">
-              cooking {getItemDef(activeProc.outputItemId)?.name.toLowerCase() ?? activeProc.outputItemId}
+              {stationProcessVerb(activeProcForEntity.processType)} {getItemDef(activeProcForEntity.outputItemId)?.name.toLowerCase() ?? activeProcForEntity.outputItemId}
             </span>
-            <span class="process-timer">{activeProc.remainingSec.toFixed(1)}s</span>
+            <span class="process-timer">{activeProcForEntity.remainingSec.toFixed(1)}s</span>
           </div>
           
           <div class="progress-bar-container">
@@ -117,18 +122,22 @@ function cancelProcess() {
           {/if}
 
           <!-- Refuel Campfire -->
-          {@const ownedWood = getOwnedQty("oak_wood")}
-          {@const canRefuel = ownedWood >= 5}
+          {@const fuelSummary = getFuelSummary({
+            firewood_bundle: getOwnedQty("firewood_bundle"),
+            oak_wood: getOwnedQty("oak_wood"),
+            branch: getOwnedQty("branch"),
+            stick: getOwnedQty("stick"),
+          })}
           <button 
             class="station-btn refuel-btn" 
-            class:enabled={canRefuel}
-            disabled={!canRefuel}
+            class:enabled={fuelSummary.canRefuel}
+            disabled={!fuelSummary.canRefuel}
             onclick={refuelCampfire}
           >
             <div class="btn-content-row">
               <span class="btn-label">Refuel Campfire</span>
-              <span class="btn-cost" class:missing={!canRefuel}>
-                {ownedWood} / 5 wood
+              <span class="btn-cost" class:missing={!fuelSummary.canRefuel}>
+                {fuelSummary.totalPieces} fuel pieces
               </span>
             </div>
             <span class="btn-desc">extends campfire heat radius</span>

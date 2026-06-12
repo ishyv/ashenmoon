@@ -15,6 +15,8 @@ vi.mock("$lib/core/vfx/vfx", () => ({
   triggerCameraShake: vi.fn(),
   flashEntity: vi.fn(),
   spawnDamageNumber: vi.fn(),
+  spawnCrosscutIndicator: vi.fn(),
+  clearCrosscutIndicators: vi.fn(),
 }));
 
 vi.mock("$lib/audio/audio-engine", () => ({

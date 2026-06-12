@@ -66,6 +66,15 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     cost: { stick: 4, leaves: 6 },
     stationId: "storage_pile",
   },
+  campfire: {
+    displayName: "campfire",
+    description: "a stone-ringed fire for warmth, light, boiling, cooking, and burning.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { stone: 3, stick: 4, leaves: 2, branch: 1 },
+    stationId: "campfire",
+  },
   drying_rack: {
     displayName: "drying rack",
     description: "a simple rack for one slow camp process.",
@@ -91,6 +100,22 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     textureType: "house1",
     sprite: { w: 1, h: 1 },
     cost: { branch: 4, leaves: 8 },
+  },
+  crude_shelter: {
+    displayName: "crude shelter",
+    description: "branch and leaf cover that cuts the worst of rain and night cold.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house1",
+    sprite: { w: 1, h: 1 },
+    cost: { branch: 6, leaves: 8, grass_fiber: 4, bark: 2 },
+  },
+  marker_sign: {
+    displayName: "marker sign",
+    description: "a rough camp marker for wayfinding.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { stick: 1, bark: 1, charcoal: 1 },
   },
   water_collector: {
     displayName: "water collector",

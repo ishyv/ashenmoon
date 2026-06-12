@@ -12,6 +12,7 @@ import {
   type ActiveShake,
   type BaseScale,
   type SlashArc,
+  type CrosscutIndicator,
 } from "$lib/core/types";
 import { TILE } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
@@ -30,6 +31,7 @@ export class VFXResource {
   public activeShakes = new Map<string, ActiveShake>();
   public baseScales = new Map<string, BaseScale>();
   public slashArcs: SlashArc[] = [];
+  public crosscutIndicators: CrosscutIndicator[] = [];
   public fellSweepChargeArc: Graphics | null = null;
   public gatherRing!: Graphics;
   public selectionRing!: Graphics;
@@ -40,6 +42,7 @@ export class VFXResource {
   public selectionRingTime = 0;
   public footstepTimer = 0;
 }
+
 
 export function particleUpdateSystem(vfx: VFXResource, dt: number, entityLayer: Container): void {
   for (let i = vfx.particles.length - 1; i >= 0; i--) {
@@ -1032,3 +1035,65 @@ export function spawnFourfoldFinisherSlash(
     entityLayer.addChild(p);
   }
 }
+
+export function spawnCrosscutIndicator(
+  vfx: VFXResource,
+  entityLayer: Container,
+  x: number,
+  y: number,
+  durationSec: number
+): void {
+  const g = new Graphics();
+  g.x = x;
+  g.y = y;
+
+  const points = 4;
+  const outerRadius = 6;
+  const innerRadius = 2.5;
+  g.moveTo(0, -outerRadius);
+  for (let i = 0; i < 2 * points; i++) {
+    const r = i % 2 === 0 ? outerRadius : innerRadius;
+    const angle = -Math.PI / 2 + i * (Math.PI / points);
+    g.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+  }
+  g.closePath();
+  g.fill({ color: 0xffffff, alpha: 0.35 });
+  g.stroke({ color: 0xffffff, width: 0.5, alpha: 0.15 });
+
+  entityLayer.addChild(g);
+  vfx.crosscutIndicators.push({
+    graphic: g,
+    life: 0,
+    maxLife: durationSec,
+  });
+}
+
+export function crosscutIndicatorUpdateSystem(
+  vfx: VFXResource,
+  dt: number,
+  entityLayer: Container
+): void {
+  for (let i = vfx.crosscutIndicators.length - 1; i >= 0; i--) {
+    const p = vfx.crosscutIndicators[i]!;
+    p.life += dt;
+    p.graphic.alpha = Math.max(0, 1.0 - p.life / p.maxLife);
+
+    if (p.life >= p.maxLife) {
+      entityLayer.removeChild(p.graphic);
+      p.graphic.destroy();
+      vfx.crosscutIndicators.splice(i, 1);
+    }
+  }
+}
+
+export function clearCrosscutIndicators(
+  vfx: VFXResource,
+  entityLayer: Container
+): void {
+  for (const p of vfx.crosscutIndicators) {
+    entityLayer.removeChild(p.graphic);
+    p.graphic.destroy();
+  }
+  vfx.crosscutIndicators = [];
+}
+

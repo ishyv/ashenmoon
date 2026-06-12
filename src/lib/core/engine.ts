@@ -53,6 +53,7 @@ import {
   cullViewportSystem,
   getAmbientEnvironment,
   TILE,
+  type ForestAnimalZoneKind,
 } from "$lib/core/systems/map/map";
 import {
   VFXResource,
@@ -74,6 +75,7 @@ import {
   spawnLevelUpBurst,
   triggerCameraShake,
   updateFourfoldSlashVFX,
+  crosscutIndicatorUpdateSystem,
 } from "$lib/core/vfx/vfx";
 import {
   MovementConfig,
@@ -97,6 +99,16 @@ import {
   renderDrivingThrustPreview,
 } from "$lib/core/systems/combat/driving-thrust";
 import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
+import { animalEcologySystem } from "$lib/core/systems/animals/animal-ecology-system";
+import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
+import {
+  createLitCampfireState,
+  findLitCampfires,
+  getCampfireHeatRadiusTiles,
+  isPointNearLitCampfire,
+  refuelCampfireEntity,
+  tickCampfireEntities,
+} from "$lib/core/systems/camp/campfire-runtime-system";
 import {
   InteractionResource,
   updateTargetSystem,
@@ -114,7 +126,21 @@ import {
   spawnBuildingSystem,
   isValidPlacement,
 } from "$lib/core/systems/building/building-system";
-import { STATION_PROCESSES } from "$lib/domain/systems/station-process";
+import { createStationProcessRuntime, stationProcessVerb, STATION_PROCESSES } from "$lib/domain/systems/station-process";
+import { chooseFuelOption } from "$lib/domain/camp/fuel";
+import type { StationId } from "$lib/domain/stations";
+import { ANIMAL_DEFINITIONS, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import {
+  createWorldEventState,
+  tickWeatherState,
+  tickWorldEventState,
+  nightEnvironmentModifiers,
+  putWorldEventOnCooldown,
+  scheduleWorldEvent,
+  WORLD_EVENT_FEEDBACK,
+  type WorldEventState,
+  type WeatherState,
+} from "$lib/domain/weather/weather-events";
 import { syncRefuel } from "$lib/state/persistence/remote-sync";
 import { getItemQty } from "$lib/domain/inventory-api";
 import { getItemDef } from "$lib/domain/items";
@@ -146,7 +172,7 @@ import { loadRecipes } from "$lib/domain/crafting.svelte";
 import { triggerQuestEvent, dialogueState } from "$lib/domain/quests.svelte";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
-import { EntityId, SkillKey, InputAction } from "$lib/domain/game-events";
+import { EntityId, SkillKey, InputAction, GameEvent } from "$lib/domain/game-events";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/domain/skill-xp";
 import { awardCharacterXp, getPlayerStats } from "$lib/domain/stats.svelte";
@@ -195,6 +221,10 @@ export class GameEngine {
   public itemPlacementResource = new ItemPlacementResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
+  public weatherState: WeatherState = { raining: false, rainRemainingSec: 0, timeOfDay: 0.28 };
+  private worldEventState: WorldEventState = createWorldEventState();
+  private rainCooldownSec = 180;
+  private rainFeedbackTimer = 0;
 
   private runtimeRegistry = createRuntimeRegistry([defaultRuntimeFeature]);
   private scheduler = new RuntimeScheduler([
@@ -261,6 +291,7 @@ export class GameEngine {
   // frames per enemy without baking presentation into the ai component.
   private enemyColors = new Map<string, UnitColor>();
   private enemySeq = 0;
+  private animalSeq = 0;
 
   // Dev unique spawns counter
   private devSpawnSeq = 0;
@@ -424,6 +455,7 @@ export class GameEngine {
     this.vfxResource.shockwaveRings = [];
     this.vfxResource.slashArcs = [];
     this.enemyColors.clear();
+    this.animalSeq = 0;
     this.vfxResource.activeShakes.clear();
     this.vfxResource.baseScales.clear();
 
@@ -665,7 +697,8 @@ export class GameEngine {
           this.movementResource.isDashing,
           (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
           this.mapResource,
-          this.onStationInteract
+          this.onStationInteract,
+          { raining: this.weatherState.raining }
         );
       }
 
@@ -753,6 +786,19 @@ export class GameEngine {
         this.getEnemyFrames
       );
 
+      animalEcologySystem(
+        world,
+        this.mapResource,
+        dt,
+        this.playerEntity,
+        this.combatConfig,
+        this.combatResource,
+        this.vfxResource,
+        this.entityLayer,
+        this.entitySprites,
+        findLitCampfires(world)
+      );
+
       tickEnemyBleedSystem(
         world,
         this.combatResource,
@@ -779,6 +825,27 @@ export class GameEngine {
         laboring: this.interactionResource.gatheringTarget !== null,
       });
 
+      if (!this.weatherState.raining) {
+        this.rainCooldownSec -= dt;
+        if (this.rainCooldownSec <= 0) {
+          this.weatherState = tickWeatherState(this.weatherState, dt, { forceRain: true });
+          this.rainCooldownSec = 420;
+          spawnEnvFloatingText(this.vfxResource, "rain begins to patter.", Colors.ui.muted, this.playerEntity.position!, this.entityLayer);
+        } else {
+          this.weatherState = tickWeatherState(this.weatherState, dt);
+        }
+      } else {
+        this.weatherState = tickWeatherState(this.weatherState, dt);
+        this.rainFeedbackTimer -= dt;
+        if (this.rainFeedbackTimer <= 0) {
+          this.rainFeedbackTimer = 0.45;
+          spawnEnvParticles(this.vfxResource, 0x7aa7c7, 5, "bubble", this.playerEntity.position!, this.entityLayer);
+        }
+      }
+
+      tickCampfireEntities(world, dt, { raining: this.weatherState.raining });
+      this.worldEventState = tickWorldEventState(this.worldEventState, dt);
+
       if (this.playerEntity.position) {
         const pgx = Math.round(this.playerEntity.position.x / TILE);
         const pgy = Math.round(this.playerEntity.position.y / TILE);
@@ -796,16 +863,18 @@ export class GameEngine {
       this.forestEventTimer -= dt;
       if (this.forestEventTimer <= 0) {
         this.forestEventTimer = 45 + Math.random() * 45;
-        const events = [
-          { msg: "You hear a distant howl echoing through the trees.", sound: "ambient.wind" },
-          { msg: "A strange rustling comes from the nearby brush.", sound: "node.deplete" },
-          { msg: "A cold wind sweeps across the forest, biting at your skin.", sound: "ambient.wind" },
-          { msg: "A snap of a branch sounds in the shadows.", sound: "node.deplete" }
-        ];
-        const event = events[Math.floor(Math.random() * events.length)];
-        emitPlayerFeedback(event.msg, "warning");
-        if (event.sound) {
-          playSound(event.sound as any);
+        const event = scheduleWorldEvent(this.worldEventState, {
+          nearWolfTerritory: this.isPlayerNearForestAnimalZone("wolf_territory", 14),
+          hasCorpseOrFoodPoi: this.mapResource.forestMetadata.eventPoints.length > 0,
+          hasPredatorAndPrey: this.hasPredatorAndPreyAnimals(),
+          timeOfDay: this.worldEventTimeOfDay(),
+          raining: this.weatherState.raining,
+        });
+        if (event) {
+          const feedback = WORLD_EVENT_FEEDBACK[event.type];
+          emitPlayerFeedback(feedback.message, "warning");
+          if (feedback.sound) playSound(feedback.sound);
+          this.worldEventState = putWorldEventOnCooldown(this.worldEventState, event.type);
         }
       }
 
@@ -861,6 +930,7 @@ export class GameEngine {
 
       // Run VFX particle movements
       particleUpdateSystem(this.vfxResource, dt, this.entityLayer);
+      crosscutIndicatorUpdateSystem(this.vfxResource, dt, this.entityLayer);
       spriteParticleUpdateSystem(this.vfxResource, dt, this.entityLayer);
       hitFlashUpdateSystem(this.vfxResource, dt, this.entityLayer);
       floatingTextUpdateSystem(this.vfxResource, dt, this.entityLayer);
@@ -948,7 +1018,7 @@ export class GameEngine {
 
       // Update campfire glow flicker
       if (this.campfireGlow) {
-        const baseRadius = this.interactionResource.campfireHeatRadius;
+        const baseRadius = getCampfireHeatRadiusTiles(world.with("campfire").entities.find((entity) => entity.id === EntityId.Campfire));
         const flicker = 1.0 + Math.sin(performance.now() * 0.007) * 0.04;
         this.campfireGlow.scale.set(((baseRadius * TILE * 1.8) / 384) * flicker);
       }
@@ -974,7 +1044,7 @@ export class GameEngine {
     // Scenarios are clean rooms by default: the base-world furniture (camp,
     // decorations, seeded enemies) is opt-in per scenario. The base world (no
     // scenario) keeps all of it, so this branch is invisible to normal play.
-    const wantCamp = !scenario || scenario.camp === true;
+    const wantCamp = scenario?.camp === true;
     const wantDecorations = !scenario || scenario.decorations === true;
     const spawnX = scenario?.spawnPoint.gx ?? Math.floor(this.mapResource.mapW / 2);
     const spawnY = scenario?.spawnPoint.gy ?? Math.floor(this.mapResource.mapH / 2);
@@ -1064,10 +1134,10 @@ export class GameEngine {
       this.spawnDecorations();
     }
 
-    // Enemies: the base world seeds a few hostiles around camp so combat is
-    // testable on load; a scenario only gets the hostiles it explicitly lists.
+    // Wildlife: the base world uses First Camp animal zones; scenarios only get
+    // their explicitly listed combat enemies.
     if (!scenario) {
-      this.spawnInitialEnemies(spawnX, spawnY);
+      this.spawnInitialAnimals();
     } else if (scenario.enemies) {
       for (const e of scenario.enemies) {
         this.spawnEnemy(e.gx, e.gy);
@@ -1262,6 +1332,87 @@ export class GameEngine {
     }
   }
 
+  public spawnAnimal(gx: number, gy: number, speciesId: AnimalSpeciesId): string | null {
+    if (!this.mapResource.inBounds(gx, gy)) return null;
+    if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return null;
+
+    const def = ANIMAL_DEFINITIONS[speciesId];
+    const id = `animal_${speciesId}_${this.animalSeq++}`;
+    const ex = gx * TILE;
+    const ey = gy * TILE;
+    const entity: Entity = {
+      id,
+      position: { x: ex, y: ey, targetX: ex, targetY: ey },
+      animal: {
+        speciesId,
+        behavior: "idle",
+        hunger: def.initialHunger,
+        threatened: false,
+        attackCooldownSec: 0,
+        home: { x: ex + TILE / 2, y: ey + TILE / 2 },
+      },
+      mover: { speed: def.moveSpeed },
+      knockback: { vx: 0, vy: 0, timer: 0 },
+      health: { current: def.maxHealth, max: def.maxHealth, faction: "hostile", invulnTimer: 0 },
+      loot: { xpReward: def.xpReward },
+    };
+    world.add(entity);
+
+    const sprite = createAnimalSprite(speciesId, ex, ey);
+    this.entityLayer.addChild(sprite);
+    this.entitySprites.set(id, sprite);
+    return id;
+  }
+
+  private spawnInitialAnimals(): void {
+    for (const zone of this.mapResource.forestMetadata.animalZones) {
+      switch (zone.kind) {
+        case "rabbit_burrow":
+          this.spawnAnimal(zone.x, zone.y, "rabbit");
+          this.spawnAnimal(zone.x + 1, zone.y, "rabbit");
+          break;
+        case "deer_grazing":
+          this.spawnAnimal(zone.x, zone.y, "deer");
+          break;
+        case "boar_rooting":
+          this.spawnAnimal(zone.x, zone.y, "boar");
+          break;
+        case "wolf_territory":
+          this.spawnAnimal(zone.x, zone.y, "wolf");
+          break;
+      }
+    }
+  }
+
+  private worldEventTimeOfDay(): "day" | "dusk" | "night" {
+    const t = this.weatherState.timeOfDay;
+    if (t >= 0.75 || t < 0.18) return "night";
+    if (t >= 0.62 || t < 0.28) return "dusk";
+    return "day";
+  }
+
+  private isPlayerNearForestAnimalZone(kind: ForestAnimalZoneKind, extraRadiusTiles: number): boolean {
+    const pos = this.playerEntity?.position;
+    if (!pos) return false;
+    const pgx = pos.x / TILE;
+    const pgy = pos.y / TILE;
+    return this.mapResource.forestMetadata.animalZones.some((zone) => {
+      if (zone.kind !== kind) return false;
+      return Math.hypot(zone.x - pgx, zone.y - pgy) <= zone.radiusTiles + extraRadiusTiles;
+    });
+  }
+
+  private hasPredatorAndPreyAnimals(): boolean {
+    let hasPredator = false;
+    let hasPrey = false;
+    for (const entity of world.with("animal").entities) {
+      if (entity.animal?.speciesId === "wolf") hasPredator = true;
+      if (entity.animal?.speciesId === "rabbit" || entity.animal?.speciesId === "deer") hasPrey = true;
+      if (hasPredator && hasPrey) return true;
+    }
+    return false;
+  }
+
   /**
    * Spawns the camp furniture: the campfire (refuel + light + respawn anchor)
    * and Commander Vane (quest giver), plus their solids. The base world always
@@ -1312,6 +1463,8 @@ export class GameEngine {
       position: { x: startX, y: startY, targetX: startX, targetY: startY },
       interactable: { name: "Campfire", action: "refuel" },
       collider: { isSolid: true },
+      station: { stationId: "campfire" },
+      campfire: createLitCampfireState(90_000),
     });
     this.setTileFootprint(spawnX, spawnY, CollisionFootprints.campfire);
 
@@ -1608,12 +1761,24 @@ export class GameEngine {
   // ---------------------------------------------------------------------------
 
   public getAmbientEnvironment(gx: number, gy: number): { temperature: number; humidity: number; toxins: number } {
-    return getAmbientEnvironment(
+    const base = getAmbientEnvironment(
       this.mapResource,
       gx,
       gy,
-      this.interactionResource.campfireHeatRadius
+      0
     );
+    const nearCampfire = isPointNearLitCampfire(world, { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 });
+    const night = nightEnvironmentModifiers({
+      timeOfDay: this.weatherState.timeOfDay,
+      nearLitCampfire: nearCampfire,
+      shelterColdMultiplier: this.shelterColdMultiplierAt(gx, gy),
+    });
+
+    return {
+      temperature: Math.round(base.temperature + night.temperatureDelta),
+      humidity: Math.min(100, base.humidity + (this.weatherState.raining ? 25 : 0)),
+      toxins: base.toxins,
+    };
   }
 
   public updateBindings(newBindings: Record<string, string[]>): void {
@@ -1671,15 +1836,50 @@ export class GameEngine {
   }
 
   public isNearCampfire(): boolean {
+    return this.isNearStation("campfire");
+  }
+
+  public isNearStation(stationId: StationId, maxDistanceTiles = 4.5): boolean {
     const pos = this.playerEntity?.position;
     if (!pos) return false;
-    const px = Math.floor((pos.x + TILE / 2) / TILE);
-    const py = Math.floor((pos.y + TILE / 2) / TILE);
-    const spawnX = Math.floor(this.mapResource.mapW / 2);
-    const spawnY = Math.floor(this.mapResource.mapH / 2);
+    const px = pos.x + TILE / 2;
+    const py = pos.y + TILE / 2;
+    if (stationId === "campfire") {
+      return isPointNearLitCampfire(world, { x: px, y: py });
+    }
+    return world.with("station", "position").entities.some((entity) => {
+      if (entity.station?.stationId !== stationId) return false;
+      const ex = entity.position!.x + TILE / 2;
+      const ey = entity.position!.y + TILE / 2;
+      return Math.hypot(px - ex, py - ey) <= maxDistanceTiles * TILE;
+    });
+  }
 
-    const dist = Math.sqrt((px - spawnX) * (px - spawnX) + (py - spawnY) * (py - spawnY));
-    return dist <= 4.5;
+  public nearbyStationIds(maxDistanceTiles = 4.5): StationId[] {
+    const pos = this.playerEntity?.position;
+    if (!pos) return [];
+    const px = pos.x + TILE / 2;
+    const py = pos.y + TILE / 2;
+    const ids = new Set<StationId>();
+    for (const entity of world.with("station", "position").entities) {
+      const ex = entity.position!.x + TILE / 2;
+      const ey = entity.position!.y + TILE / 2;
+      if (Math.hypot(px - ex, py - ey) <= maxDistanceTiles * TILE) {
+        if (entity.station!.stationId === "campfire" && !entity.campfire?.isLit) continue;
+        ids.add(entity.station!.stationId);
+      }
+    }
+    return [...ids];
+  }
+
+  private shelterColdMultiplierAt(gx: number, gy: number): number {
+    const px = gx * TILE + TILE / 2;
+    const py = gy * TILE + TILE / 2;
+    const shelter = world
+      .with("position")
+      .entities
+      .find((entity) => entity.id.includes("crude_shelter") && Math.hypot(entity.position!.x - px, entity.position!.y - py) <= TILE * 2.5);
+    return shelter ? 0.55 : 1;
   }
 
   public startBuildingPlacement(
@@ -1789,19 +1989,10 @@ export class GameEngine {
     if (!hasIngredients) return;
 
     // Start process
-    this.interactionResource.activeProcess = {
-      stationId: proc.stationId,
-      targetEntityId: target.id,
-      itemId: Object.keys(proc.inputs)[0],
-      remainingSec: proc.durationSec,
-      bubbleTimer: 0,
-      inputs: proc.inputs,
-      outputItemId: proc.outputItemId,
-      outputQty: proc.outputQty,
-    };
+    this.interactionResource.activeProcess = createStationProcessRuntime(proc, target.id);
 
     playSound("station.boil");
-    const procName = proc.processType === "dry" ? "drying" : proc.processType === "assemble" ? "assembling" : proc.processType === "burn" ? "burning" : "processing";
+    const procName = stationProcessVerb(proc.processType);
     const resultName = getItemDef(proc.outputItemId)?.name ?? proc.outputItemId;
     
     spawnEnvFloatingText(
@@ -1814,28 +2005,41 @@ export class GameEngine {
   }
 
   public async refuelCampfire(entityId: string): Promise<boolean> {
-    const woodQty = getItemQty("oak_wood");
-    if (woodQty < 5) return false;
+    const fuel = chooseFuelOption({
+      firewood_bundle: getItemQty("firewood_bundle"),
+      oak_wood: getItemQty("oak_wood"),
+      branch: getItemQty("branch"),
+      stick: getItemQty("stick"),
+    });
+    if (!fuel) return false;
 
     try {
-      const { applyRpgState, applyRpgStatePreservingLocalWeapon } = await import("$lib/state/rpg-actions.svelte");
-      const { localRpgCommands } = await import("$lib/state/persistence/rpg-commands");
-      // Consume 5 oak wood
-      applyRpgState(localRpgCommands.placeItem("oak_wood", 5));
-      // Sync refuel with backend
+      const { applyRpgStatePreservingLocalWeapon } = await import("$lib/state/rpg-actions.svelte");
       const r = await syncRefuel();
       if (r.ok) {
         applyRpgStatePreservingLocalWeapon(r.data.playerState);
+      } else {
+        spawnEnvFloatingText(
+          this.vfxResource,
+          `refuel failed: ${r.error}`,
+          Colors.ui.error,
+          this.playerEntity.position!,
+          this.entityLayer
+        );
+        return false;
       }
       
       playSound("station.boil");
       spawnEnvFloatingText(
         this.vfxResource,
-        "campfire refueled (+5 wood)",
+        "campfire refueled",
         Colors.vfx.campfireMsg,
         this.playerEntity.position!,
         this.entityLayer
       );
+      const campfire = world.with("position").entities.find((entity) => entity.id === entityId);
+      if (campfire) refuelCampfireEntity(campfire, fuel.fuelMs);
+      triggerQuestEvent(GameEvent.Refuel);
       
       // Update campfire visual sprite (reset frames / alpha)
       if (this.campfireGlow) {

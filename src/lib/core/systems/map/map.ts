@@ -23,6 +23,176 @@ export interface SpawnNode {
   gatherableId: string;
 }
 
+export type ForestWaterKind = "river" | "pond" | "muddy_pool";
+export type ForestResourceClusterKind =
+  | "starter_materials"
+  | "rocky_patch"
+  | "clearing"
+  | "water_edge"
+  | "dense_forest";
+export type ForestAnimalZoneKind =
+  | "rabbit_burrow"
+  | "deer_grazing"
+  | "boar_rooting"
+  | "wolf_territory";
+export type ForestEventPointKind = "corpse_site" | "berry_patch" | "water_sign" | "wolf_howl";
+
+export interface ForestPoint {
+  x: number;
+  y: number;
+}
+
+export interface ForestWaterSource extends ForestPoint {
+  kind: ForestWaterKind;
+  radiusTiles: number;
+}
+
+export interface ForestResourceCluster extends ForestPoint {
+  kind: ForestResourceClusterKind;
+  radiusTiles: number;
+}
+
+export interface ForestAnimalZone extends ForestPoint {
+  kind: ForestAnimalZoneKind;
+  radiusTiles: number;
+}
+
+export interface ForestEventPoint extends ForestPoint {
+  kind: ForestEventPointKind;
+}
+
+export interface ForestMetadata {
+  waterSources: ForestWaterSource[];
+  resourceClusters: ForestResourceCluster[];
+  animalZones: ForestAnimalZone[];
+  landmarks: (ForestPoint & { kind: string; label: string })[];
+  campCandidates: (ForestPoint & { radiusTiles: number })[];
+  eventPoints: ForestEventPoint[];
+}
+
+function createEmptyForestMetadata(): ForestMetadata {
+  return {
+    waterSources: [],
+    resourceClusters: [],
+    animalZones: [],
+    landmarks: [],
+    campCandidates: [],
+    eventPoints: [],
+  };
+}
+
+type SpawnAdder = (gatherableId: string, x: number, y: number, prefix?: string) => void;
+
+const FIRST_CAMP_RELATIVE_LAYOUT = {
+  water: { kind: "pond", dx: 10, dy: 2, radiusTiles: 3 },
+  resourceClusters: [
+    { kind: "starter_materials", dx: 0, dy: 6, radiusTiles: 7 },
+    { kind: "water_edge", dx: 8, dy: 2, radiusTiles: 4 },
+    { kind: "rocky_patch", dx: -9, dy: 4, radiusTiles: 4 },
+    { kind: "clearing", dx: 3, dy: 7, radiusTiles: 5 },
+    { kind: "dense_forest", dx: -8, dy: -8, radiusTiles: 6 },
+  ] satisfies readonly (Omit<ForestResourceCluster, "x" | "y"> & { dx: number; dy: number })[],
+  animalZones: [
+    { kind: "rabbit_burrow", dx: 5, dy: 8, radiusTiles: 5 },
+    { kind: "deer_grazing", dx: 8, dy: 6, radiusTiles: 6 },
+    { kind: "boar_rooting", dx: -10, dy: -4, radiusTiles: 6 },
+    { kind: "wolf_territory", dx: 18, dy: -12, radiusTiles: 9 },
+  ] satisfies readonly (Omit<ForestAnimalZone, "x" | "y"> & { dx: number; dy: number })[],
+  landmarks: [
+    { kind: "fallen_tree", label: "fallen tree", dx: -6, dy: 8 },
+    { kind: "old_stump", label: "old stump", dx: 7, dy: -5 },
+    { kind: "pond", label: "dark pond", dx: 10, dy: 2 },
+  ],
+  campCandidates: [
+    { dx: 4, dy: 5, radiusTiles: 3 },
+    { dx: -4, dy: 6, radiusTiles: 3 },
+  ],
+  eventPoints: [
+    { kind: "water_sign", dx: 7, dy: 2 },
+    { kind: "berry_patch", dx: 4, dy: 8 },
+    { kind: "corpse_site", dx: 15, dy: -9 },
+    { kind: "wolf_howl", dx: 18, dy: -12 },
+  ] satisfies readonly (Omit<ForestEventPoint, "x" | "y"> & { dx: number; dy: number })[],
+  guaranteedSpawns: [
+    { gatherableId: "water_source", dx: 8, dy: 2, prefix: "water" },
+    { gatherableId: "clay_deposit", dx: 7, dy: 3, prefix: "clay" },
+    { gatherableId: "clay_deposit", dx: 13, dy: 2, prefix: "clay" },
+    { gatherableId: "loose_stone_pickup", dx: -9, dy: 4, prefix: "rocky" },
+    { gatherableId: "flint_shard_pickup", dx: -8, dy: 5, prefix: "rocky" },
+    { gatherableId: "flint_shard_pickup", dx: -10, dy: 3, prefix: "rocky" },
+    { gatherableId: "berry_bush", dx: 4, dy: 8, prefix: "clearing" },
+    { gatherableId: "grass_patch", dx: 3, dy: 6, prefix: "clearing" },
+    { gatherableId: "moss_patch", dx: -7, dy: -6, prefix: "forest" },
+    { gatherableId: "bark_strip", dx: -8, dy: -7, prefix: "forest" },
+  ],
+} as const;
+
+function rel(spawnX: number, spawnY: number, p: { dx: number; dy: number }): ForestPoint {
+  return { x: spawnX + p.dx, y: spawnY + p.dy };
+}
+
+function applyFirstCampForestPass(map: MapResource, addSpawn: SpawnAdder, spawnX: number, spawnY: number): void {
+  const { mapW: W, mapH: H } = map;
+  const pondX = Math.min(W - 6, spawnX + FIRST_CAMP_RELATIVE_LAYOUT.water.dx);
+  const pondY = Math.min(H - 6, spawnY + FIRST_CAMP_RELATIVE_LAYOUT.water.dy);
+
+  // WHY: Milestone 2 needs a guaranteed reachable water source. The procedural
+  // noise can still create water elsewhere, but this pond anchors the first loop.
+  for (let y = pondY - 1; y <= pondY + 1; y++) {
+    for (let x = pondX - 1; x <= pondX + 1; x++) {
+      const idx = y * W + x;
+      if (idx >= 0 && idx < map.cells.length) {
+        map.cells[idx] = Cell.Water;
+        map.solidCoords.add(coordKey(x, y));
+      }
+    }
+  }
+
+  map.forestMetadata.waterSources.push({
+    kind: FIRST_CAMP_RELATIVE_LAYOUT.water.kind,
+    x: pondX,
+    y: pondY,
+    radiusTiles: FIRST_CAMP_RELATIVE_LAYOUT.water.radiusTiles,
+  });
+  map.forestMetadata.resourceClusters.push(
+    ...FIRST_CAMP_RELATIVE_LAYOUT.resourceClusters.map((cluster) => ({
+      kind: cluster.kind,
+      ...rel(spawnX, spawnY, cluster),
+      radiusTiles: cluster.radiusTiles,
+    })),
+  );
+  map.forestMetadata.animalZones.push(
+    ...FIRST_CAMP_RELATIVE_LAYOUT.animalZones.map((zone) => ({
+      kind: zone.kind,
+      ...rel(spawnX, spawnY, zone),
+      radiusTiles: zone.radiusTiles,
+    })),
+  );
+  map.forestMetadata.landmarks.push(
+    ...FIRST_CAMP_RELATIVE_LAYOUT.landmarks.map((landmark) => ({
+      kind: landmark.kind,
+      label: landmark.label,
+      ...rel(spawnX, spawnY, landmark),
+    })),
+  );
+  map.forestMetadata.campCandidates.push(
+    ...FIRST_CAMP_RELATIVE_LAYOUT.campCandidates.map((candidate) => ({
+      ...rel(spawnX, spawnY, candidate),
+      radiusTiles: candidate.radiusTiles,
+    })),
+  );
+  map.forestMetadata.eventPoints.push(
+    ...FIRST_CAMP_RELATIVE_LAYOUT.eventPoints.map((point) => ({
+      kind: point.kind,
+      ...rel(spawnX, spawnY, point),
+    })),
+  );
+
+  for (const spawn of FIRST_CAMP_RELATIVE_LAYOUT.guaranteedSpawns) {
+    addSpawn(spawn.gatherableId, spawnX + spawn.dx, spawnY + spawn.dy, spawn.prefix);
+  }
+}
+
 export class MapResource {
   public mapW = 100;
   public mapH = 100;
@@ -32,6 +202,7 @@ export class MapResource {
   public customSolids = new Map<string, AABB>();
   public lastCullKey = "";
   public mapData: { spawns: SpawnNode[] } = { spawns: [] };
+  public forestMetadata: ForestMetadata = createEmptyForestMetadata();
 
   public inBounds(gx: number, gy: number): boolean {
     return gx >= 0 && gy >= 0 && gx < this.mapW && gy < this.mapH;
@@ -44,6 +215,12 @@ export class MapResource {
  */
 export function buildMapSystem(map: MapResource): void {
   const { mapW: W, mapH: H } = map;
+  map.cells = [];
+  map.solidCoords.clear();
+  map.customSolids.clear();
+  map.mapData = { spawns: [] };
+  map.forestMetadata = createEmptyForestMetadata();
+
   const noiseGen = new SeededNoise(12345);
 
   const spawnX = Math.floor(W / 2);
@@ -55,6 +232,20 @@ export function buildMapSystem(map: MapResource): void {
 
   const spawnsList: SpawnNode[] = [];
   let devSpawnIdSeq = 1;
+  const occupiedSpawns = new Set<string>();
+  const addSpawn = (gatherableId: string, x: number, y: number, prefix = "node") => {
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    const key = coordKey(x, y);
+    if (occupiedSpawns.has(key)) return;
+    if (map.cells[y * W + x] === Cell.Water) return;
+    occupiedSpawns.add(key);
+    spawnsList.push({
+      id: `${prefix}_${gatherableId}_${devSpawnIdSeq++}`,
+      x,
+      y,
+      gatherableId,
+    });
+  };
 
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -138,17 +329,14 @@ export function buildMapSystem(map: MapResource): void {
                       : resourceKind === "tree"
                         ? "oak_tree"
                         : "stone_node";
-            spawnsList.push({
-              id: `node_${gatherableId}_${devSpawnIdSeq++}`,
-              x,
-              y,
-              gatherableId,
-            });
+            addSpawn(gatherableId, x, y);
           }
         }
       }
     }
   }
+
+  applyFirstCampForestPass(map, addSpawn, spawnX, spawnY);
 
   // Scattered bare-hand materials around spawn.
   const pickupCounts: Record<string, number> = {
@@ -174,8 +362,8 @@ export function buildMapSystem(map: MapResource): void {
     moss_patch: 5,
     berry_bush: 5,
     mushroom_patch: 5,
-    clay_deposit: 3,
-    water_source: 3,
+    clay_deposit: 0,
+    water_source: 0,
   };
   const pickupKinds = Object.keys(pickupTargets);
   const hasNeededPickups = () => pickupKinds.some((kind) => pickupCounts[kind] < pickupTargets[kind]);
@@ -196,12 +384,8 @@ export function buildMapSystem(map: MapResource): void {
         const normalizedHash = Math.abs(hash % 1);
         const gatherableId = pickupKinds[Math.floor(normalizedHash * pickupKinds.length)] ?? "stick_pickup";
         if ((pickupCounts[gatherableId] ?? 0) < (pickupTargets[gatherableId] ?? 0)) {
-          spawnsList.push({
-            id: `pickup_${gatherableId}_${pickupCounts[gatherableId]++}`,
-            x,
-            y,
-            gatherableId,
-          });
+          addSpawn(gatherableId, x, y, "pickup");
+          pickupCounts[gatherableId]++;
         }
       }
     }

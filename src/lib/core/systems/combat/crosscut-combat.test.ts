@@ -23,6 +23,8 @@ vi.mock("$lib/core/vfx/vfx", () => ({
   triggerCameraShake: vi.fn(),
   flashEntity: vi.fn(),
   spawnDamageNumber: vi.fn(),
+  spawnCrosscutIndicator: vi.fn(),
+  clearCrosscutIndicators: vi.fn(),
 }));
 
 vi.mock("$lib/audio/audio-engine", () => ({
@@ -141,7 +143,7 @@ describe("Combat System - Crosscut Combo", () => {
 
     swing(ctx, { x: 132, y: 32 });
     swing(ctx, { x: 132, y: -68 });
-    swing(ctx, { x: 132, y: -168 });
+    swing(ctx, { x: 170, y: -160 });
 
     expect(ctx.combat.crosscutState.firstClickWorldPosition).toBeNull();
     expect(ctx.combat.crosscutState.firstDirection).toBeNull();
@@ -301,6 +303,7 @@ describe("Combat System - Crosscut Combo", () => {
     expect(ctx.combat.crosscutState.stacks).toBe(0);
     expect(ctx.combat.crosscutState.firstDirection).toBeNull();
     expect(ctx.combat.crosscutState.cooldownUntilMs).toBeGreaterThan(0);
+    expect(ctx.combat.crosscutState.firstClickWorldPosition).toEqual({ x: 32, y: -68 });
   });
 
   it("does not prevent normal attacks from happening and resolves finisher on 4th unique direction click", () => {

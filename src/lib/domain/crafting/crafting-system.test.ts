@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { canCraft, checkCraft, resolveCraft, type CraftSlots } from "./crafting-system";
-import { assertValidCraftRecipes, validateCraftRecipes } from "./recipes";
+import { assertValidCraftRecipes, getRecipe, validateCraftRecipes } from "./recipes";
 
 const near = { isNearCampfire: true };
 const away = { isNearCampfire: false };
+const atWorkSurface = { isNearCampfire: false, stationId: "primitive_work_surface" as const };
 
 function slots(map: Record<string, number>): CraftSlots {
   return Object.fromEntries(Object.entries(map).map(([id, qty]) => [id, { qty }]));
@@ -50,6 +51,26 @@ describe("checkCraft", () => {
     const inv = slots({ copper_ore: 3, charcoal: 1 });
     expect(checkCraft(inv, "copper_ingot", away)).toEqual({ ok: false, reason: "requires_campfire" });
     expect(canCraft(inv, "copper_ingot", near)).toBe(true);
+  });
+
+  it("enforces station context for work-surface recipes", () => {
+    const inv = slots({ stick: 1, flint_shard: 1, grass_fiber: 1 });
+    expect(checkCraft(inv, "crude_knife", away)).toEqual({
+      ok: false,
+      reason: "requires_station",
+      requiredContext: "primitive_work_surface",
+    });
+    expect(checkCraft(inv, "crude_knife", atWorkSurface).ok).toBe(true);
+  });
+
+  it("keeps recipe definitions descriptive enough for station and feedback UI", () => {
+    expect(getRecipe("crude_knife")).toMatchObject({
+      category: "tools",
+      requiredContext: "primitive_work_surface",
+      process: "assemble",
+      discoverable: true,
+      feedbackTags: expect.arrayContaining(["binding", "tool"]),
+    });
   });
 });
 
