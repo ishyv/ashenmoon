@@ -80,7 +80,9 @@ export interface SlashArc {
   reach: number;
   /** half the cone angle in radians (arc spans angle ± halfAngle). */
   halfAngle: number;
-  color: number;
+  variant?: "arc" | "crosscut" | "wheel_slash" | "falling_wheel" | "rising_wheel" | "crosswind_cut";
+  grade?: "excellent" | "good" | "weak";
+  color?: number;
 }
 
 export interface Particle {

@@ -73,6 +73,7 @@ import {
   spawnDeathBurst,
   spawnLevelUpBurst,
   triggerCameraShake,
+  updateFourfoldSlashVFX,
 } from "$lib/core/vfx/vfx";
 import {
   MovementConfig,
@@ -86,6 +87,7 @@ import {
   renderFellSweepChargeFeedback,
   trackMovementCombo,
   fellSweepSystem,
+  tickEnemyBleedSystem,
   knockbackSystem,
   despawnEntity,
   updateFellSweepChargeSystem,
@@ -419,6 +421,7 @@ export class GameEngine {
     this.vfxResource.gatherRing?.destroy();
     this.vfxResource.selectionRing?.destroy();
     this.vfxResource.comboRing?.destroy();
+    this.vfxResource.fourfoldRing?.destroy();
   }
 
   private onWheel = (e: WheelEvent): void => {
@@ -708,6 +711,16 @@ export class GameEngine {
         this.getEnemyFrames
       );
 
+      tickEnemyBleedSystem(
+        world,
+        this.combatResource,
+        this.combatConfig,
+        this.vfxResource,
+        this.entityLayer,
+        dt,
+        (enemy) => this.handleEnemyDeath(enemy)
+      );
+
       knockbackSystem(world, this.mapResource, this.entitySprites, dt);
 
       // Pin the player sprite after any knockback displacement.
@@ -863,6 +876,15 @@ export class GameEngine {
         this.entitySprites
       );
 
+      updateFourfoldSlashVFX(
+        this.vfxResource,
+        this.playerEntity.position,
+        this.combatResource.fourfoldState,
+        this.combatResource.fourfoldConfig,
+        this.combatResource.currentTimeMs,
+        this.combatConfig.reach
+      );
+
       // Cull offscreen viewport entities/tiles
       cullViewportSystem(
         this.mapResource,
@@ -1012,6 +1034,10 @@ export class GameEngine {
     this.vfxResource.comboRing = new Graphics();
     this.vfxResource.comboRing.visible = false;
     this.entityLayer.addChild(this.vfxResource.comboRing);
+
+    this.vfxResource.fourfoldRing = new Graphics();
+    this.vfxResource.fourfoldRing.visible = false;
+    this.entityLayer.addChild(this.vfxResource.fourfoldRing);
   }
 
   private spawnDecorations(): void {
@@ -1467,7 +1493,12 @@ export class GameEngine {
     const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
     const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
 
-    if (this.playerAnimState === state && this.lastEquippedWeapon === currentWeaponId) return;
+    if (this.playerAnimState === state && this.lastEquippedWeapon === currentWeaponId) {
+      if (state === "attack") {
+        this.playerSprite.gotoAndPlay(0);
+      }
+      return;
+    }
     this.playerAnimState = state;
     this.lastEquippedWeapon = currentWeaponId;
 

@@ -59,7 +59,10 @@ export type SoundId =
   | "combo.momentum.activate"
   | "combo.momentum.stack"
   | "combo.momentum.break"
-  | "combo.momentum.overload";
+  | "combo.momentum.overload"
+  | "combo.crosscut"
+  | "combo.crosscut.excellent"
+  | "combo.crosscut.bleed";
 
 export const SOUNDS: Record<SoundId, SoundDef> = {
   "gather.chop": { bus: "sfx", recipe: "chop", spatial: true, throttleMs: 60 },
@@ -95,6 +98,9 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "combo.momentum.stack": { bus: "sfx", recipe: "momentumStack" },
   "combo.momentum.break": { bus: "sfx", recipe: "momentumBreak" },
   "combo.momentum.overload": { bus: "sfx", recipe: "momentumOverload" },
+  "combo.crosscut": { bus: "sfx", recipe: "crosscut", spatial: true, throttleMs: 60 },
+  "combo.crosscut.excellent": { bus: "sfx", recipe: "crosscutExcellent", spatial: true, throttleMs: 80 },
+  "combo.crosscut.bleed": { bus: "sfx", recipe: "crosscutBleed", spatial: true, throttleMs: 90 },
 };
 
 const GATHER_SOUND_IDS: Record<GatherSoundKey, SoundId> = {

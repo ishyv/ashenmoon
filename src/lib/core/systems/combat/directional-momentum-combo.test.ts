@@ -250,9 +250,13 @@ describe("Combat System - Directional Momentum Combo", () => {
 
     // Stack is 1
     // Stamina penalty: 1 * 2% = 2% of 100 = 2 stamina lost.
-    // Base stamina is 100. spendStamina is called twice: once for standard attack (cost 8), once for overload penalty (cost 2).
-    // Final stamina should be 100 - 8 - 2 = 90.
-    expect(stamina.current).toBe(90);
+    // Basic attack is rushed (16ms since last), so cost is rhythm-scaled:
+    // readiness = 16 / 1000 = 0.016
+    // staminaCostMultiplier = 2.75 - 1.75 * 0.016 = 2.722
+    // Basic attack cost = 4 * 2.722 = 10.888
+    // Overload penalty cost = 2% of 100 = 2
+    // Final stamina should be 100 - 10.888 - 2 = 87.112
+    expect(stamina.current).toBeCloseTo(87.112, 3);
 
     // Cooldown penalty: 1 * 3% = 3% increase
     // Cooldown timer should be config.cooldown (0.45) * 1.03 = 0.4635

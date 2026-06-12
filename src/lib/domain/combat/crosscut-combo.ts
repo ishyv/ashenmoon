@@ -27,6 +27,12 @@ export interface CrosscutComboConfig {
   staminaCosts: Record<CrosscutGrade, number>;
   comboCooldownMs: number;
   effects: Record<CrosscutGrade, CrosscutEffectConfig>;
+  windowDecayRate: number;
+  minComboWindowMs: number;
+  damageStackMultiplier: number;
+  bleedChanceStackBonus: number;
+  bleedDamageStackBonus: number;
+  bleedImmediateDamageStackBonus: number;
 }
 
 export interface CrosscutComboState {
@@ -35,6 +41,7 @@ export interface CrosscutComboState {
   firstDirection: Vec2 | null;
   firstAttackAtMs: number | null;
   cooldownUntilMs: number;
+  stacks: number;
 }
 
 export type CrosscutFailureReason =
@@ -88,9 +95,9 @@ export const DEFAULT_CROSSCUT_COMBO_CONFIG: CrosscutComboConfig = {
   minSecondClickDistancePx: 32,
   minDistanceBetweenClicksPx: 48,
   perfectAngleDegrees: 90,
-  excellentToleranceDegrees: 8,
-  goodToleranceDegrees: 18,
-  minimumToleranceDegrees: 30,
+  excellentToleranceDegrees: 12,
+  goodToleranceDegrees: 24,
+  minimumToleranceDegrees: 36,
   staminaCosts: {
     weak: 6,
     good: 8,
@@ -126,7 +133,25 @@ export const DEFAULT_CROSSCUT_COMBO_CONFIG: CrosscutComboConfig = {
       bleedImmediateDamage: 3,
     },
   },
+  windowDecayRate: 0.85,
+  minComboWindowMs: 200,
+  damageStackMultiplier: 0.15,
+  bleedChanceStackBonus: 10,
+  bleedDamageStackBonus: 1,
+  bleedImmediateDamageStackBonus: 1,
 };
+
+export function createDefaultCrosscutComboConfig(): CrosscutComboConfig {
+  return {
+    ...DEFAULT_CROSSCUT_COMBO_CONFIG,
+    staminaCosts: { ...DEFAULT_CROSSCUT_COMBO_CONFIG.staminaCosts },
+    effects: {
+      weak: { ...DEFAULT_CROSSCUT_COMBO_CONFIG.effects.weak },
+      good: { ...DEFAULT_CROSSCUT_COMBO_CONFIG.effects.good },
+      excellent: { ...DEFAULT_CROSSCUT_COMBO_CONFIG.effects.excellent },
+    },
+  };
+}
 
 export function createInitialCrosscutComboState(): CrosscutComboState {
   return {
@@ -135,6 +160,7 @@ export function createInitialCrosscutComboState(): CrosscutComboState {
     firstDirection: null,
     firstAttackAtMs: null,
     cooldownUntilMs: 0,
+    stacks: 0,
   };
 }
 
@@ -179,6 +205,7 @@ export function clearCrosscutState(state: CrosscutComboState): void {
   state.firstPlayerPosition = null;
   state.firstDirection = null;
   state.firstAttackAtMs = null;
+  state.stacks = 0;
 }
 
 export function storeFirstCrosscutClick(
@@ -217,7 +244,12 @@ export function tryResolveCrosscutCombo(
     return { triggered: false, reason: "no_starter" };
   }
 
-  if (input.nowMs > state.firstAttackAtMs + config.comboWindowMs) {
+  const currentComboWindowMs = Math.max(
+    config.minComboWindowMs,
+    config.comboWindowMs * Math.pow(config.windowDecayRate, state.stacks)
+  );
+
+  if (input.nowMs > state.firstAttackAtMs + currentComboWindowMs) {
     return { triggered: false, reason: "expired", expired: true };
   }
 
@@ -257,12 +289,48 @@ export function tryResolveCrosscutCombo(
     return { triggered: false, reason: "insufficient_stamina", angleDegrees, angleErrorDegrees, grade };
   }
 
+  const baseEffects = config.effects[grade];
+  const stacks = state.stacks;
+
+  const damageMultiplier = baseEffects.damageMultiplier + stacks * config.damageStackMultiplier;
+  const bleedChancePct = Math.min(100, baseEffects.bleedChancePct + stacks * config.bleedChanceStackBonus);
+  const bleedDamagePerTick = baseEffects.bleedDamagePerTick + stacks * config.bleedDamageStackBonus;
+  const bleedImmediateDamage = baseEffects.bleedImmediateDamage + stacks * config.bleedImmediateDamageStackBonus;
+
   return {
     triggered: true,
     grade,
     angleDegrees,
     angleErrorDegrees,
     staminaCost,
-    ...config.effects[grade],
+    damageMultiplier,
+    knockbackMultiplier: baseEffects.knockbackMultiplier,
+    bleedChancePct,
+    bleedDurationSec: baseEffects.bleedDurationSec,
+    bleedTickEverySec: baseEffects.bleedTickEverySec,
+    bleedDamagePerTick,
+    bleedImmediateDamage,
   };
+}
+
+export interface AdvanceCrosscutChainInput {
+  clickWorldPosition: Vec2;
+  playerPosition: Vec2;
+  nowMs: number;
+}
+
+export function advanceCrosscutChain(
+  state: CrosscutComboState,
+  input: AdvanceCrosscutChainInput,
+): void {
+  const secondDirection = normalize(subtract(input.clickWorldPosition, input.playerPosition));
+  if (!secondDirection) {
+    clearCrosscutState(state);
+    return;
+  }
+  state.firstClickWorldPosition = { ...input.clickWorldPosition };
+  state.firstPlayerPosition = { ...input.playerPosition };
+  state.firstDirection = secondDirection;
+  state.firstAttackAtMs = input.nowMs;
+  state.stacks += 1;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  advanceCrosscutChain,
   clearCrosscutState,
   createInitialCrosscutComboState,
   DEFAULT_CROSSCUT_COMBO_CONFIG,
@@ -31,10 +32,10 @@ describe("Crosscut combo rules", () => {
 
   it("maps angle error into excellent, good, weak, and failed bands", () => {
     expect(getCrosscutGrade(0, config)).toBe("excellent");
-    expect(getCrosscutGrade(8, config)).toBe("excellent");
-    expect(getCrosscutGrade(18, config)).toBe("good");
-    expect(getCrosscutGrade(30, config)).toBe("weak");
-    expect(getCrosscutGrade(30.1, config)).toBeNull();
+    expect(getCrosscutGrade(12, config)).toBe("excellent");
+    expect(getCrosscutGrade(24, config)).toBe("good");
+    expect(getCrosscutGrade(36, config)).toBe("weak");
+    expect(getCrosscutGrade(36.1, config)).toBeNull();
   });
 
   it("triggers excellent on an exact perpendicular second click", () => {
@@ -240,5 +241,85 @@ describe("Crosscut combo rules", () => {
     expect(state.firstDirection).toBeNull();
     expect(state.firstAttackAtMs).toBeNull();
     expect(state.cooldownUntilMs).toBe(2000);
+  });
+
+  it("advances crosscut chain on success, incrementing stacks and updating fields", () => {
+    const state = primedState(1000);
+    const res = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1200,
+      playerPosition: { x: 0, y: 0 },
+      clickWorldPosition: { x: 0, y: 100 },
+      currentStamina: 100,
+    });
+    expect(res.triggered).toBe(true);
+
+    advanceCrosscutChain(state, {
+      clickWorldPosition: { x: 0, y: 100 },
+      playerPosition: { x: 0, y: 0 },
+      nowMs: 1200,
+    });
+
+    expect(state.stacks).toBe(1);
+    expect(state.firstDirection).toEqual({ x: 0, y: 1 });
+    expect(state.firstAttackAtMs).toBe(1200);
+
+    const res2 = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1400,
+      playerPosition: { x: 0, y: 0 },
+      clickWorldPosition: { x: -100, y: 0 },
+      currentStamina: 100,
+    });
+    expect(res2.triggered).toBe(true);
+    expect(res2.damageMultiplier).toBeCloseTo(config.effects.excellent.damageMultiplier + config.damageStackMultiplier, 2);
+  });
+
+  it("decays the combo window as stacks increase", () => {
+    const state = primedState(1000);
+    state.stacks = 2;
+
+    const resValid = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1400,
+      playerPosition: { x: 0, y: 0 },
+      clickWorldPosition: { x: 0, y: 100 },
+      currentStamina: 100,
+    });
+    expect(resValid.triggered).toBe(true);
+
+    const resExpired = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1500,
+      playerPosition: { x: 0, y: 0 },
+      clickWorldPosition: { x: 0, y: 100 },
+      currentStamina: 100,
+    });
+    expect(resExpired.triggered).toBe(false);
+    expect(resExpired.reason).toBe("expired");
+  });
+
+  it("scales damage and bleeding effects based on stacks", () => {
+    const state = primedState(1000);
+    state.stacks = 3;
+
+    const res = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1200,
+      playerPosition: { x: 0, y: 0 },
+      clickWorldPosition: { x: 0, y: 100 },
+      currentStamina: 100,
+    });
+
+    expect(res.triggered).toBe(true);
+    expect(res.damageMultiplier).toBeCloseTo(1.65 + 3 * 0.15, 2);
+    expect(res.bleedChancePct).toBe(35 + 3 * 10);
+    expect(res.bleedDamagePerTick).toBe(3 + 3 * 1);
+    expect(res.bleedImmediateDamage).toBe(3 + 3 * 1);
   });
 });

@@ -42,6 +42,7 @@ import {
   spawnDamageNumber,
   spawnSlashArc,
   spawnCrosscutSlash,
+  spawnFourfoldFinisherSlash,
   spawnEnvFloatingText,
   triggerCameraShake,
 } from "$lib/core/vfx/vfx";
@@ -54,9 +55,10 @@ import { gameState } from "$lib/state/game-state.svelte";
 import { PLAYER_BODY } from "$lib/domain/collision";
 import { createInitialFellSweepChargeState, type FellSweepChargeState } from "$lib/domain/combat/fell-sweep";
 import {
+  advanceCrosscutChain,
   clearCrosscutState,
+  createDefaultCrosscutComboConfig,
   createInitialCrosscutComboState,
-  DEFAULT_CROSSCUT_COMBO_CONFIG,
   storeFirstCrosscutClick,
   tryResolveCrosscutCombo,
   type CrosscutComboConfig,
@@ -64,6 +66,18 @@ import {
   type CrosscutComboState,
   type CrosscutGrade,
 } from "$lib/domain/combat/crosscut-combo";
+import { evaluate as evaluateRhythm, type RhythmResult } from "$lib/domain/combat/rhythm";
+import {
+  clearFourfoldSlashState,
+  createInitialFourfoldSlashState,
+  createDefaultFourfoldSlashConfig,
+  detectClickDirection,
+  pushFourfoldSlashInput,
+  type FourfoldSlashState,
+  type FourfoldSlashConfig,
+  type FourfoldSlashResult,
+  type FourfoldSlashType,
+} from "$lib/domain/combat/fourfold-slash";
 
 export { trackMovementCombo } from "./kite-combo";
 export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
@@ -133,9 +147,12 @@ export class CombatResource {
   public kiteStacksDecayTimer = 0;
   public kiteParticleTimer = 0;
   public currentTimeMs = 0;
+  public lastBasicAttackAtMs: number | null = null;
   public crosscutState: CrosscutComboState = createInitialCrosscutComboState();
-  public crosscutConfig: CrosscutComboConfig = { ...DEFAULT_CROSSCUT_COMBO_CONFIG };
+  public crosscutConfig: CrosscutComboConfig = createDefaultCrosscutComboConfig();
   public lastCrosscutWeaponId: string | null = null;
+  public fourfoldState: FourfoldSlashState = createInitialFourfoldSlashState();
+  public fourfoldConfig: FourfoldSlashConfig = createDefaultFourfoldSlashConfig();
   public directionalMomentumState: DirectionalMomentumComboState = {
     isActive: false,
     lockedDirection: null,
@@ -324,6 +341,115 @@ export function knockbackSystem(
   }
 }
 
+function currentEquippedWeaponId(): string | null {
+  const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
+  return currentWeapon
+    ? typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId
+    : null;
+}
+
+function crosscutColor(grade: CrosscutGrade): number {
+  switch (grade) {
+    case "excellent":
+      return Colors.combat.crosscutExcellent;
+    case "good":
+      return Colors.combat.crosscutGood;
+    case "weak":
+      return Colors.combat.crosscutWeak;
+  }
+}
+
+function crosscutText(grade: CrosscutGrade): string {
+  switch (grade) {
+    case "excellent":
+      return "Perfect Crosscut";
+    case "good":
+      return "Crosscut";
+    case "weak":
+      return "Weak Crosscut";
+  }
+}
+
+function maybeApplyCrosscutBleed(
+  target: Entity,
+  result: CrosscutComboResult,
+  config: CombatConfig,
+  vfx: VFXResource,
+  entityLayer: Container,
+  combat: CombatResource,
+): boolean {
+  if (!result.grade || !result.bleedChancePct || Math.random() * 100 >= result.bleedChancePct) return false;
+  if (!target.health || target.health.current <= 0) return false;
+
+  target.bleed = {
+    remainingSec: result.bleedDurationSec ?? 6,
+    tickEverySec: result.bleedTickEverySec ?? 2,
+    tickTimer: result.bleedTickEverySec ?? 2,
+    damagePerTick: result.bleedDamagePerTick ?? 1,
+    sourceId: `crosscut:${result.grade}`,
+  };
+
+  const immediateDamage = result.bleedImmediateDamage ?? 0;
+  if (immediateDamage > 0) {
+    applyDamage(
+      target,
+      immediateDamage,
+      target.position!.x + TILE / 2,
+      target.position!.y + TILE / 2,
+      0,
+      config,
+      vfx,
+      entityLayer,
+      combat,
+    );
+  }
+
+  if (target.position) {
+    spawnEnvFloatingText(vfx, "bleeding", Colors.combat.crosscutBleed, target.position, entityLayer, `bleed:${target.id}`);
+  }
+  playSound("combo.crosscut.bleed", { position: target.position });
+  return true;
+}
+
+function clearEnemyBleed(entity: Entity): void {
+  entity.bleed = undefined;
+}
+
+export function tickEnemyBleedSystem(
+  world: World<Entity>,
+  combat: CombatResource,
+  config: CombatConfig,
+  vfx: VFXResource,
+  entityLayer: Container,
+  dt: number,
+  onEnemyKilled: (enemy: Entity) => void,
+): void {
+  for (const e of world.with("health", "position", "bleed").entities) {
+    const h = e.health!;
+    const bleed = e.bleed!;
+    if (h.faction !== "hostile" || h.current <= 0) {
+      clearEnemyBleed(e);
+      continue;
+    }
+
+    bleed.remainingSec -= dt;
+    bleed.tickTimer -= dt;
+    if (bleed.tickTimer <= 0) {
+      bleed.tickTimer += bleed.tickEverySec;
+      const cx = e.position!.x + TILE / 2;
+      const cy = e.position!.y + TILE / 2;
+      const died = applyDamage(e, bleed.damagePerTick, cx, cy, 0, config, vfx, entityLayer, combat);
+      if (died) {
+        clearEnemyBleed(e);
+        onEnemyKilled(e);
+        continue;
+      }
+    }
+
+    if (bleed.remainingSec <= 0) clearEnemyBleed(e);
+  }
+}
+
 /**
  * The player's melee swing. Free-aimed at the mouse: the hit region is a cone in
  * the aim direction, and every hostile inside it takes damage on the same swing.
@@ -379,15 +505,83 @@ export function playerAttackSystem(
   // Update Kite Combo timers and foot embers/flames
   updateKiteCombo(combat, player, vfx, entityLayer, dt);
 
+  const currentWeaponId = currentEquippedWeaponId();
+  if (combat.lastCrosscutWeaponId === null) {
+    combat.lastCrosscutWeaponId = currentWeaponId;
+  } else if (combat.lastCrosscutWeaponId !== currentWeaponId) {
+    clearCrosscutState(combat.crosscutState);
+    clearFourfoldSlashState(combat.fourfoldState);
+    combat.lastCrosscutWeaponId = currentWeaponId;
+  }
+
+  if (
+    isPlacementMode ||
+    movement?.isDashing ||
+    (player.knockback?.timer ?? 0) > 0 ||
+    (player.health?.current ?? 1) <= 0
+  ) {
+    clearCrosscutState(combat.crosscutState);
+    clearFourfoldSlashState(combat.fourfoldState);
+  }
+
   if (!inputs.pendingAttack) return;
   inputs.pendingAttack = false;
 
-  // Failure states: placement mode / mid-dash / on cooldown.
-  if (isPlacementMode || (movement && movement.isDashing) || combat.attackCooldownTimer > 0) return;
+  // Failure states: placement mode / mid-dash.
+  if (isPlacementMode || (movement && movement.isDashing)) return;
 
   const pos = player.position!;
   const pcx = pos.x + TILE / 2;
   const pcy = pos.y + TILE / 2;
+
+  // Check if Kite Combo is ready (no side effects)
+  const isKiteReady =
+    combat.comboResetTimer > 0 &&
+    combat.movePhases.length >= 3 &&
+    (() => {
+      const phases = combat.movePhases;
+      const p0 = phases[phases.length - 3]!;
+      const p1 = phases[phases.length - 2]!;
+      const p2 = phases[phases.length - 1]!;
+      const sameDir = p0.x * p2.x + p0.y * p2.y;
+      const oppDir  = p0.x * p1.x + p0.y * p1.y;
+      return sameDir > 0.5 && oppDir < -0.5;
+    })();
+
+  // Fourfold Slash input check
+  const clickDir = detectClickDirection({ x: pcx, y: pcy }, inputs.mouseWorld);
+  const fourfoldResult = pushFourfoldSlashInput(
+    combat.fourfoldState,
+    combat.fourfoldConfig,
+    clickDir,
+    combat.currentTimeMs
+  );
+
+  if (fourfoldResult.status === "failed_repeated") {
+    spawnEnvFloatingText(vfx, "combo broken", Colors.ui.error, player.position!, entityLayer);
+    playSound("combo.crosscut"); // play a fail/break sound
+    triggerCameraShake(vfx, 1.5, 0.1);
+  }
+
+  const isFourfold = fourfoldResult.status === "completed";
+
+  const crosscutResult = !isKiteReady && !isFourfold
+    ? tryResolveCrosscutCombo({
+        state: combat.crosscutState,
+        config: combat.crosscutConfig,
+        nowMs: combat.currentTimeMs,
+        playerPosition: { x: pcx, y: pcy },
+        clickWorldPosition: inputs.mouseWorld,
+        currentStamina: stamina.current,
+      })
+    : { triggered: false };
+  const isCrosscut = crosscutResult.triggered === true;
+  const isCombo = isKiteReady || isCrosscut || isFourfold;
+
+  // Primed/triggered combos respect the attack cooldown.
+  // Basic attacks (not combos) bypass the hard cooldown check.
+  if (combat.attackCooldownTimer > 0 && isCombo) return;
+
   let ax = inputs.mouseWorld.x - pcx;
   let ay = inputs.mouseWorld.y - pcy;
   const len = Math.hypot(ax, ay) || 1;
@@ -395,7 +589,7 @@ export function playerAttackSystem(
   ay /= len;
   const angle = Math.atan2(ay, ax);
 
-  // Check if Kite Combo is triggered
+  // Check if Kite Combo is triggered (this resets the movePhases/lastMoveVec if true)
   const isKiteCombo = checkKiteComboTrigger(combat);
 
   const playerCombatStats = getPlayerStats().combat;
@@ -406,6 +600,11 @@ export function playerAttackSystem(
   let arcColor: number = Colors.combat.slashArc;
   let useStaminaCost = staminaCost(config.staminaCost, 1, 1);
 
+  let rhythmEval: RhythmResult | null = null;
+
+  let finisherType: FourfoldSlashType | null = null;
+  let finisherColor = 0xd9c5b2;
+
   if (isKiteCombo) {
     const finisher = applyKiteComboFinisher(combat, config, player, vfx, entityLayer, angle, pcx, pcy);
     effectiveReach = finisher.effectiveReach;
@@ -413,17 +612,46 @@ export function playerAttackSystem(
     effectiveDamage = finisher.effectiveDamage;
     useStaminaCost = finisher.useStaminaCost;
     arcColor = finisher.arcColor;
+  } else if (isFourfold) {
+    finisherType = fourfoldResult.finisherType!;
+    const dmgMult = combat.fourfoldConfig.damageMultipliers[finisherType];
+    const staminaCostVal = combat.fourfoldConfig.staminaCosts[finisherType];
+
+    effectiveReach = config.reach * 1.35;
+    effectiveHalfAngle = Math.PI; // 360 degrees sweep
+    effectiveDamage = Math.round(effectiveDamage * dmgMult);
+    useStaminaCost = staminaCostVal;
+
+    if (finisherType === "wheel_slash") {
+      finisherColor = 0xd9c5b2;
+    } else if (finisherType === "falling_wheel") {
+      finisherColor = 0x8c7e73;
+    } else if (finisherType === "rising_wheel") {
+      finisherColor = 0xa6b8b1;
+    } else if (finisherType === "crosswind_cut") {
+      finisherColor = 0xbf8585;
+    }
+    arcColor = finisherColor;
+  } else if (isCrosscut) {
+    effectiveDamage = Math.round(effectiveDamage * (crosscutResult.damageMultiplier ?? 1));
+    useStaminaCost = crosscutResult.staminaCost ?? combat.crosscutConfig.staminaCosts.weak;
+    arcColor = crosscutColor(crosscutResult.grade!);
   } else {
     // Reset stacks on standard attack
     combat.kiteStacks = 0;
     combat.kiteStacksDecayTimer = 0;
+
+    // Evaluate rhythm
+    rhythmEval = evaluateRhythm(combat.currentTimeMs, combat.lastBasicAttackAtMs);
+    effectiveDamage = Math.round(effectiveDamage * rhythmEval.damageMultiplier);
+    useStaminaCost = rhythmEval.staminaCost;
   }
 
   // Refuse swing if stamina is too low
-  if (stamina.current < (isKiteCombo ? useStaminaCost : config.minStamina)) {
+  if (stamina.current < (isKiteCombo || isFourfold ? useStaminaCost : config.minStamina)) {
     spawnEnvFloatingText(
       vfx,
-      isKiteCombo ? "⚡️ too winded to kite" : "⚡️ too winded to swing",
+      isKiteCombo ? "⚡️ too winded to kite" : isFourfold ? "⚡️ too winded to finish" : "⚡️ too winded to swing",
       Colors.ui.error,
       player.position!,
       entityLayer,
@@ -431,25 +659,41 @@ export function playerAttackSystem(
     return;
   }
 
-  // Directional Momentum Combo application
-  const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
-  const currentWeaponId = currentWeapon
-    ? typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId
-    : null;
+  if (rhythmEval) {
+    let gradeText = rhythmEval.grade === "perfect" ? "clean" : rhythmEval.grade;
+    let gradeColor: number = Colors.ui.muted;
+    if (rhythmEval.grade === "perfect") {
+      gradeColor = Colors.combat.crosscutExcellent;
+    } else if (rhythmEval.grade === "good") {
+      gradeColor = Colors.ui.success;
+    } else if (rhythmEval.grade === "strained") {
+      gradeColor = Colors.ui.warning;
+    } else if (rhythmEval.grade === "rushed") {
+      gradeColor = Colors.ui.error;
+    }
+    spawnEnvFloatingText(vfx, gradeText, gradeColor, player.position!, entityLayer);
+  }
 
-  const momentumDamageMult = processDirectionalMomentumStrike(
-    combat,
-    inputs,
-    combat.directionalMomentumConfig,
-    movement,
-    player,
-    vfx,
-    entityLayer,
-    angle,
-    currentWeaponId
-  );
-  
-  effectiveDamage = Math.round(effectiveDamage * momentumDamageMult);
+  if (!isCrosscut && crosscutResult.reason === "insufficient_stamina") {
+    spawnEnvFloatingText(vfx, "too winded", Colors.ui.error, player.position!, entityLayer);
+  }
+
+  // Directional Momentum Combo application
+  if (!isCrosscut) {
+    const momentumDamageMult = processDirectionalMomentumStrike(
+      combat,
+      inputs,
+      combat.directionalMomentumConfig,
+      movement,
+      player,
+      vfx,
+      entityLayer,
+      angle,
+      currentWeaponId
+    );
+    
+    effectiveDamage = Math.round(effectiveDamage * momentumDamageMult);
+  }
 
   if (combat.directionalMomentumState.isActive && !isKiteCombo) {
     const count = combat.directionalMomentumState.currentStacks;
@@ -473,13 +717,35 @@ export function playerAttackSystem(
 
   combat.inCombatTimer = config.inCombatTimeout;
   spendStamina(useStaminaCost, "burst");
+  if (isCrosscut) {
+    advanceCrosscutChain(combat.crosscutState, {
+      clickWorldPosition: inputs.mouseWorld,
+      playerPosition: { x: pcx, y: pcy },
+      nowMs: combat.currentTimeMs,
+    });
+  } else if (!isKiteCombo) {
+    combat.lastBasicAttackAtMs = combat.currentTimeMs;
+  }
 
   // Face + animate + swing VFX.
   playerSprite.scale.x =
     ax < 0 ? -Math.abs(playerSprite.scale.x) : Math.abs(playerSprite.scale.x);
   setPlayerAnim("attack");
 
-  if (!isKiteCombo) {
+  if (isFourfold && finisherType) {
+    spawnFourfoldFinisherSlash(vfx, entityLayer, pcx, pcy, effectiveReach, arcColor, finisherType);
+    spawnEnvFloatingText(vfx, finisherName(finisherType), arcColor, player.position!, entityLayer);
+    playSound("combo.crosscut.excellent");
+    triggerCameraShake(vfx, 6.0, 0.22);
+  } else if (isCrosscut) {
+    spawnCrosscutSlash(vfx, entityLayer, pcx, pcy, angle, effectiveReach, arcColor, crosscutResult.grade!);
+    spawnEnvFloatingText(vfx, crosscutText(crosscutResult.grade!), arcColor, player.position!, entityLayer);
+    playSound(crosscutResult.grade === "excellent" ? "combo.crosscut.excellent" : "combo.crosscut", {
+      position: { x: pcx, y: pcy },
+      params: { grade: crosscutResult.grade },
+    });
+    triggerCameraShake(vfx, crosscutResult.grade === "excellent" ? 5.5 : crosscutResult.grade === "good" ? 3.8 : 2.4, 0.13);
+  } else if (!isKiteCombo) {
     spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, effectiveReach, effectiveHalfAngle, arcColor);
     playSound("player.swing");
   }
@@ -504,12 +770,16 @@ export function playerAttackSystem(
       effectiveDamage,
       pcx,
       pcy,
-      config.knockback,
+      config.knockback * (isCrosscut ? (crosscutResult.knockbackMultiplier ?? 1) : isFourfold && finisherType ? combat.fourfoldConfig.knockbackMultipliers[finisherType] : 1),
       config,
       vfx,
       entityLayer,
       combat,
     );
+    if (isCrosscut && !died) {
+      const bleedKilled = maybeApplyCrosscutBleed(e, crosscutResult, config, vfx, entityLayer, combat);
+      if (bleedKilled && (e.health?.current ?? 0) <= 0) onEnemyKilled(e);
+    }
     if (died) onEnemyKilled(e);
     hitCount++;
   }
@@ -517,5 +787,36 @@ export function playerAttackSystem(
   // Handle Kite Combo stamina refunds and HP strain
   if (isKiteCombo) {
     handleKiteComboHit(combat, player, vfx, entityLayer, hitCount);
+  } else if (!isCrosscut) {
+    if (crosscutResult.reason && crosscutResult.reason !== "no_starter" && crosscutResult.reason !== "cooldown") {
+      if (crosscutResult.reason === "expired" && combat.crosscutState.stacks === 0) {
+        clearCrosscutState(combat.crosscutState);
+        storeFirstCrosscutClick(combat.crosscutState, {
+          clickWorldPosition: inputs.mouseWorld,
+          playerPosition: { x: pcx, y: pcy },
+          nowMs: combat.currentTimeMs,
+          config: combat.crosscutConfig,
+        });
+      } else {
+        combat.crosscutState.cooldownUntilMs = combat.currentTimeMs + combat.crosscutConfig.comboCooldownMs;
+        clearCrosscutState(combat.crosscutState);
+      }
+    } else if (crosscutResult.reason === "no_starter") {
+      storeFirstCrosscutClick(combat.crosscutState, {
+        clickWorldPosition: inputs.mouseWorld,
+        playerPosition: { x: pcx, y: pcy },
+        nowMs: combat.currentTimeMs,
+        config: combat.crosscutConfig,
+      });
+    }
+  }
+}
+
+function finisherName(type: FourfoldSlashType): string {
+  switch (type) {
+    case "wheel_slash": return "Wheel Slash";
+    case "falling_wheel": return "Falling Wheel";
+    case "rising_wheel": return "Rising Wheel";
+    case "crosswind_cut": return "Crosswind Cut";
   }
 }

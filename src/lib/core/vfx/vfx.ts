@@ -17,6 +17,7 @@ import { TILE } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
 import { EntityId } from "$lib/domain/game-events";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
+import type { FourfoldSlashState, FourfoldSlashConfig } from "$lib/domain/combat/fourfold-slash";
 
 export class VFXResource {
   public particles: Particle[] = [];
@@ -33,6 +34,7 @@ export class VFXResource {
   public gatherRing!: Graphics;
   public selectionRing!: Graphics;
   public comboRing!: Graphics;
+  public fourfoldRing!: Graphics;
   public chargeParticleTimer = 0;
   public selectionRingTime = 0;
   public footstepTimer = 0;
@@ -448,6 +450,86 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
     const a0 = arc.angle - arc.halfAngle;
     const a1 = arc.angle + arc.halfAngle;
     arc.graphic.clear();
+    if (arc.variant === "wheel_slash" || arc.variant === "falling_wheel" || arc.variant === "rising_wheel" || arc.variant === "crosswind_cut") {
+      const variant = arc.variant;
+      if (variant === "wheel_slash") {
+        const r = arc.reach * (0.6 + 0.45 * t);
+        const inner = r * 0.72;
+        arc.graphic.circle(0, 0, r);
+        arc.graphic.circle(0, 0, inner);
+        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.65 });
+        arc.graphic.circle(0, 0, r).stroke({ color: Colors.ui.white, width: 3, alpha: (1 - t) * 0.75 });
+      } else if (variant === "falling_wheel") {
+        const yOffset = t * 36;
+        const r = arc.reach * (0.6 + 0.45 * t);
+        const inner = r * 0.65;
+        arc.graphic.moveTo(r, yOffset);
+        arc.graphic.arc(0, yOffset, r, 0, Math.PI);
+        arc.graphic.arc(0, yOffset, inner, Math.PI, 0, true);
+        arc.graphic.closePath();
+        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.75 });
+        arc.graphic.arc(0, yOffset, r, 0, Math.PI).stroke({ color: Colors.ui.white, width: 3, alpha: (1 - t) * 0.8 });
+      } else if (variant === "rising_wheel") {
+        const yOffset = -t * 36;
+        const r = arc.reach * (0.6 + 0.45 * t);
+        const inner = r * 0.65;
+        arc.graphic.moveTo(-r, yOffset);
+        arc.graphic.arc(0, yOffset, r, Math.PI, 2 * Math.PI);
+        arc.graphic.arc(0, yOffset, inner, 2 * Math.PI, Math.PI, true);
+        arc.graphic.closePath();
+        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.75 });
+        arc.graphic.arc(0, yOffset, r, Math.PI, 2 * Math.PI).stroke({ color: Colors.ui.white, width: 3, alpha: (1 - t) * 0.8 });
+      } else if (variant === "crosswind_cut") {
+        const r = arc.reach * (0.5 + 0.5 * t);
+        const inner = r * 0.8;
+        arc.graphic.circle(0, 0, r);
+        arc.graphic.circle(0, 0, inner);
+        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.5 });
+
+        const len = arc.reach * (0.4 + 0.7 * t);
+        const half = len * 0.8;
+        const angle1 = Math.PI / 4;
+        const angle2 = 3 * Math.PI / 4;
+        const width = 4;
+        const alpha = (1 - t) * 0.85;
+
+        arc.graphic.moveTo(-Math.cos(angle1) * half, -Math.sin(angle1) * half);
+        arc.graphic.lineTo(Math.cos(angle1) * half, Math.sin(angle1) * half);
+        arc.graphic.moveTo(-Math.cos(angle2) * half, -Math.sin(angle2) * half);
+        arc.graphic.lineTo(Math.cos(angle2) * half, Math.sin(angle2) * half);
+        arc.graphic.stroke({ color: arc.color, width, alpha });
+
+        arc.graphic.moveTo(-Math.cos(angle1) * half * 0.8, -Math.sin(angle1) * half * 0.8);
+        arc.graphic.lineTo(Math.cos(angle1) * half * 0.8, Math.sin(angle1) * half * 0.8);
+        arc.graphic.moveTo(-Math.cos(angle2) * half * 0.8, -Math.sin(angle2) * half * 0.8);
+        arc.graphic.lineTo(Math.cos(angle2) * half * 0.8, Math.sin(angle2) * half * 0.8);
+        arc.graphic.stroke({ color: Colors.ui.white, width: 2, alpha: alpha * 0.9 });
+      }
+
+      if (arc.life >= arc.maxLife) {
+        entityLayer.removeChild(arc.graphic);
+        arc.graphic.destroy();
+        vfx.slashArcs.splice(i, 1);
+      }
+      continue;
+    }
+    if (arc.variant === "crosscut") {
+      const length = arc.reach * (arc.grade === "excellent" ? 1.1 : arc.grade === "good" ? 1.0 : 0.88);
+      const half = length * 0.5;
+      const width = arc.grade === "excellent" ? 5 : arc.grade === "good" ? 4 : 3;
+      const alpha = (1 - t) * (arc.grade === "excellent" ? 0.92 : arc.grade === "good" ? 0.76 : 0.58);
+      for (const lineAngle of [arc.angle, arc.angle + Math.PI / 2]) {
+        arc.graphic.moveTo(Math.cos(lineAngle) * -half, Math.sin(lineAngle) * -half);
+        arc.graphic.lineTo(Math.cos(lineAngle) * half, Math.sin(lineAngle) * half);
+      }
+      arc.graphic.stroke({ color: arc.color, width, alpha });
+      if (arc.life >= arc.maxLife) {
+        entityLayer.removeChild(arc.graphic);
+        arc.graphic.destroy();
+        vfx.slashArcs.splice(i, 1);
+      }
+      continue;
+    }
     arc.graphic.moveTo(Math.cos(a0) * inner, Math.sin(a0) * inner);
     arc.graphic.arc(0, 0, r, a0, a1);
     arc.graphic.arc(0, 0, inner, a1, a0, true);
@@ -487,6 +569,67 @@ export function spawnSlashArc(
   g.y = cy;
   entityLayer.addChild(g);
   vfx.slashArcs.push({ graphic: g, life: 0, maxLife: 0.22, angle, reach, halfAngle, color });
+}
+
+export function spawnCrosscutSlash(
+  vfx: VFXResource,
+  entityLayer: Container,
+  cx: number,
+  cy: number,
+  angle: number,
+  reach: number,
+  color: number,
+  grade: "excellent" | "good" | "weak",
+): void {
+  const g = new Graphics();
+  g.x = cx;
+  g.y = cy;
+  const length = reach * (grade === "excellent" ? 1.1 : grade === "good" ? 1.0 : 0.88);
+  const width = grade === "excellent" ? 5 : grade === "good" ? 4 : 3;
+  const alpha = grade === "excellent" ? 0.92 : grade === "good" ? 0.76 : 0.58;
+  const half = length * 0.5;
+  const cross = Math.PI / 2;
+
+  g.moveTo(Math.cos(angle) * -half, Math.sin(angle) * -half);
+  g.lineTo(Math.cos(angle) * half, Math.sin(angle) * half);
+  g.moveTo(Math.cos(angle + cross) * -half, Math.sin(angle + cross) * -half);
+  g.lineTo(Math.cos(angle + cross) * half, Math.sin(angle + cross) * half);
+  g.stroke({ color, width, alpha });
+  g.moveTo(Math.cos(angle) * -half, Math.sin(angle) * -half);
+  g.lineTo(Math.cos(angle) * half, Math.sin(angle) * half);
+  g.stroke({ color: Colors.ui.white, width: Math.max(1.5, width * 0.4), alpha: alpha * 0.75 });
+
+  entityLayer.addChild(g);
+  vfx.slashArcs.push({
+    graphic: g,
+    life: 0,
+    maxLife: grade === "excellent" ? 0.28 : 0.22,
+    angle,
+    reach,
+    halfAngle: Math.PI / 2,
+    color,
+    variant: "crosscut",
+    grade,
+  });
+
+  const particleCount = grade === "excellent" ? 16 : grade === "good" ? 10 : 6;
+  for (let i = 0; i < particleCount; i++) {
+    const p = new Graphics();
+    p.rect(-1.5, -1.5, 3, 3).fill({ color, alpha: 0.9 });
+    p.x = cx + (Math.random() - 0.5) * 18;
+    p.y = cy + (Math.random() - 0.5) * 18;
+    const burstAngle = angle + (Math.random() < 0.5 ? cross : -cross) + (Math.random() - 0.5) * 0.8;
+    const speed = 80 + Math.random() * (grade === "excellent" ? 130 : 80);
+    vfx.particles.push({
+      graphic: p,
+      vx: Math.cos(burstAngle) * speed,
+      vy: Math.sin(burstAngle) * speed,
+      gravity: 40,
+      life: 0,
+      maxLife: 0.25 + Math.random() * 0.22,
+    });
+    entityLayer.addChild(p);
+  }
 }
 
 /**
@@ -661,5 +804,139 @@ export function spawnEnvParticles(
       maxLife: 0.4 + Math.random() * 0.4,
     });
     entityLayer.addChild(g);
+  }
+}
+
+export function updateFourfoldSlashVFX(
+  vfx: VFXResource,
+  playerPos: { x: number; y: number } | undefined,
+  state: FourfoldSlashState,
+  config: FourfoldSlashConfig,
+  currentTimeMs: number,
+  reach: number
+): void {
+  if (!vfx.fourfoldRing) return;
+
+  if (!playerPos || state.inputs.length === 0 || currentTimeMs >= state.cooldownUntilMs) {
+    vfx.fourfoldRing.visible = false;
+    return;
+  }
+
+  vfx.fourfoldRing.visible = true;
+  vfx.fourfoldRing.x = playerPos.x + TILE / 2;
+  vfx.fourfoldRing.y = playerPos.y + TILE / 2;
+  vfx.fourfoldRing.clear();
+
+  const radius = reach * 1.1;
+
+  // 1. Draw background track circle
+  vfx.fourfoldRing.circle(0, 0, radius).stroke({ color: 0x4a3f35, width: 2, alpha: 0.35 });
+
+  // 2. Draw sequence connection lines
+  if (state.inputs.length > 1) {
+    const startNode = getDirectionCoords(state.inputs[0]!, radius);
+    vfx.fourfoldRing.moveTo(startNode.x, startNode.y);
+    for (let i = 1; i < state.inputs.length; i++) {
+      const nextNode = getDirectionCoords(state.inputs[i]!, radius);
+      vfx.fourfoldRing.lineTo(nextNode.x, nextNode.y);
+    }
+    vfx.fourfoldRing.stroke({ color: 0xd9c5b2, width: 2.5, alpha: 0.8 });
+  }
+
+  // 3. Draw timer progress arc
+  const elapsedTotal = currentTimeMs - state.inputTimestampsMs[0]!;
+  const elapsedGap = currentTimeMs - state.inputTimestampsMs[state.inputTimestampsMs.length - 1]!;
+  const totalRemaining = config.comboTotalWindowMs - elapsedTotal;
+  const gapRemaining = config.comboMaxGapMs - elapsedGap;
+  const limitRemaining = Math.max(0, Math.min(totalRemaining, gapRemaining));
+  const progress = limitRemaining / config.comboMaxGapMs;
+  if (progress > 0.001) {
+    const endAngle = -Math.PI / 2 + progress * Math.PI * 2;
+    vfx.fourfoldRing.arc(0, 0, radius, -Math.PI / 2, endAngle);
+    vfx.fourfoldRing.stroke({ color: 0xc8b29b, width: 3.5, alpha: 0.75 });
+  }
+
+  // 4. Draw quadrant nodes (top, right, bottom, left)
+  const directions: ("top" | "right" | "bottom" | "left")[] = ["top", "right", "bottom", "left"];
+  for (const dir of directions) {
+    const node = getDirectionCoords(dir, radius);
+    const isEntered = state.inputs.includes(dir);
+    if (isEntered) {
+      vfx.fourfoldRing.circle(node.x, node.y, 6.5).fill({ color: 0xe6dfd5, alpha: 0.95 });
+      vfx.fourfoldRing.circle(node.x, node.y, 6.5).stroke({ color: 0xc8b29b, width: 1.5, alpha: 0.8 });
+    } else {
+      vfx.fourfoldRing.circle(node.x, node.y, 4.5).fill({ color: 0x4a3f35, alpha: 0.5 });
+    }
+  }
+}
+
+function getDirectionCoords(dir: "top" | "right" | "bottom" | "left", radius: number): { x: number; y: number } {
+  switch (dir) {
+    case "top": return { x: 0, y: -radius };
+    case "right": return { x: radius, y: 0 };
+    case "bottom": return { x: 0, y: radius };
+    case "left": return { x: -radius, y: 0 };
+  }
+}
+
+export function spawnFourfoldFinisherSlash(
+  vfx: VFXResource,
+  entityLayer: Container,
+  cx: number,
+  cy: number,
+  reach: number,
+  color: number,
+  variant: "wheel_slash" | "falling_wheel" | "rising_wheel" | "crosswind_cut"
+): void {
+  const g = new Graphics();
+  g.x = cx;
+  g.y = cy;
+  entityLayer.addChild(g);
+  vfx.slashArcs.push({
+    graphic: g,
+    life: 0,
+    maxLife: 0.38,
+    angle: 0,
+    reach,
+    halfAngle: Math.PI,
+    color,
+    variant,
+  });
+
+  const particleCount = variant === "wheel_slash" ? 28 : 20;
+  for (let i = 0; i < particleCount; i++) {
+    const p = new Graphics();
+    const isDust = Math.random() < 0.6;
+    const pColor = isDust ? 0x6e6259 : color;
+    const size = isDust ? 2 + Math.random() * 3 : 1.5 + Math.random() * 2;
+    p.circle(0, 0, size).fill({ color: pColor, alpha: 0.8 });
+
+    p.x = cx + (Math.random() - 0.5) * 32;
+    p.y = cy + (Math.random() - 0.5) * 32;
+
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 60 + Math.random() * 120;
+
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+    let gravity = 60;
+
+    if (variant === "falling_wheel") {
+      vy = Math.abs(vy) + 50;
+      gravity = 180;
+    } else if (variant === "rising_wheel") {
+      vy = -Math.abs(vy) - 50;
+      gravity = -40;
+    }
+
+    vfx.particles.push({
+      graphic: p,
+      vx,
+      vy,
+      gravity,
+      life: 0,
+      maxLife: 0.3 + Math.random() * 0.35,
+    });
+    entityLayer.addChild(p);
   }
 }

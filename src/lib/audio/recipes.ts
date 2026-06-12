@@ -23,6 +23,9 @@ export type RecipeId =
   | "momentumStack"
   | "momentumBreak"
   | "momentumOverload"
+  | "crosscut"
+  | "crosscutExcellent"
+  | "crosscutBleed"
   | "fellSweepBrace"
   | "fellSweepPulse"
   | "fellSweepFull"
@@ -34,6 +37,7 @@ export type RecipeId =
 
 export interface RecipeParams {
   stacks?: number;
+  grade?: "excellent" | "good" | "weak";
 }
 
 export type Recipe = (v: Voice, params?: RecipeParams) => void;
@@ -109,6 +113,23 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     tone(v, { type: "sawtooth", freq: 120, sweepTo: 50, sweepShape: "lin", gain: 0.13, dur: 0.35 });
     tone(v, { type: "sawtooth", freq: 124, sweepTo: 51, sweepShape: "lin", gain: 0.13, dur: 0.35 });
     noise(v, { dur: 0.3, cutoff: 500, gain: 0.12 });
+  },
+  crosscut: (v, params) => {
+    const gradeLift = params?.grade === "good" ? 1.08 : params?.grade === "weak" ? 0.92 : 1;
+    const p = (0.9 + v.rng() * 0.18) * gradeLift;
+    tone(v, { type: "triangle", freq: 180 * p, sweepTo: 54 * p, gain: 0.3, dur: 0.12 });
+    noise(v, { dur: 0.1, cutoff: 2600, gain: 0.24 });
+    tone(v, { type: "sine", freq: 1200 * p, gain: 0.08, dur: 0.16, delay: 0.03 });
+  },
+  crosscutExcellent: (v) => {
+    const p = 0.95 + v.rng() * 0.14;
+    tone(v, { type: "sawtooth", freq: 220 * p, sweepTo: 42 * p, sweepShape: "lin", cutoff: 520, gain: 0.38, dur: 0.18 });
+    noise(v, { dur: 0.14, cutoff: 3600, gain: 0.32 });
+    tone(v, { type: "sine", freq: 1800 * p, gain: 0.11, dur: 0.24, delay: 0.025 });
+  },
+  crosscutBleed: (v) => {
+    tone(v, { type: "triangle", freq: 90, sweepTo: 45, sweepShape: "lin", gain: 0.13, dur: 0.12 });
+    noise(v, { dur: 0.08, cutoff: 900, gain: 0.1 });
   },
   fellSweepBrace: (v) => {
     tone(v, { type: "triangle", freq: 95, sweepTo: 70, sweepShape: "lin", gain: 0.16, dur: 0.18 });
