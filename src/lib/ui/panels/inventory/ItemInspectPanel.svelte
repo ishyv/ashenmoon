@@ -11,6 +11,7 @@ const KNOWLEDGE_LABELS: Record<KnowledgeProperty, string> = {
   perishable: "perishable",
   heat_sensitive: "heat-sensitive",
   boilable: "boilable",
+  sharp: "sharp / can cut you",
 };
 
 let {
@@ -38,8 +39,6 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
 
 {#if meta}
   <aside class="inspect-panel">
-    <button class="close-inspect-btn" onclick={onClose} aria-label="close inspect">x</button>
-
     <div class="inspect-header">
       <div class="inspect-visual">
         {#if meta.iconUrl}
@@ -109,22 +108,12 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
 
 <style>
   .inspect-panel {
-    width: min(20rem, calc(100vw - 2rem));
-    pointer-events: auto;
+    width: 20rem;
     padding: var(--inv-space-lg);
-    border: 1px solid var(--inv-border);
-    border-radius: var(--inv-radius);
-    background: var(--inv-surface);
-    box-shadow: 0 1rem 2rem var(--inv-shadow);
     color: var(--inv-text);
-  }
-
-  .close-inspect-btn {
-    float: right;
-    border: 0;
-    background: transparent;
-    color: var(--inv-text-muted);
-    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    font-family: "IBM Plex Mono", monospace;
   }
 
   .inspect-header {
@@ -157,7 +146,12 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
   }
 
   .inspect-name {
+    font-family: "Cinzel", serif;
+    font-size: 0.88rem;
     font-weight: 700;
+    color: var(--inv-accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .inspect-subtitle,
@@ -168,8 +162,14 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
     line-height: 1.4;
   }
 
+  .inspect-description {
+    font-family: "Cardo", serif;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.5;
+  }
+
   .inspect-subtitle,
-  .inspect-description,
   .muted {
     color: var(--inv-text-muted);
   }
@@ -181,7 +181,10 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
   .section-heading {
     margin-bottom: 0.35rem;
     color: var(--inv-accent);
-    font-size: 0.62rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
@@ -213,7 +216,19 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
     background: var(--inv-accent-dim);
     color: var(--inv-accent);
     padding: 0.45rem 0.6rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    text-transform: uppercase;
     cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .action-btn:hover:not(:disabled) {
+    background: rgba(255, 220, 120, 0.22);
+    border-color: var(--inv-accent);
+    color: #fff;
   }
 
   .action-btn:disabled {

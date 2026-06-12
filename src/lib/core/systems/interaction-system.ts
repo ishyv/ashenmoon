@@ -21,7 +21,7 @@ import { awardSkillXp } from "$lib/domain/skill-xp";
 import { SkillKey, InputAction, EntityId, GameEvent } from "$lib/domain/game-events";
 import { getItemQty, getEquippedWeaponId } from "$lib/domain/inventory-api";
 import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remote-sync";
-import { transformStackQty } from "$lib/domain/systems/inventory-system";
+import { transformStackQty, removeStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
 import { getStationDefinition } from "$lib/domain/stations";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
@@ -36,6 +36,8 @@ import {
   isPointInTreeFallZone,
 } from "$lib/domain/hazards/tree-fall-hazard";
 import { learnAbout } from "$lib/domain/knowledge.svelte";
+import { learnRecipe } from "$lib/domain/crafting.svelte";
+import { findProcessForStation } from "$lib/domain/systems/station-process";
 import { InteractionDispatcher } from "$lib/core/runtime/interactions";
 import type { RuntimeResourceMap } from "$lib/core/runtime/runtime";
 
@@ -98,6 +100,9 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
           : null;
         if (gatherRisk) {
           applyStatusEffect(gatherRisk.status, gatherRisk.durationSec, "hazard:gather");
+          if (gatherRisk.knowledgeItemId && gatherRisk.status === StatusId.Cut) {
+            learnAbout(gatherRisk.knowledgeItemId, "sharp");
+          }
           spawnEnvFloatingText(
             vfx,
             gatherRisk.status === StatusId.Cut ? "cut" : gatherRisk.status === StatusId.Poison ? "poison" : "bleeding",
@@ -124,30 +129,35 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
   },
   {
     id: "refuel",
-    handle: ({ resources }) => {
+    handle: ({ target, resources }) => {
       const { interaction, vfx, entityLayer, triggerQuestEvent } = resources.deps;
       const playerEntity = getPlayerEntity();
 
       // Processing takes the first interaction when the player carries processable
       // items: it costs nothing, can't fail, and is the core loop's reason to
       // visit the station. A second interaction (while processing) reaches refuel.
-      const processable =
-        !interaction.activeProcess && !interaction.refuelPendingConfirm && gameState.rpg.inventory && CAMPFIRE_STATION
-          ? findProcessableItem(gameState.rpg.inventory, CAMPFIRE_STATION)
+      const proc =
+        !interaction.activeProcess && !interaction.refuelPendingConfirm && gameState.rpg.inventory
+          ? findProcessForStation(gameState.rpg.inventory, "campfire")
           : null;
 
-      if (processable) {
+      if (proc) {
         interaction.activeProcess = {
-          itemId: processable.itemId,
-          effect: processable.effect,
-          remainingSec: processable.durationSec,
+          stationId: "campfire",
+          targetEntityId: target.id,
+          itemId: Object.keys(proc.inputs)[0],
+          remainingSec: proc.durationSec,
           bubbleTimer: 0,
+          inputs: proc.inputs,
+          outputItemId: proc.outputItemId,
+          outputQty: proc.outputQty,
         };
         playSound("station.boil");
-        const itemName = getItemDef(processable.itemId)?.name ?? processable.itemId;
+        const procName = proc.processType === "dry" ? "drying" : proc.processType === "assemble" ? "assembling" : proc.processType === "burn" ? "burning" : "processing";
+        const resultName = getItemDef(proc.outputItemId)?.name ?? proc.outputItemId;
         spawnEnvFloatingText(
           vfx,
-          `boiling ${itemName}...`,
+          `${procName} ${resultName.toLowerCase()}...`,
           Colors.vfx.campfireMsg,
           playerEntity.position!,
           entityLayer
@@ -206,6 +216,61 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
     },
   },
   {
+    id: "process",
+    handle: ({ target, resources }) => {
+      const { interaction, vfx, entityLayer } = resources.deps;
+      const playerEntity = getPlayerEntity();
+
+      const stationId = target.station?.stationId;
+      if (!stationId || !gameState.rpg.inventory) return;
+
+      if (interaction.activeProcess) {
+        spawnEnvFloatingText(
+          vfx,
+          "already processing...",
+          Colors.ui.warning,
+          playerEntity.position!,
+          entityLayer
+        );
+        return;
+      }
+
+      const proc = findProcessForStation(gameState.rpg.inventory, stationId as any);
+      if (proc) {
+        interaction.activeProcess = {
+          stationId: proc.stationId,
+          targetEntityId: target.id,
+          itemId: Object.keys(proc.inputs)[0],
+          remainingSec: proc.durationSec,
+          bubbleTimer: 0,
+          inputs: proc.inputs,
+          outputItemId: proc.outputItemId,
+          outputQty: proc.outputQty,
+        };
+
+        playSound("station.boil");
+        const procName = proc.processType === "dry" ? "drying" : proc.processType === "assemble" ? "assembling" : "processing";
+        const resultName = getItemDef(proc.outputItemId)?.name ?? proc.outputItemId;
+
+        spawnEnvFloatingText(
+          vfx,
+          `${procName} ${resultName.toLowerCase()}...`,
+          Colors.vfx.campfireMsg,
+          playerEntity.position!,
+          entityLayer
+        );
+      } else {
+        spawnEnvFloatingText(
+          vfx,
+          "no valid ingredients for this station.",
+          Colors.ui.warning,
+          playerEntity.position!,
+          entityLayer
+        );
+      }
+    },
+  },
+  {
     id: "talk",
     handle: ({ target, resources }) => {
       const { dialogueState, triggerQuestEvent } = resources.deps;
@@ -232,10 +297,15 @@ export class InteractionResource {
   public refuelConfirmTimer = 0;
   /** Active item process (boiling, smelting); null when nothing is processing. */
   public activeProcess: {
+    stationId: string;
+    targetEntityId: string;
     itemId: string;
-    effect: InventoryEffect;
+    outputItemId: string;
+    outputQty: number;
     remainingSec: number;
     bubbleTimer: number;
+    inputs: Record<string, number>;
+    effect?: InventoryEffect;
   } | null = null;
 }
 
@@ -581,6 +651,14 @@ export function depleteNodeSystem(
     fallingSprite.loop = false;
     fallingSprite.animationSpeed = 0.16;
 
+    const angles = {
+      north: Math.PI,
+      south: 0,
+      east: Math.PI / 2,
+      west: -Math.PI / 2,
+    };
+    fallingSprite.rotation = angles[hazard.direction];
+
     fallingSprite.onComplete = () => {
       const stump = new Sprite(getStumpTexture());
       stump.anchor.set(0.5, 1);
@@ -717,15 +795,18 @@ export function runInteractionSystem(
   // Advance an active process; walking out of the heat cancels it.
   if (interaction.activeProcess) {
     const playerEntity = getPlayerEntity();
-    const campfire = world.with("position").entities.find((e) => e.id === EntityId.Campfire);
-    let inHeat = true;
-    if (campfire?.position && playerEntity.position) {
-      const dx = (campfire.position.x - playerEntity.position.x) / TILE;
-      const dy = (campfire.position.y - playerEntity.position.y) / TILE;
-      inHeat = Math.hypot(dx, dy) <= interaction.campfireHeatRadius;
+    const proc = interaction.activeProcess;
+    const stationEntity = world.with("position").entities.find((e) => e.id === (proc.targetEntityId || EntityId.Campfire));
+
+    let inRange = true;
+    if (stationEntity?.position && playerEntity.position) {
+      const dx = (stationEntity.position.x - playerEntity.position.x) / TILE;
+      const dy = (stationEntity.position.y - playerEntity.position.y) / TILE;
+      const maxDist = proc.stationId === "campfire" ? interaction.campfireHeatRadius : 2.5;
+      inRange = Math.hypot(dx, dy) <= maxDist;
     }
 
-    if (!inHeat) {
+    if (!inRange) {
       spawnEnvFloatingText(
         vfx,
         "process interrupted.",
@@ -735,29 +816,50 @@ export function runInteractionSystem(
       );
       interaction.activeProcess = null;
     } else {
-      const proc = interaction.activeProcess;
       proc.remainingSec -= dt;
       proc.bubbleTimer -= dt;
-      if (proc.bubbleTimer <= 0 && campfire?.position) {
+      if (proc.bubbleTimer <= 0 && stationEntity?.position) {
         proc.bubbleTimer = 0.8;
-        spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", campfire.position, entityLayer);
-        playSound("station.boil");
+        if (proc.stationId === "campfire") {
+          spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", stationEntity.position, entityLayer);
+          playSound("station.boil");
+        } else if (proc.stationId === "primitive_work_surface") {
+          playSound("craft");
+        } else {
+          playSound("pickup");
+        }
       }
       if (proc.remainingSec <= 0) {
         if (gameState.rpg.inventory) {
-          const next = resolveProcessingCompletion(
-            gameState.rpg.inventory,
-            proc.itemId,
-            proc.effect,
-            1,
-            Math.random
-          );
-          if (next !== gameState.rpg.inventory) {
-            setRpgInventory(next);
-            const resultName =
-              proc.effect.kind === "transform"
-                ? getItemDef(proc.effect.into)?.name ?? proc.effect.into
-                : "Result";
+          let inv = gameState.rpg.inventory;
+          let hasIngredients = true;
+          const inputs = proc.inputs || (proc.itemId ? { [proc.itemId]: 1 } : {});
+          for (const [inId, reqQty] of Object.entries(inputs)) {
+            const slot = inv.slots[inId];
+            if (!slot || !("qty" in slot) || slot.qty < reqQty) {
+              hasIngredients = false;
+              break;
+            }
+          }
+
+          if (hasIngredients) {
+            for (const [inId, reqQty] of Object.entries(inputs)) {
+              inv = removeStackQty(inv, inId, reqQty);
+            }
+            const outId = proc.outputItemId || (proc.effect?.kind === "transform" ? proc.effect.into : "charcoal");
+            const outQty = proc.outputQty || 1;
+            const targetSlot = inv.slots[outId];
+            const targetQty = targetSlot && "qty" in targetSlot ? targetSlot.qty : 0;
+            inv = {
+              ...inv,
+              slots: {
+                ...inv.slots,
+                [outId]: { qty: targetQty + outQty }
+              }
+            };
+
+            setRpgInventory(inv);
+            const resultName = getItemDef(outId)?.name ?? outId;
             spawnEnvFloatingText(
               vfx,
               `process complete: ${resultName.toLowerCase()}`,
@@ -767,14 +869,27 @@ export function runInteractionSystem(
             );
             playSound("craft");
 
-            if (proc.effect.kind === "transform") {
-              learnAbout(proc.itemId, "boilable");
-              triggerQuestEvent(GameEvent.Boil, proc.effect.into);
+            if (proc.stationId === "campfire") {
+              if (outId === "clean_water") {
+                learnAbout(Object.keys(inputs)[0], "boilable");
+              } else if (outId === "charcoal") {
+                learnAbout(Object.keys(inputs)[0], "flammable");
+                learnRecipe("charcoal");
+              } else if (outId === "hardened_clay") {
+                learnAbout(Object.keys(inputs)[0], "heat_sensitive");
+              }
+            } else if (proc.stationId === "drying_rack") {
+              learnAbout(Object.keys(inputs)[0], "perishable");
+            } else if (proc.stationId === "primitive_work_surface") {
+              learnRecipe(outId);
             }
+
+            triggerQuestEvent(GameEvent.Boil, outId);
+            triggerQuestEvent("craft", outId);
           } else {
             spawnEnvFloatingText(
               vfx,
-              "the materials are gone.",
+              "missing ingredients.",
               Colors.ui.muted,
               playerEntity.position!,
               entityLayer

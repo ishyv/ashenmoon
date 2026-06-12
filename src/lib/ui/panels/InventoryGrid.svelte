@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
+import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
@@ -8,7 +9,7 @@ import { triggerQuestEvent } from "$lib/domain/quests.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system";
-import { matchExperiment } from "$lib/domain/crafting/experimental";
+import { getExperimentHint, matchExperiment } from "$lib/domain/crafting/experimental";
 import { inspect as inspectKnowledge } from "$lib/domain/knowledge.svelte";
 import { knownRecipeList, learnRecipe } from "$lib/domain/crafting.svelte";
 import { BUILDING_SPECS } from "$lib/domain/building-specs";
@@ -19,7 +20,15 @@ import CraftingPanel from "./inventory/CraftingPanel.svelte";
 import BuildingPanel from "./inventory/BuildingPanel.svelte";
 import type { BuildRecipeView, InventoryEngine, InventoryItemView, InventoryTab } from "./inventory/types";
 
-let { engine, onClose } = $props<{ engine: InventoryEngine | null; onClose: () => void }>();
+let { 
+  engine, 
+  initialTab = "stash", 
+  onClose 
+}: { 
+  engine: InventoryEngine | null; 
+  initialTab?: InventoryTab; 
+  onClose: () => void 
+} = $props();
 
 let activeTab = $state<InventoryTab>("stash");
 let hoveredItem = $state<string | null>(null);
@@ -41,112 +50,46 @@ const buildRecipes: BuildRecipeView[] = [
   const spec = BUILDING_SPECS[id];
   return {
     id,
-    name: spec.displayName,
-    description: spec.description,
-    costs: Object.entries(spec.cost ?? {}).map(([itemId, required]) => ({
+    name: spec?.displayName ?? id,
+    description: spec?.description ?? "",
+    costs: Object.entries(spec?.cost ?? {}).map(([itemId, required]) => ({
       itemId,
-      name: getItemDef(itemId)?.name.toLowerCase() ?? itemId,
+      name: getItemDef(itemId)?.name ?? itemId,
       required,
     })),
   };
 });
 
-function slotQty(slot: RpgInventorySlot | undefined): number {
-  if (!slot) return 0;
-  if ("qty" in slot) return slot.qty ?? 0;
-  return slot.instances.length;
+$effect(() => {
+  activeTab = initialTab;
+});
+
+function getStashUsage(): number {
+  let count = 0;
+  for (const slot of Object.values(gameState.rpg.inventory?.slots ?? {})) {
+    if (slot && "qty" in slot) {
+      count += slot.qty;
+    } else if (slot && "instances" in slot) {
+      count += slot.instances.length;
+    }
+  }
+  return count;
 }
 
 function getMaterialQty(itemId: string): number {
   const slot = gameState.rpg.inventory?.slots[itemId];
-  return slot && "qty" in slot ? (slot.qty ?? 0) : 0;
+  if (!slot) return 0;
+  return "qty" in slot ? slot.qty : slot.instances.length;
 }
 
-function getStashUsage(): number {
-  return Object.values(gameState.rpg.inventory?.slots ?? {}).reduce((sum, slot) => sum + slotQty(slot), 0);
+function slotQty(slot: RpgInventorySlot): number {
+  return "qty" in slot ? slot.qty : slot.instances.length;
 }
 
-function canCraft(recipe: CraftRecipe): boolean {
-  if (!gameState.rpg.inventory) return false;
-  return canCraftRecipe(gameState.rpg.inventory.slots, recipe.id, {
-    isNearCampfire: engine?.isNearCampfire() ?? false,
-  });
-}
-
-function canBuild(recipe: BuildRecipeView): boolean {
-  return recipe.costs.every((cost) => getMaterialQty(cost.itemId) >= cost.required);
-}
-
-async function craftItem(recipe: CraftRecipe): Promise<void> {
-  if (!canCraft(recipe)) return;
-  try {
-    applyRpgState(localRpgCommands.craft(recipe.id, { isNearCampfire: engine?.isNearCampfire() ?? false }));
-  } catch (err) {
-    console.error("crafting error:", err instanceof Error ? err.message : String(err));
-    return;
-  }
-
-  playSound("craft");
-  learnRecipe(recipe.id);
-  triggerQuestEvent("craft", recipe.id);
-}
-
-function startBuildPlacement(recipe: BuildRecipeView): void {
-  if (!canBuild(recipe)) return;
-  engine?.startBuildingPlacement(recipe.id, () => {}, onClose);
-  onClose();
-}
-
-function experimentQty(itemId: string): number {
-  return experimentInputs[itemId] ?? 0;
-}
-
-function addExperimentIngredient(itemId: string): void {
-  const current = experimentQty(itemId);
-  if (current >= getMaterialQty(itemId)) return;
-  experimentInputs = { ...experimentInputs, [itemId]: current + 1 };
-  experimentMessage = "";
-}
-
-function removeExperimentIngredient(itemId: string): void {
-  const nextQty = experimentQty(itemId) - 1;
-  const next = { ...experimentInputs };
-  if (nextQty <= 0) delete next[itemId];
-  else next[itemId] = nextQty;
-  experimentInputs = next;
-}
-
-function clearExperiment(): void {
-  experimentInputs = {};
-  experimentMessage = "";
-}
-
-async function runExperiment(): Promise<void> {
-  if (Object.keys(experimentInputs).length === 0) {
-    experimentMessage = "add ingredients first.";
-    return;
-  }
-
-  const { recipe, partial } = matchExperiment(experimentInputs);
-  if (!recipe) {
-    experimentMessage = partial.length > 0 ? "something is close, but the mix is wrong." : "nothing useful happens.";
-    return;
-  }
-
-  if (!canCraft(recipe)) {
-    experimentMessage = recipe.requiresCampfire ? "this needs campfire heat." : "you do not have enough material.";
-    return;
-  }
-
-  await craftItem(recipe);
-  experimentInputs = {};
-  experimentMessage = `learned ${recipe.name.toLowerCase()}.`;
-}
-
-async function equipTool(itemId: string): Promise<void> {
-  if (getItemDef(itemId)?.category !== "tool") return;
+function equipTool(itemId: string) {
   try {
     applyRpgState(localRpgCommands.equipTool(itemId));
+    playSound("pickup");
   } catch (err) {
     console.error("equip error:", err instanceof Error ? err.message : String(err));
   }
@@ -187,81 +130,169 @@ onMount(() => {
 onDestroy(() => {
   if (decayInterval) clearInterval(decayInterval);
 });
+
+function addExperimentIngredient(itemId: string) {
+  const current = experimentInputs[itemId] ?? 0;
+  const invQty = getMaterialQty(itemId);
+  if (current < invQty) {
+    experimentInputs[itemId] = current + 1;
+    playSound("pickup");
+  }
+}
+
+function removeExperimentIngredient(itemId: string) {
+  const current = experimentInputs[itemId] ?? 0;
+  if (current > 1) {
+    experimentInputs[itemId] = current - 1;
+  } else {
+    delete experimentInputs[itemId];
+  }
+  playSound("pickup");
+}
+
+function experimentQty(itemId: string): number {
+  return experimentInputs[itemId] ?? 0;
+}
+
+function clearExperiment() {
+  experimentInputs = {};
+  experimentMessage = "";
+  playSound("pickup");
+}
+
+function canCraft(recipe: CraftRecipe): boolean {
+  if (!gameState.rpg.inventory) return false;
+  return canCraftRecipe(gameState.rpg.inventory.slots, recipe.id, {
+    isNearCampfire: engine?.isNearCampfire() ?? false,
+  });
+}
+
+function canBuild(recipe: BuildRecipeView): boolean {
+  return recipe.costs.every((cost) => getMaterialQty(cost.itemId) >= cost.required);
+}
+
+async function craftItem(recipe: CraftRecipe): Promise<void> {
+  if (!canCraft(recipe)) return;
+  try {
+    applyRpgState(localRpgCommands.craft(recipe.id, { isNearCampfire: engine?.isNearCampfire() ?? false }));
+    playSound("craft");
+    
+    // Clear items in mix if we successfully crafted something
+    experimentInputs = {};
+    
+    learnRecipe(recipe.id);
+    triggerQuestEvent("craft", recipe.id);
+  } catch (err) {
+    console.error("craft error:", err instanceof Error ? err.message : String(err));
+  }
+}
+
+function startBuildPlacement(recipe: BuildRecipeView): void {
+  if (!canBuild(recipe)) return;
+  engine?.startBuildingPlacement(recipe.id, () => {}, onClose);
+}
+
+async function runExperiment() {
+  const count = Object.keys(experimentInputs).length;
+  if (count === 0) {
+    experimentMessage = "add ingredients first.";
+    return;
+  }
+
+  const { recipe, partial } = matchExperiment(experimentInputs);
+  if (!recipe) {
+    experimentMessage = getExperimentHint(experimentInputs, partial);
+    playSound("node.deplete");
+    return;
+  }
+
+  if (!canCraft(recipe)) {
+    experimentMessage = recipe.requiresCampfire ? "this needs campfire heat." : "you do not have enough material.";
+    playSound("node.deplete");
+    return;
+  }
+
+  await craftItem(recipe);
+  experimentMessage = `learned ${recipe.name.toLowerCase()}.`;
+}
 </script>
 
 <div class="inventory-container">
   {#if selectedItem}
-    <ItemInspectPanel
-      itemId={selectedItem}
-      {inspectNotes}
-      {decayProgress}
-      {isEquipped}
-      onClose={() => (selectedItem = null)}
-      onEquip={equipTool}
-    />
-  {/if}
-
-  <section class="panel-overlay" aria-label="inventory">
-    <header class="panel-header">
-      <nav class="tab-header" aria-label="inventory tabs">
-        <button class:active={activeTab === "stash"} onclick={() => (activeTab = "stash")}>stash</button>
-        <button class:active={activeTab === "crafting"} onclick={() => (activeTab = "crafting")}>craft</button>
-        <button class:active={activeTab === "building"} onclick={() => (activeTab = "building")}>build</button>
-      </nav>
-      <button class="close-btn" onclick={onClose} aria-label="close inventory">x</button>
-    </header>
-
-    {#if activeTab === "stash"}
-      <div class="stash-usage">
-        <div class="bar-labels">
-          <span>storage</span>
-          <span>{getStashUsage()} / {stashLimit}</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" style="width: {Math.min(100, (getStashUsage() / stashLimit) * 100)}%"></div>
-        </div>
-      </div>
-      <ItemGrid
-        items={itemsList}
-        {selectedItem}
+    <GamePanel id="inspect" title="inspect" onClose={() => (selectedItem = null)}>
+      <ItemInspectPanel
+        itemId={selectedItem}
+        {inspectNotes}
         {decayProgress}
         {isEquipped}
-        onSelect={(itemId) => (selectedItem = itemId)}
-        onHover={(itemId) => (hoveredItem = itemId)}
+        onClose={() => (selectedItem = null)}
+        onEquip={equipTool}
       />
-    {:else if activeTab === "crafting"}
-      <CraftingPanel
-        recipes={recipes}
-        items={itemsList}
-        {experimentInputs}
-        {experimentMessage}
-        {experimentQty}
-        {addExperimentIngredient}
-        {removeExperimentIngredient}
-        {runExperiment}
-        {clearExperiment}
-        {canCraft}
-        {craftItem}
-      />
-    {:else}
-      <BuildingPanel
-        recipes={buildRecipes}
-        {getMaterialQty}
-        {canBuild}
-        {startBuildPlacement}
-      />
-    {/if}
+    </GamePanel>
+  {/if}
 
-    <footer class="tooltip-container">
-      {#if hoveredItem && getItemDef(hoveredItem)}
-        {@const meta = getItemDef(hoveredItem)!}
-        <div class="tooltip-name">{meta.name.toLowerCase()}</div>
-        <div class="tooltip-desc">{meta.description}</div>
+  <GamePanel id="inventory" title="stash & assembly" width={activeTab === "crafting" ? "42rem" : "22rem"} onClose={onClose}>
+    <section class="panel-overlay" aria-label="inventory">
+      <header class="panel-tab-bar">
+        <nav class="tab-header" aria-label="inventory tabs">
+          <button class:active={activeTab === "stash"} onclick={() => (activeTab = "stash")}>stash</button>
+          <button class:active={activeTab === "crafting"} onclick={() => (activeTab = "crafting")}>craft</button>
+          <button class:active={activeTab === "building"} onclick={() => (activeTab = "building")}>build</button>
+        </nav>
+      </header>
+
+      {#if activeTab === "stash"}
+        <div class="stash-usage">
+          <div class="bar-labels">
+            <span>storage</span>
+            <span>{getStashUsage()} / {stashLimit}</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {Math.min(100, (getStashUsage() / stashLimit) * 100)}%"></div>
+          </div>
+        </div>
+        <ItemGrid
+          items={itemsList}
+          {selectedItem}
+          {decayProgress}
+          {isEquipped}
+          onSelect={(itemId) => (selectedItem = itemId)}
+          onHover={(itemId) => (hoveredItem = itemId)}
+        />
+      {:else if activeTab === "crafting"}
+        <CraftingPanel
+          recipes={recipes}
+          items={itemsList}
+          {experimentInputs}
+          {experimentMessage}
+          {experimentQty}
+          addExperimentIngredient={addExperimentIngredient}
+          removeExperimentIngredient={removeExperimentIngredient}
+          {runExperiment}
+          {clearExperiment}
+          {canCraft}
+          {craftItem}
+        />
       {:else}
-        <div class="tooltip-empty">hover an item</div>
+        <BuildingPanel
+          recipes={buildRecipes}
+          {getMaterialQty}
+          {canBuild}
+          {startBuildPlacement}
+        />
       {/if}
-    </footer>
-  </section>
+
+      <footer class="tooltip-container">
+        {#if hoveredItem && getItemDef(hoveredItem)}
+          {@const meta = getItemDef(hoveredItem)!}
+          <div class="tooltip-name">{meta.name.toLowerCase()}</div>
+          <div class="tooltip-desc">{meta.description}</div>
+        {:else}
+          <div class="tooltip-empty">hover an item</div>
+        {/if}
+      </footer>
+    </section>
+  </GamePanel>
 </div>
 
 <style>
@@ -296,25 +327,18 @@ onDestroy(() => {
   }
 
   .panel-overlay {
-    width: min(22rem, calc(100vw - 2rem));
-    pointer-events: auto;
+    width: 100%;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--inv-border);
-    border-radius: var(--inv-radius);
-    background: var(--inv-surface);
-    box-shadow: 0 1rem 2rem var(--inv-shadow);
-    color: var(--inv-text);
     overflow: hidden;
   }
 
-  .panel-header {
+  .panel-tab-bar {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 1rem;
-    padding: 0.75rem var(--inv-space);
+    padding: 0.6rem var(--inv-space) 0.5rem;
     border-bottom: 1px solid var(--inv-border-muted);
+    background: rgba(255, 220, 120, 0.01);
   }
 
   .tab-header {
@@ -322,21 +346,23 @@ onDestroy(() => {
     gap: 0.75rem;
   }
 
-  .tab-header button,
-  .close-btn {
+  .tab-header button {
     border: 0;
     background: transparent;
     color: var(--inv-text-muted);
-    font: inherit;
+    font-family: "Cinzel", serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    font-weight: 600;
     cursor: pointer;
+    text-transform: uppercase;
+    transition: color 0.1s;
+    padding: 0.2rem 0;
   }
 
   .tab-header button.active {
     color: var(--inv-accent);
-  }
-
-  .close-btn {
-    font-size: 0.9rem;
+    border-bottom: 2px solid var(--inv-accent);
   }
 
   .stash-usage {
@@ -373,14 +399,19 @@ onDestroy(() => {
 
   .tooltip-name {
     margin-bottom: 0.25rem;
+    font-family: "Cinzel", serif;
     font-size: 0.78rem;
     font-weight: 700;
+    color: var(--inv-accent);
+    letter-spacing: 0.03em;
   }
 
   .tooltip-desc,
   .tooltip-empty {
     color: var(--inv-text-muted);
-    font-size: 0.68rem;
+    font-family: "Cardo", serif;
+    font-style: italic;
+    font-size: 0.78rem;
     line-height: 1.35;
   }
 

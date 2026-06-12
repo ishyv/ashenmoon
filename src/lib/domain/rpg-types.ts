@@ -66,6 +66,9 @@ export interface RpgPlayerState {
     fellSweep?: RpgSkillState;
     kiteCombo?: RpgSkillState;
   };
+  runSettings?: {
+    deathMode: string;
+  };
 }
 
 export interface RpgGatherResult {

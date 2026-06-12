@@ -93,3 +93,54 @@ export function listKnownRecipes(
 export function isRecipeKnown(knownRecipeIds: ReadonlySet<string>, recipeId: string): boolean {
   return knownRecipeIds.has(recipeId);
 }
+
+/**
+ * Generates vague but useful feedback when an experimental combination fails.
+ * If there are partial recipes, gives a hint about how close they are.
+ */
+export function getExperimentHint(
+  inputs: CraftInputs,
+  partials: readonly CraftRecipe[]
+): string {
+  if (partials.length === 0) {
+    return "nothing useful happens.";
+  }
+
+  let bestRecipe: CraftRecipe | null = null;
+  let maxShared = 0;
+  const inputKeys = Object.keys(inputs).filter((k) => (inputs[k] ?? 0) > 0);
+
+  for (const recipe of partials) {
+    const costIds = recipe.costs.map((c) => c.itemId);
+    const shared = costIds.filter((id) => inputKeys.includes(id)).length;
+    if (shared > maxShared) {
+      maxShared = shared;
+      bestRecipe = recipe;
+    }
+  }
+
+  if (bestRecipe && maxShared > 0) {
+    const costIds = bestRecipe.costs.map((c) => c.itemId);
+    const extraItems = inputKeys.filter((id) => !costIds.includes(id));
+    const missingItems = costIds.filter((id) => !inputKeys.includes(id));
+
+    if (extraItems.length > 0 && missingItems.length === 0) {
+      return "something is close, but there are extra ingredients clashing.";
+    }
+    if (extraItems.length === 0 && missingItems.length > 0) {
+      return `you feel a faint resonance. maybe you need ${missingItems.length} more ingredient${missingItems.length > 1 ? "s" : ""}?`;
+    }
+    if (extraItems.length > 0 && missingItems.length > 0) {
+      return "some ingredients seem right, but the balance is off.";
+    }
+    const wrongQty = bestRecipe.costs.some(
+      (c) => (inputs[c.itemId] ?? 0) < c.required
+    );
+    if (wrongQty) {
+      return "the ingredients are right, but you need more of them.";
+    }
+  }
+
+  return "something is close, but the mix is wrong.";
+}
+

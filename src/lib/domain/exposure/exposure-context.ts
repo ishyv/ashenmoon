@@ -16,6 +16,23 @@ export interface ExposureContext {
   readonly nearFire: boolean;
 }
 
+export type ItemLocation =
+  | "inventory"
+  | "world_drop"
+  | "placed"
+  | "station_input"
+  | "equipped";
+
+export interface ItemExposureContext {
+  readonly location: ItemLocation;
+  readonly heatExposure: number;
+  readonly coldExposure: number;
+  readonly moistureExposure: number;
+  readonly toxinExposure: number;
+  readonly impactExposure: number;
+  readonly insulation: number;
+}
+
 /** Radiant heat (°C) an open flame adds to a fully exposed item. */
 export const OPEN_FLAME_BONUS = 600;
 

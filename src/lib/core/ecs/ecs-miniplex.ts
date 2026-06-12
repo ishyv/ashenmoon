@@ -40,6 +40,8 @@ export interface Entity {
     itemId: string;
     qty: number;
     gatherableId?: string;
+    exposureTimeSec?: number;
+    hasWarned?: boolean;
   };
 
   /** Station marker for generic station/process interactions. */

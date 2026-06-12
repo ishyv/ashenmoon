@@ -175,6 +175,7 @@ export function createDefaultPlayerState(): RpgPlayerState {
     profile: createDefaultProfile(),
     inventory: { slots: {} },
     skills: createDefaultSkills(),
+    runSettings: { deathMode: "respawn" },
   };
 }
 
@@ -182,12 +183,18 @@ export function normalizePlayerState(input: unknown): RpgPlayerState {
   const candidate = isRecord(input) && isRecord(input.rpg) ? input.rpg : input;
   if (!isRecord(candidate)) return createDefaultPlayerState();
 
+  const runSettingsInput = isRecord(candidate.runSettings) ? candidate.runSettings : null;
+  const deathMode = runSettingsInput && typeof runSettingsInput.deathMode === "string"
+    ? runSettingsInput.deathMode
+    : "respawn";
+
   return {
     profile: normalizeProfile(candidate.profile),
     inventory: {
       slots: normalizeSlots(isRecord(candidate.inventory) ? candidate.inventory.slots : undefined),
     },
     skills: normalizeSkills(candidate.skills),
+    runSettings: { deathMode },
   };
 }
 

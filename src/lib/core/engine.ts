@@ -119,8 +119,12 @@ import {
   tickStatusEffects,
   getStatusModifiers,
   loadStatuses,
+  applyStatusEffect,
 } from "$lib/domain/status-effects.svelte";
-import { registerPlayerFeedback, registerPlayerHp } from "$lib/ui/player-feedback";
+import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$lib/ui/player-feedback";
+import { setEnvironment } from "$lib/state/environment-state.svelte";
+import { tickExposureSystem } from "$lib/core/systems/exposure-system";
+import { StatusId } from "$lib/domain/systems/status-types";
 import { loadKnowledge } from "$lib/domain/knowledge.svelte";
 import { loadRecipes } from "$lib/domain/crafting.svelte";
 import { triggerQuestEvent, dialogueState } from "$lib/domain/quests.svelte";
@@ -242,6 +246,7 @@ export class GameEngine {
 
   // Player respawn anchor (camp centre), set in spawnEntities.
   private playerSpawn = { x: 0, y: 0 };
+  private forestEventTimer = 0;
 
   // Enemy sprite colour registry — lets the AI system fetch the right warrior
   // frames per enemy without baking presentation into the ai component.
@@ -303,7 +308,7 @@ export class GameEngine {
       // Save cleanup references
       this.cleanupInputListeners = cleanInputListeners;
 
-      window.addEventListener("wheel", this.onWheel, { passive: false });
+      canvas.addEventListener("wheel", this.onWheel, { passive: false });
 
       // Map generation: use scenario if active, otherwise procedural.
       if (this.scenarioId) {
@@ -387,7 +392,9 @@ export class GameEngine {
     if (this.cleanupInputListeners) {
       this.cleanupInputListeners();
     }
-    window.removeEventListener("wheel", this.onWheel);
+    if (this.app?.canvas) {
+      this.app.canvas.removeEventListener("wheel", this.onWheel);
+    }
     registerPlayerFeedback(null);
     registerPlayerHp(null);
 
@@ -694,6 +701,37 @@ export class GameEngine {
         moving: this.playerAnimState === "run",
         laboring: this.interactionResource.gatheringTarget !== null,
       });
+
+      if (this.playerEntity.position) {
+        const pgx = Math.round(this.playerEntity.position.x / TILE);
+        const pgy = Math.round(this.playerEntity.position.y / TILE);
+        const env = this.getAmbientEnvironment(pgx, pgy);
+        setEnvironment(env);
+
+        if (env.temperature <= 0) {
+          applyStatusEffect(StatusId.Hypothermia, 5, "environment");
+        }
+      }
+
+      tickExposureSystem(this.mapResource, dt, this.vfxResource, this.entityLayer);
+
+      // --- Random Forest Events ---
+      this.forestEventTimer -= dt;
+      if (this.forestEventTimer <= 0) {
+        this.forestEventTimer = 45 + Math.random() * 45;
+        const events = [
+          { msg: "You hear a distant howl echoing through the trees.", sound: "ambient.wind" },
+          { msg: "A strange rustling comes from the nearby brush.", sound: "node.deplete" },
+          { msg: "A cold wind sweeps across the forest, biting at your skin.", sound: "ambient.wind" },
+          { msg: "A snap of a branch sounds in the shadows.", sound: "node.deplete" }
+        ];
+        const event = events[Math.floor(Math.random() * events.length)];
+        emitPlayerFeedback(event.msg, "warning");
+        if (event.sound) {
+          playSound(event.sound as any);
+        }
+      }
+
       const statusTick = tickStatusEffects(dt);
       if (statusTick.hpDelta !== 0) {
         playerHealth.current = Math.max(

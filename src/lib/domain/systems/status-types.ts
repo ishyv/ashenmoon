@@ -15,6 +15,7 @@ export enum StatusId {
   Exhaustion = "exhaustion",
   Injured = "injured",
   Cut = "cut",
+  Hypothermia = "hypothermia",
 }
 
 /** A status currently affecting the player. */
@@ -116,6 +117,17 @@ export const STATUS_DEFINITIONS: Record<StatusId, StatusDefinition> = {
     expireMessage: "The sting fades.",
     pulseEverySec: 5,
     pulse: { hpDelta: -1 },
+  },
+  [StatusId.Hypothermia]: {
+    id: StatusId.Hypothermia,
+    label: "Hypothermia",
+    icon: "🥶",
+    applyMessage: "A biting chill sets in.",
+    pulseMessage: "You shiver violently.",
+    expireMessage: "Warmth returns to your limbs.",
+    pulseEverySec: 4,
+    pulse: { hpDelta: -1 },
+    modifiers: { moveSpeedMult: 0.8 },
   },
 };
 

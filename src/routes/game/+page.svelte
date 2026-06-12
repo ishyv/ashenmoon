@@ -23,6 +23,7 @@ import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
 import { dialogueState } from "$lib/domain/quests.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
+import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 
 let containerEl = $state<HTMLDivElement | null>(null);
 let engine     = $state<GameEngine | null>(null);
@@ -67,8 +68,24 @@ function toggleSkills() {
   showSkills ? overlayStack.close(OverlayId.Skills) : overlayStack.push(OverlayId.Skills);
 }
 
+let inventoryTab = $state<"stash" | "crafting" | "building">("stash");
+
 function toggleInventory() {
-  showInventory ? overlayStack.close(OverlayId.Inventory) : overlayStack.push(OverlayId.Inventory);
+  if (showInventory && inventoryTab === "stash") {
+    overlayStack.close(OverlayId.Inventory);
+  } else {
+    inventoryTab = "stash";
+    if (!showInventory) overlayStack.push(OverlayId.Inventory);
+  }
+}
+
+function toggleCrafting() {
+  if (showInventory && inventoryTab === "crafting") {
+    overlayStack.close(OverlayId.Inventory);
+  } else {
+    inventoryTab = "crafting";
+    if (!showInventory) overlayStack.push(OverlayId.Inventory);
+  }
 }
 
 function openSettings() {
@@ -126,6 +143,7 @@ $effect(() => {
 onMount(async () => {
   loadUiPreferences();
   loadGameState();
+  loadPanelPositions();
   if (!containerEl) return;
   const scenarioParam = new URLSearchParams(window.location.search).get("scenario") ?? undefined;
   activeScenarioId = scenarioParam ?? null;
@@ -205,6 +223,7 @@ onDestroy(() => {
 <svelte:window
   on:mousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
   on:keydown={handleGlobalKeyDown}
+  on:contextmenu={(e) => e.preventDefault()}
 />
 
 <div class="shell">
@@ -216,8 +235,11 @@ onDestroy(() => {
     <button class="settings-trigger-btn" onclick={toggleSkills} title="Open Skill Progression">
       skills
     </button>
-    <button class="settings-trigger-btn" onclick={toggleInventory} title="Open Stash Inventory">
+    <button class="settings-trigger-btn" class:active-scenario={showInventory && inventoryTab === "stash"} onclick={toggleInventory} title="Open Stash Inventory">
       stash
+    </button>
+    <button class="settings-trigger-btn" class:active-scenario={showInventory && inventoryTab === "crafting"} onclick={toggleCrafting} title="Open Crafting Panel">
+      craft
     </button>
     <button class="settings-trigger-btn" onclick={openSettings} title="Configure Controls">
       controls
@@ -251,12 +273,15 @@ onDestroy(() => {
     </div>
   </div>
 
-  {#if !uiPreferences.equipOnlyWithStash || showInventory}
-    <EquipmentPanel />
-  {/if}
+  <div class="left-panels-container">
+    {#if !uiPreferences.equipOnlyWithStash || showInventory}
+      <EquipmentPanel />
+    {/if}
+    <QuestTracker />
+  </div>
 
   {#if showInventory}
-    <InventoryGrid engine={engine} onClose={() => overlayStack.close(OverlayId.Inventory)} />
+    <InventoryGrid engine={engine} initialTab={inventoryTab} onClose={() => overlayStack.close(OverlayId.Inventory)} />
   {/if}
 
   <EnvironmentGauge />
@@ -306,7 +331,6 @@ onDestroy(() => {
   {/if}
 
   <DialogueBox />
-  <QuestTracker />
   <IntroOverlay />
 </div>
 
@@ -528,5 +552,16 @@ onDestroy(() => {
     pointer-events: none;
     user-select: none;
     z-index: 10;
+  }
+
+  .left-panels-container {
+    position: fixed;
+    top: 5rem;
+    left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    z-index: 90;
+    pointer-events: none;
   }
 </style>

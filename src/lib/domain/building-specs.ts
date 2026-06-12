@@ -84,6 +84,30 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     cost: { branch: 2, bark: 4 },
     stationId: "primitive_work_surface",
   },
+  lean_to: {
+    displayName: "lean-to",
+    description: "a crude shelter to rest and hide from the cold.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house1",
+    sprite: { w: 1, h: 1 },
+    cost: { branch: 4, leaves: 8 },
+  },
+  water_collector: {
+    displayName: "water collector",
+    description: "a crude vessel to passively collect rainwater.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house2",
+    sprite: { w: 1, h: 1 },
+    cost: { clay: 4, stick: 6 },
+  },
+  simple_barrier: {
+    displayName: "simple barrier",
+    description: "a basic protective barricade.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { branch: 3, grass_fiber: 2 },
+  },
 };
 
 /** Fallback for any type without an explicit spec (matches the old house1 default). */

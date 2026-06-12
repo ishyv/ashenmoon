@@ -453,6 +453,20 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.02, stackLimit: 50 },
   }),
+  dried_berries: Item({
+    id: itemId("dried_berries"),
+    name: "Dried Berries",
+    description: "Dried, preserved berries. Chewy and lasts much longer.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.03, stackLimit: 40 },
+    iconUrl: "/assets/icons/berries.png",
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(4)],
+    }),
+  ),
   clean_water: Item({
     id: itemId("clean_water"),
     name: "Clean Water",

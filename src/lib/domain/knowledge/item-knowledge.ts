@@ -14,7 +14,8 @@ export type KnowledgeProperty =
   | "flammable"
   | "perishable"
   | "heat_sensitive"
-  | "boilable";
+  | "boilable"
+  | "sharp";
 
 /** Item id -> the set of properties the player has learned about it. */
 export type PlayerKnowledge = Readonly<Record<string, ReadonlySet<KnowledgeProperty>>>;
@@ -80,6 +81,9 @@ function effectRestoresThirst(effect: KnowledgeEffect): boolean {
  */
 export function discoverableProperties(def: ItemDefinition): KnowledgeProperty[] {
   const props = new Set<KnowledgeProperty>();
+  if (def.id === "flint_shard") {
+    props.add("sharp");
+  }
   for (const trait of def.traits) {
     switch (trait.kind) {
       case "consumable":

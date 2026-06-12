@@ -89,4 +89,12 @@ describe("aggregateModifiers", () => {
     expect(mods.staminaRegenMult).toBeCloseTo(0.5 * 0.4);
     expect(mods.moveSpeedMult).toBeCloseTo(0.85);
   });
+
+  it("applies hypothermia modifiers", () => {
+    // Hypothermia: moveSpeedMult 0.8.
+    const list = applyStatus([], StatusId.Hypothermia, 60);
+    const mods = aggregateModifiers(list);
+    expect(mods.moveSpeedMult).toBeCloseTo(0.8);
+    expect(mods.staminaRegenMult).toBeCloseTo(1.0);
+  });
 });

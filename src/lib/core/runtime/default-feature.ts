@@ -55,8 +55,9 @@ const building: ComponentFactory = ({ component }) => {
   return {
     collider: { isSolid: true },
     interactable: spec.stationId
-      ? { name: spec.displayName, action: "refuel" }
+      ? { name: spec.displayName, action: "process" }
       : { name: spec.displayName, action: "gather" },
+    ...(spec.stationId ? { station: { stationId: spec.stationId } } : {}),
   };
 };
 

@@ -159,6 +159,10 @@ export function buildMapSystem(map: MapResource): void {
     bark_strip: 0,
     grass_patch: 0,
     moss_patch: 0,
+    berry_bush: 0,
+    mushroom_patch: 0,
+    clay_deposit: 0,
+    water_source: 0,
   };
   const pickupTargets: Record<string, number> = {
     stick_pickup: 10,
@@ -168,6 +172,10 @@ export function buildMapSystem(map: MapResource): void {
     bark_strip: 6,
     grass_patch: 8,
     moss_patch: 5,
+    berry_bush: 5,
+    mushroom_patch: 5,
+    clay_deposit: 3,
+    water_source: 3,
   };
   const pickupKinds = Object.keys(pickupTargets);
   const hasNeededPickups = () => pickupKinds.some((kind) => pickupCounts[kind] < pickupTargets[kind]);

@@ -376,6 +376,7 @@ function clearSlot(action: ActionId, slotIndex: number): void {
     border-radius: 8px;
     width: 90%;
     max-width: 520px;
+    max-height: 90vh;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
     display: flex;
     flex-direction: column;
