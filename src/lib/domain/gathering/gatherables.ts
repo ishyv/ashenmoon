@@ -1,6 +1,8 @@
 import type { ToolKind } from "./gather-system";
+import type { FocusedGatherDifficulty } from "./focused-gather/focused-gather-types";
 import { SkillKey } from "$lib/domain/game-events";
 import { StatusId } from "$lib/domain/systems/status-types";
+import { CollisionFootprints, type CollisionShape } from "$lib/domain/collision";
 
 export type GatherInteractionKind = "pickup" | "repeated_action" | "liquid" | "harvest";
 export type GatherableRenderKind =
@@ -19,6 +21,13 @@ export type GatherableRenderKind =
   | "moss";
 export type GatherableSolidKind = "none" | "tree" | "rock";
 export type GatherableSyncAction = "forest" | "mine";
+
+/**
+ * Key naming the strike sound a node makes when worked. The core audio layer
+ * owns the key -> synthesizer mapping (see `playGatherSound`); `domain/` only
+ * declares intent. Nodes that omit it fall back to the metallic "strike".
+ */
+export type GatherSoundKey = "chop" | "strike" | "dig";
 
 export interface GatherYield {
   itemId: string;
@@ -49,7 +58,12 @@ export interface GatherableDefinition {
   depletion?: DepletionRule;
   renderKind: GatherableRenderKind;
   solidKind: GatherableSolidKind;
+  collision?: CollisionShape;
   skillKey?: SkillKey.Lumberjacking | SkillKey.Mining;
+  /** Strike sound when worked; defaults to "strike" (see `GatherSoundKey`). */
+  gatherSound?: GatherSoundKey;
+  /** Focused Gathering tier override; derived from render/solid kind when absent. */
+  focusedGatherDifficulty?: FocusedGatherDifficulty;
   syncAction?: GatherableSyncAction;
   syncLocationId?: string;
   feedback: {
@@ -188,11 +202,13 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     displayName: "Oak Tree",
     interactionKind: "repeated_action",
     requiredToolKind: "axe",
+    gatherSound: "chop",
     baseDurationSec: 0.6,
     yieldTable: [{ itemId: "oak_wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree",
     solidKind: "tree",
+    collision: { solid: true, footprint: CollisionFootprints.tree },
     skillKey: SkillKey.Lumberjacking,
     syncAction: "forest",
     syncLocationId: "oak_forest",
@@ -203,11 +219,13 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     displayName: "Crimson Ash Tree",
     interactionKind: "repeated_action",
     requiredToolKind: "axe",
+    gatherSound: "chop",
     baseDurationSec: 0.6,
     yieldTable: [{ itemId: "spruce_wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree_crimson",
     solidKind: "tree",
+    collision: { solid: true, footprint: CollisionFootprints.tree },
     skillKey: SkillKey.Lumberjacking,
     syncAction: "forest",
     syncLocationId: "crimson_grove",
@@ -218,11 +236,13 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     displayName: "Spore Mangrove Tree",
     interactionKind: "repeated_action",
     requiredToolKind: "axe",
+    gatherSound: "chop",
     baseDurationSec: 0.6,
     yieldTable: [{ itemId: "palm_wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree_fungal",
     solidKind: "tree",
+    collision: { solid: true, footprint: CollisionFootprints.tree },
     skillKey: SkillKey.Lumberjacking,
     syncAction: "forest",
     syncLocationId: "fungal_mire",
@@ -233,11 +253,13 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     displayName: "Frost Pine Tree",
     interactionKind: "repeated_action",
     requiredToolKind: "axe",
+    gatherSound: "chop",
     baseDurationSec: 0.6,
     yieldTable: [{ itemId: "pine_wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree_frost",
     solidKind: "tree",
+    collision: { solid: true, footprint: CollisionFootprints.tree },
     skillKey: SkillKey.Lumberjacking,
     syncAction: "forest",
     syncLocationId: "frostbane_peak",
@@ -253,6 +275,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     depletion: { hp: 15 },
     renderKind: "rock",
     solidKind: "rock",
+    collision: { solid: true, footprint: CollisionFootprints.rock },
     skillKey: SkillKey.Mining,
     syncAction: "mine",
     syncLocationId: "stone_mine",
@@ -268,6 +291,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     depletion: { hp: 15 },
     renderKind: "rock_copper",
     solidKind: "rock",
+    collision: { solid: true, footprint: CollisionFootprints.rock },
     skillKey: SkillKey.Mining,
     syncAction: "mine",
     syncLocationId: "copper_mine",
@@ -283,6 +307,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     depletion: { hp: 15 },
     renderKind: "rock_iron",
     solidKind: "rock",
+    collision: { solid: true, footprint: CollisionFootprints.rock },
     skillKey: SkillKey.Mining,
     syncAction: "mine",
     syncLocationId: "iron_mine",
@@ -298,6 +323,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     depletion: { hp: 15 },
     renderKind: "rock_toxic",
     solidKind: "rock",
+    collision: { solid: true, footprint: CollisionFootprints.rock },
     skillKey: SkillKey.Mining,
     syncAction: "mine",
     syncLocationId: "copper_mine",
@@ -313,7 +339,9 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     depletion: { hp: 15 },
     renderKind: "rock",
     solidKind: "rock",
+    collision: { solid: true, footprint: CollisionFootprints.rock },
     skillKey: SkillKey.Mining,
+    focusedGatherDifficulty: "hard",
     syncAction: "mine",
     syncLocationId: "silver_mine",
     feedback: { start: "frosted silver glints beneath the stone.", success: "silver ore breaks free." },
@@ -322,11 +350,13 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     id: "clay_deposit",
     displayName: "Clay Deposit",
     interactionKind: "repeated_action",
+    gatherSound: "dig",
     baseDurationSec: 0.7,
     yieldTable: [{ itemId: "clay", quantity: 1 }],
     depletion: { hp: 8 },
     renderKind: "rock",
     solidKind: "rock",
+    collision: { solid: true, footprint: CollisionFootprints.rock },
     skillKey: SkillKey.Mining,
     feedback: { start: "you dig into the wet clay.", success: "you gather clay." },
   },

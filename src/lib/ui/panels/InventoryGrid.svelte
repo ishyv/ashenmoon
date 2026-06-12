@@ -4,7 +4,7 @@ import { gameState } from "$lib/state/game-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
 import { triggerQuestEvent } from "$lib/domain/quests.svelte";
-import { playCraftSound } from "$lib/core/audio-synthesis";
+import { playSound } from "$lib/audio/audio-engine";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system";
 import { matchExperiment } from "$lib/domain/crafting/experimental";
@@ -90,7 +90,7 @@ async function craftItem(recipe: CraftRecipe): Promise<void> {
   }
 
   applyRpgState(await res.json());
-  playCraftSound();
+  playSound("craft");
   learnRecipe(recipe.id);
   triggerQuestEvent("craft", recipe.id);
 }

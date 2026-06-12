@@ -2,7 +2,7 @@
 import { activeQuests, dialogueState } from "$lib/domain/quests.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { devGiveItem } from "$lib/state/dev-rpg-actions";
-import { playPickupSound, playCraftSound } from "$lib/core/audio-synthesis";
+import { playSound } from "$lib/audio/audio-engine";
 import { learnRecipe } from "$lib/domain/crafting.svelte";
 
 // Typings
@@ -139,7 +139,7 @@ function handleAction() {
       if (axeObj.current >= axeObj.target) axeObj.completed = true;
     }
 
-    playPickupSound();
+    playSound("pickup");
     closeDialog();
   } else if (activeQuests.currentQuestId === "scavenger_tools") {
     const quest = activeQuests.quests.scavenger_tools;
@@ -157,7 +157,7 @@ function handleAction() {
 
       // Give reward
       devGiveItem("copper_ingot", 1);
-      playCraftSound();
+      playSound("craft");
 
       // Unlock next quest
       activeQuests.currentQuestId = "securing_perimeter";
@@ -178,7 +178,7 @@ function handleAction() {
 
       // Give reward
       devGiveItem("iron_ingot", 1);
-      playCraftSound();
+      playSound("craft");
 
       // Unlock next quest: foundations
       activeQuests.currentQuestId = "outpost_foundations";
@@ -198,7 +198,7 @@ function handleAction() {
 
       // Reward Copper Axe
       devGiveItem("copper_axe", 1);
-      playCraftSound();
+      playSound("craft");
 
       activeQuests.currentQuestId = "outpost_sanctuary";
     }
@@ -217,7 +217,7 @@ function handleAction() {
 
       // Reward Copper Pickaxe
       devGiveItem("copper_pickaxe", 1);
-      playCraftSound();
+      playSound("craft");
 
       activeQuests.currentQuestId = "completed_all";
     }

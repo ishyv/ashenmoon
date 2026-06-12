@@ -38,6 +38,8 @@ let {
           <div class="item-visual">
             {#if iconUrl}
               <img src={iconUrl} alt={meta?.name ?? itemId} class="item-icon-img" />
+            {:else if meta?.icon}
+              <span class="item-icon-emoji">{meta.icon}</span>
             {:else}
               <span>{(meta?.name ?? itemId).slice(0, 2).toLowerCase()}</span>
             {/if}
@@ -109,6 +111,11 @@ let {
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+
+  .item-icon-emoji {
+    font-size: 1.4rem;
+    line-height: 1;
   }
 
   .qty-badge,

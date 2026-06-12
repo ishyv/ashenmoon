@@ -20,7 +20,7 @@ import {
 import { emitPlayerFeedback, emitPlayerHpDelta } from "$lib/ui/player-feedback";
 import { triggerQuestEvent } from "$lib/domain/quests.svelte";
 import { GameEvent } from "$lib/domain/game-events";
-import { playPickupSound } from "$lib/core/audio-synthesis";
+import { playSound } from "$lib/audio/audio-engine";
 import { learnAbout } from "$lib/domain/knowledge.svelte";
 import { propertiesFromConsume } from "$lib/domain/knowledge/knowledge-unlock";
 
@@ -58,7 +58,7 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
   if (!gameState.rpg.inventory) return false;
   setRpgInventory(removeStackQty(gameState.rpg.inventory, itemId, 1));
 
-  playPickupSound();
+  playSound("consume");
   emitPlayerFeedback(
     outcome.verb === "drink" ? `You drink the ${def.name.toLowerCase()}.` : `You eat the ${def.name.toLowerCase()}.`,
     "info",

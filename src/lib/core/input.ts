@@ -17,13 +17,27 @@ export class InputResource {
   public mouseWorld = { x: 0, y: 0 };
   public mouseScreen = { x: 0, y: 0 };
   public dashTriggered = false;
-  public superGatherTriggered = false;
+  public focusedGatherTriggered = false;
   public pendingInteract = false;
-  /** Set on left-click; consumed by the combat system as a melee swing. */
+  /** Set on short left-click (< 800ms hold); consumed by the combat system as a melee swing. */
   public pendingAttack = false;
+  /** Set when mouse is released after a charge hold (>= 800ms). */
+  public pendingFellSweep = false;
+  /** 0–1 charge level captured at mouseup. */
+  public fellSweepCharge = 0;
+  /** True while the left mouse button is held down. */
+  public isMouseHeld = false;
+  private mouseDownAt = 0;
 
   private lastSprintPressTime = 0;
   private lastHarvestPressTime = 0;
+
+  /** Current charge progress (0–1) while holding. Drives VFX ring each frame. */
+  public getChargeProgress(): number {
+    if (!this.isMouseHeld) return 0;
+    const heldMs = performance.now() - this.mouseDownAt;
+    return Math.min(1.0, Math.max(0, (heldMs - 200) / 2800));
+  }
 
   constructor() {
     this.loadBindings();
@@ -57,12 +71,12 @@ export class InputResource {
         this.lastSprintPressTime = now;
       }
 
-      // Double-tap HARVEST detection (Super-Gather)
+      // Double-tap HARVEST detection (Focused Gathering)
       const harvestKeys = this.bindings[InputAction.Harvest] ?? [];
       if (harvestKeys.includes(keyName)) {
         const now = performance.now();
         if (now - this.lastHarvestPressTime < 250) {
-          this.superGatherTriggered = true;
+          this.focusedGatherTriggered = true;
         }
         this.lastHarvestPressTime = now;
       }
@@ -84,9 +98,23 @@ export class InputResource {
     const onMouseDown = (e: MouseEvent): void => {
       if (devConsole.open) return;
       if (e.button === 0) {
-        // Left-click swings. Gathering/interacting is the E key (HARVEST); the
-        // building-placement path reads this flag directly to place on click.
-        this.pendingAttack = true;
+        this.isMouseHeld = true;
+        this.mouseDownAt = performance.now();
+      }
+    };
+
+    const onMouseUp = (e: MouseEvent): void => {
+      if (e.button === 0 && this.isMouseHeld) {
+        this.isMouseHeld = false;
+        const heldMs = performance.now() - this.mouseDownAt;
+        if (heldMs < 200) {
+          // Fast click — normal swing.
+          this.pendingAttack = true;
+        } else {
+          // Any hold >= 200ms fires Fell Sweep (weakest at 200ms, max at 3000ms).
+          this.pendingFellSweep = true;
+          this.fellSweepCharge = Math.min(1.0, (heldMs - 200) / 2800);
+        }
       }
     };
 
@@ -106,6 +134,7 @@ export class InputResource {
     window.addEventListener("keyup", onKeyUp);
     canvas.addEventListener("mousemove", onMouseMove);
     canvas.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mouseup", onMouseUp);
     canvas.addEventListener("contextmenu", onContextMenuEvent);
 
     // Return cleanup function
@@ -114,6 +143,7 @@ export class InputResource {
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mouseup", onMouseUp);
       canvas.removeEventListener("contextmenu", onContextMenuEvent);
     };
   }

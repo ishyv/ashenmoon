@@ -18,6 +18,8 @@ interface ItemBaseInput {
   rarity: Rarity;
   category: Category;
   physical?: Partial<ItemPhysicalProperties>;
+  iconUrl?: string;
+  icon?: string;
 }
 
 /**
@@ -42,6 +44,8 @@ export function Item(base: ItemBaseInput): ItemDefinition & {
       stackLimit: base.physical?.stackLimit,
     },
     traits: [],
+    ...(base.iconUrl !== undefined && { iconUrl: base.iconUrl }),
+    ...(base.icon !== undefined && { icon: base.icon }),
   };
 
   return {

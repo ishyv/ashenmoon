@@ -110,10 +110,11 @@ function normalizeSkills(value: unknown): RpgPlayerState["skills"] {
   if (!isRecord(value)) return defaults;
   for (const key of Object.keys(defaults) as (keyof RpgPlayerState["skills"])[]) {
     const skill = value[key];
-    if (!isRecord(skill)) continue;
-    const level = typeof skill.level === "number" && Number.isFinite(skill.level) ? skill.level : defaults[key].level;
-    const xp = typeof skill.xp === "number" && Number.isFinite(skill.xp) ? skill.xp : defaults[key].xp;
-    const nextXp = typeof skill.nextXp === "number" && Number.isFinite(skill.nextXp) ? skill.nextXp : defaults[key].nextXp;
+    const defaultVal = defaults[key];
+    if (!isRecord(skill) || !defaultVal) continue;
+    const level = typeof skill.level === "number" && Number.isFinite(skill.level) ? skill.level : defaultVal.level;
+    const xp = typeof skill.xp === "number" && Number.isFinite(skill.xp) ? skill.xp : defaultVal.xp;
+    const nextXp = typeof skill.nextXp === "number" && Number.isFinite(skill.nextXp) ? skill.nextXp : defaultVal.nextXp;
     defaults[key] = { level, xp, nextXp };
   }
   return defaults;
@@ -174,7 +175,8 @@ export function createDefaultSkills(): RpgPlayerState["skills"] {
     lumberjacking: { level: 1, xp: 0, nextXp: 100 },
     mining: { level: 1, xp: 0, nextXp: 100 },
     evade: { level: 1, xp: 0, nextXp: 100 },
-    superGather: { level: 1, xp: 0, nextXp: 100 },
+    fellSweep: { level: 1, xp: 0, nextXp: 100 },
+    kiteCombo: { level: 1, xp: 0, nextXp: 100 },
   };
 }
 

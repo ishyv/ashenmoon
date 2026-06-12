@@ -1,5 +1,5 @@
 /**
- * Stamina: the central resource that sprint, dash, and super-gather will all
+ * Stamina: the central resource that sprint, dash, and focused gathering all
  * draw on. Reactive ($state) so the HUD bar tracks it without polling — the
  * engine ticks regen each frame and actions call `spendStamina()`. The
  * "configurable parameters" from the mechanics spec live in `staminaConfig` and

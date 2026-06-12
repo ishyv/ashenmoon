@@ -52,18 +52,3 @@ export function gatherInterval(baseInterval: number, skillLevel: number): number
   const levels = Math.max(0, skillLevel - 1);
   return Math.max(MIN_GATHER_INTERVAL, baseInterval * Math.pow(GATHER_SKILL_FACTOR, levels));
 }
-
-/** Units yielded per swing. Super-gather doubles output. */
-export function gatherQuantity(isSuper: boolean): number {
-  return isSuper ? 2 : 1;
-}
-
-/** Stamina cost of a super-gather, cheaper at higher SuperGather skill (min 15). */
-export function superGatherCost(baseCost: number, sgLevel: number): number {
-  return Math.max(15, baseCost - (sgLevel - 1) * 2);
-}
-
-/** Cooldown between super-gathers, shorter at higher SuperGather skill (min 0.5s). */
-export function superGatherCooldown(baseCooldown: number, sgLevel: number): number {
-  return Math.max(0.5, baseCooldown - (sgLevel - 1) * 0.15);
-}

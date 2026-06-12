@@ -5,7 +5,7 @@
  * by the *kind* of the last change, so two decrease idioms read differently:
  *   - "drain": slow, smooth unfill (continuous costs like sprint).
  *   - "burst": fast snap + a scale/flash pop, "exploding to disappear" (instant
- *     chunk costs like dash / super-gather).
+ *     chunk costs like dash / focused gathering).
  * Increases (regen) just follow smoothly at the idle speed.
  */
 interface Props {

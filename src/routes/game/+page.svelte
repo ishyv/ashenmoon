@@ -19,6 +19,9 @@ import { activeEnvironment, setEnvironment } from "$lib/state/environment-state.
 import { uiPreferences, loadUiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { markGameStateHydrated } from "$lib/state/game-state.svelte";
+import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
+import { dialogueState } from "$lib/domain/quests.svelte";
+import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 
 let { data } = $props();
 
@@ -27,9 +30,13 @@ let engine     = $state<GameEngine | null>(null);
 let notify     = $state<string | null>(null);
 let coords     = $state<{ gx: number; gy: number } | null>(null);
 let lookAt     = $state<string | null>(null);
-let showSettings = $state(false);
-let showInventory = $state(false);
-let showSkills    = $state(false);
+// Panel visibility is authoritative in the overlay stack; derive from it so
+// that Escape always closes the right panel regardless of open order.
+const showSettings  = $derived(overlayStack.has(OverlayId.Settings));
+const showInventory = $derived(overlayStack.has(OverlayId.Inventory));
+const showSkills    = $derived(overlayStack.has(OverlayId.Skills));
+const showScenario  = $derived(overlayStack.has(OverlayId.Scenario));
+let activeScenarioId = $state<string | null>(null);
 let contextMenu   = $state<{ name: string; action: string; x: number; y: number } | null>(null);
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 let envInterval: ReturnType<typeof setInterval> | null = null;
@@ -58,33 +65,45 @@ function closeContextMenu() {
 }
 
 function toggleSkills() {
-  showSkills = !showSkills;
+  showSkills ? overlayStack.close(OverlayId.Skills) : overlayStack.push(OverlayId.Skills);
 }
 
 function toggleInventory() {
-  showInventory = !showInventory;
+  showInventory ? overlayStack.close(OverlayId.Inventory) : overlayStack.push(OverlayId.Inventory);
 }
 
 function openSettings() {
-  showSettings = true;
+  overlayStack.push(OverlayId.Settings);
+}
+
+function toggleScenario() {
+  showScenario ? overlayStack.close(OverlayId.Scenario) : overlayStack.push(OverlayId.Scenario);
 }
 
 function handleGlobalKeyDown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    if (devConsole.open) return;
-
-    if (showSettings) {
-      showSettings = false;
-      e.preventDefault();
-    } else if (showSkills) {
-      showSkills = false;
-      e.preventDefault();
-    } else if (showInventory) {
-      showInventory = false;
-      e.preventDefault();
-    }
+  if (e.key === "Escape" && !devConsole.open && !overlayStack.isEmpty) {
+    overlayStack.popTop();
+    e.preventDefault();
   }
 }
+
+// --- Dialogue ↔ stack sync -----------------------------------------------
+// DialogueBox owns its open state in dialogueState.activeNpc (domain module).
+// These two effects bridge it into the overlay stack so Escape works correctly.
+
+// When dialogue opens via NPC interaction, push it onto the stack.
+// When it closes via its own button, remove it from the stack.
+$effect(() => {
+  if (dialogueState.activeNpc) overlayStack.push(OverlayId.Dialogue);
+  else                         overlayStack.close(OverlayId.Dialogue);
+});
+
+// When Escape pops Dialogue off the stack, honour it by closing the dialogue.
+$effect(() => {
+  if (!overlayStack.has(OverlayId.Dialogue) && dialogueState.activeNpc) {
+    dialogueState.activeNpc = null;
+  }
+});
 
 function handleBindingsUpdate(newBindings: Bindings) {
   engine?.updateBindings(newBindings);
@@ -112,11 +131,14 @@ onMount(async () => {
   }
   markGameStateHydrated();
   if (!containerEl) return;
+  const scenarioParam = new URLSearchParams(window.location.search).get("scenario") ?? undefined;
+  activeScenarioId = scenarioParam ?? null;
   engine = new GameEngine({
     container: containerEl,
     onInteract: handleInteract,
     onHudUpdate,
     onContextMenu: handleContextMenu,
+    scenarioId: scenarioParam,
   });
   await engine.init();
   registerDevCommands(engine);
@@ -211,7 +233,14 @@ onDestroy(() => {
     <button class="settings-trigger-btn" onclick={openSettings} title="Configure Controls">
       controls
     </button>
+    <button class="settings-trigger-btn" class:active-scenario={activeScenarioId !== null} onclick={toggleScenario} title="Scenario tools">
+      scenario
+    </button>
   </div>
+
+  {#if activeScenarioId}
+    <div class="scenario-badge">scenario: {activeScenarioId}</div>
+  {/if}
 
   <div class="hud-corner">
     {#if lookAt}
@@ -238,7 +267,7 @@ onDestroy(() => {
   {/if}
 
   {#if showInventory}
-    <InventoryGrid engine={engine} onClose={() => (showInventory = false)} />
+    <InventoryGrid engine={engine} onClose={() => overlayStack.close(OverlayId.Inventory)} />
   {/if}
 
   <EnvironmentGauge />
@@ -255,13 +284,13 @@ onDestroy(() => {
 
   {#if showSettings}
     <InputConfigHub
-      onClose={() => (showSettings = false)}
+      onClose={() => overlayStack.close(OverlayId.Settings)}
       onUpdate={handleBindingsUpdate}
     />
   {/if}
 
   {#if showSkills}
-    <SkillTreePanel onClose={() => (showSkills = false)} />
+    <SkillTreePanel onClose={() => overlayStack.close(OverlayId.Skills)} />
   {/if}
 
   {#if contextMenu}
@@ -277,6 +306,14 @@ onDestroy(() => {
       <button class="ctx-item" role="menuitem" onclick={closeContextMenu}>inspect</button>
       <button class="ctx-item ctx-close" role="menuitem" onclick={closeContextMenu}>close</button>
     </div>
+  {/if}
+
+  {#if showScenario}
+    <ScenarioPanel
+      {engine}
+      {activeScenarioId}
+      onClose={() => overlayStack.close(OverlayId.Scenario)}
+    />
   {/if}
 
   <DialogueBox />
@@ -484,5 +521,23 @@ onDestroy(() => {
     border-top: 1px solid rgba(255, 255, 255, 0.07);
     margin-top: 0.15rem;
     color: rgba(255, 255, 255, 0.35);
+  }
+
+  .settings-trigger-btn.active-scenario {
+    border-color: rgba(255, 220, 120, 0.6);
+    background: rgba(255, 220, 120, 0.12);
+  }
+
+  .scenario-badge {
+    position: absolute;
+    top: 3.7rem;
+    right: 1.1rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.65rem;
+    color: rgba(255, 220, 120, 0.55);
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    user-select: none;
+    z-index: 10;
   }
 </style>

@@ -31,7 +31,7 @@ export interface Command {
   name: string;
   /** one-line usage shown by `help`, e.g. "tp <gx> <gy> : teleport player". */
   help: string;
-  run: (args: string[]) => string;
+  run: (args: string[]) => string | Promise<string>;
 }
 
 /** Newest-line-last; capped so a long session can't grow unbounded. */
@@ -102,7 +102,7 @@ class DevConsole {
    * Parses `name arg arg…`, echoes it, and dispatches. Whitespace-only input is
    * ignored. Unknown commands report rather than throw — this is a REPL.
    */
-  run(input: string): void {
+  async run(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed) return;
     this.log(`> ${trimmed}`, "echo");
@@ -115,8 +115,12 @@ class DevConsole {
       return;
     }
 
-    const out = cmd.run(args);
-    if (out) this.log(out);
+    try {
+      const out = await cmd.run(args);
+      if (out) this.log(out);
+    } catch (error) {
+      this.log(error instanceof Error ? error.message : String(error), "error");
+    }
   }
 
   private notify(): void {

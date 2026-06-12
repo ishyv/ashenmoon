@@ -44,6 +44,8 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
       <div class="inspect-visual">
         {#if meta.iconUrl}
           <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+        {:else if meta.icon}
+          <span class="inspect-icon-emoji">{meta.icon}</span>
         {:else}
           <span>{meta.name.slice(0, 2).toLowerCase()}</span>
         {/if}
@@ -141,6 +143,11 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
     border-radius: var(--inv-radius-sm);
     background: var(--inv-surface-soft);
     font-weight: 700;
+  }
+
+  .inspect-icon-emoji {
+    font-size: 1.8rem;
+    line-height: 1;
   }
 
   .item-icon-img {

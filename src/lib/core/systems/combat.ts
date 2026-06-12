@@ -16,11 +16,26 @@
  */
 
 import type { World } from "miniplex";
+import { Graphics } from "pixi.js";
 import type { AnimatedSprite, Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map";
-import { collidesWithSolid } from "$lib/core/systems/movement";
+import { collidesWithSolid, type MovementResource } from "$lib/core/systems/movement";
 import type { InputResource } from "$lib/core/input";
+import { InputAction } from "$lib/domain/game-events";
+import {
+  type DirectionalMomentumComboState,
+  type DirectionalMomentumComboConfig,
+  DEFAULT_DIRECTIONAL_MOMENTUM_COMBO_CONFIG,
+  updateDirectionalMomentumCombo,
+  processDirectionalMomentumStrike,
+} from "./directional-momentum-combo";
+import {
+  updateKiteCombo,
+  checkKiteComboTrigger,
+  applyKiteComboFinisher,
+  handleKiteComboHit,
+} from "./kite-combo";
 import {
   type VFXResource,
   flashEntity,
@@ -30,17 +45,18 @@ import {
   triggerCameraShake,
 } from "$lib/core/vfx";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
-import {
-  playChopSound,
-  playClinkSound,
-  playFallSound,
-} from "$lib/core/audio-synthesis";
+import { playSound } from "$lib/audio/audio-engine";
 import { Colors } from "$lib/utils/colors";
+import { gameState } from "$lib/state/game-state.svelte";
+import { PLAYER_BODY } from "$lib/domain/collision";
+
+export { trackMovementCombo } from "./kite-combo";
+export { fellSweepSystem } from "./fell-sweep";
 
 /** Generic body half-extents used for knockback collision (feet-anchored). */
-const BODY_HX = TILE * 0.34;
-const BODY_HY = TILE * 0.28;
-const BODY_CY = TILE * 0.7;
+const BODY_HX = PLAYER_BODY.hx;
+const BODY_HY = PLAYER_BODY.hy;
+const BODY_CY = PLAYER_BODY.cy;
 
 /**
  * Player swing tuning + shared combat constants. Every value is a designer knob;
@@ -81,7 +97,38 @@ export class CombatConfig {
 /** Live, per-run combat state owned by the engine. */
 export class CombatResource {
   public attackCooldownTimer = 0;
+  public swingActiveTimer = 0;
+  public fellSweepCooldownTimer = 0;
   public inCombatTimer = 0;
+  /**
+   * Recent significant movement direction changes, oldest first (max 3).
+   * Used to detect the A → -A → A footwork pattern that triggers the thrust combo.
+   */
+  public movePhases: { x: number; y: number }[] = [];
+  /** Last recorded movement direction — used to detect phase transitions. */
+  public lastMoveVec: { x: number; y: number } | null = null;
+  /** Seconds until the phase history expires due to inactivity. */
+  public comboResetTimer = 0;
+  static readonly COMBO_WINDOW = 1.5;
+  public kiteStacks = 0;
+  public kiteStacksDecayTimer = 0;
+  public kiteParticleTimer = 0;
+  public currentTimeMs = 0;
+  public directionalMomentumState: DirectionalMomentumComboState = {
+    isActive: false,
+    lockedDirection: null,
+    currentStacks: 0,
+    validStepCount: 0,
+    lastStepAtMs: 0,
+    lastAttackAtMs: 0,
+    currentTimeMs: 0,
+    lastMoveInputDirection: null,
+    lastMoveInputTime: 0,
+    lastEquippedWeaponId: null,
+    overloadAttackSpeedPenaltyPct: 0,
+    overloadDebuffTimer: 0,
+  };
+  public directionalMomentumConfig: DirectionalMomentumComboConfig = { ...DEFAULT_DIRECTIONAL_MOMENTUM_COMBO_CONFIG };
 }
 
 /**
@@ -99,13 +146,39 @@ export function applyDamage(
   config: CombatConfig,
   vfx: VFXResource,
   entityLayer: Container,
+  combat?: CombatResource,
 ): boolean {
   const h = target.health;
   if (!h || h.invulnTimer > 0 || h.current <= 0) return false;
 
+  const isPlayer = h.faction === "player";
+  if (isPlayer && combat && combat.kiteStacks > 0) {
+    amount = Math.round(amount * (1 + 0.15 * combat.kiteStacks));
+    spawnEnvFloatingText(
+      vfx,
+      "⚠️ Focus Broken!",
+      Colors.ui.error,
+      target.position!,
+      entityLayer,
+    );
+    combat.kiteStacks = 0;
+    combat.kiteStacksDecayTimer = 0;
+  }
+
   h.current = Math.max(0, h.current - amount);
 
-  if (target.position && knockbackStrength > 0) {
+  let shouldApplyKnockback = true;
+  if (!isPlayer && combat) {
+    const dmState = combat.directionalMomentumState;
+    if (dmState) {
+      const baseChance = 100;
+      const bonusChance = dmState.isActive ? dmState.currentStacks * (combat.directionalMomentumConfig?.stackKnockbackChanceBonusPct ?? 3) : 0;
+      const roll = Math.random() * 100;
+      shouldApplyKnockback = roll < (baseChance + bonusChance);
+    }
+  }
+
+  if (target.position && knockbackStrength > 0 && shouldApplyKnockback) {
     const tcx = target.position.x + TILE / 2;
     const tcy = target.position.y + TILE / 2;
     const dx = tcx - sourceX;
@@ -122,7 +195,6 @@ export function applyDamage(
     }
   }
 
-  const isPlayer = h.faction === "player";
   if (isPlayer) h.invulnTimer = config.playerIFrames;
 
   // --- feedback: flash, damage number, impact shake, hurt/hit sfx ---
@@ -146,8 +218,8 @@ export function applyDamage(
     isPlayer ? Colors.combat.playerDmgNum : Colors.combat.enemyDmgNum,
   );
   triggerCameraShake(vfx, isPlayer ? 4 : 2.5, 0.12);
-  if (isPlayer) playFallSound();
-  else playClinkSound();
+  const hitPos = { x: fx, y: (target.position?.y ?? sourceY) + TILE / 2 };
+  playSound(isPlayer ? "combat.hit.player" : "combat.hit.enemy", { position: hitPos });
 
   return h.current <= 0;
 }
@@ -242,28 +314,49 @@ export function playerAttackSystem(
   playerSprite: AnimatedSprite,
   setPlayerAnim: (state: "idle" | "run" | "attack") => void,
   entityLayer: Container,
-  isDashing: boolean,
+  movement: MovementResource,
   isPlacementMode: boolean,
   onEnemyKilled: (enemy: Entity) => void,
 ): void {
+  updateDirectionalMomentumCombo(
+    combat,
+    inputs,
+    combat.directionalMomentumConfig,
+    movement,
+    player,
+    dt,
+    vfx,
+    entityLayer
+  );
+
+  if (combat.swingActiveTimer > 0) {
+    combat.swingActiveTimer -= dt;
+    if (player.position) {
+      const pcx = player.position.x + TILE / 2;
+      const ax = inputs.mouseWorld.x - pcx;
+      playerSprite.scale.x =
+        ax < 0 ? -Math.abs(playerSprite.scale.x) : Math.abs(playerSprite.scale.x);
+    }
+  }
+
   if (combat.attackCooldownTimer > 0) combat.attackCooldownTimer -= dt;
   if (combat.inCombatTimer > 0) combat.inCombatTimer -= dt;
+  if (combat.comboResetTimer > 0) {
+    combat.comboResetTimer -= dt;
+    if (combat.comboResetTimer <= 0) {
+      combat.movePhases = [];
+      combat.lastMoveVec = null;
+    }
+  }
+
+  // Update Kite Combo timers and foot embers/flames
+  updateKiteCombo(combat, player, vfx, entityLayer, dt);
 
   if (!inputs.pendingAttack) return;
   inputs.pendingAttack = false;
 
-  // Failure states: placement mode / mid-dash / on cooldown / too tired.
-  if (isPlacementMode || isDashing || combat.attackCooldownTimer > 0) return;
-  if (stamina.current < config.minStamina) {
-    spawnEnvFloatingText(
-      vfx,
-      "⚡️ too winded to swing",
-      Colors.ui.error,
-      player.position!,
-      entityLayer,
-    );
-    return;
-  }
+  // Failure states: placement mode / mid-dash / on cooldown.
+  if (isPlacementMode || (movement && movement.isDashing) || combat.attackCooldownTimer > 0) return;
 
   const pos = player.position!;
   const pcx = pos.x + TILE / 2;
@@ -275,29 +368,97 @@ export function playerAttackSystem(
   ay /= len;
   const angle = Math.atan2(ay, ax);
 
-  combat.attackCooldownTimer = config.cooldown;
-  combat.inCombatTimer = config.inCombatTimeout;
-  spendStamina(config.staminaCost, "burst");
+  // Check if Kite Combo is triggered
+  const isKiteCombo = checkKiteComboTrigger(combat);
 
-  // Face + animate + swing VFX + whoosh.
+  let effectiveReach = config.reach;
+  let effectiveHalfAngle = config.arcHalfAngle;
+  let effectiveDamage = config.damage;
+  let arcColor: number = Colors.combat.slashArc;
+  let useStaminaCost = config.staminaCost;
+
+  if (isKiteCombo) {
+    const finisher = applyKiteComboFinisher(combat, config, player, vfx, entityLayer, angle, pcx, pcy);
+    effectiveReach = finisher.effectiveReach;
+    effectiveHalfAngle = finisher.effectiveHalfAngle;
+    effectiveDamage = finisher.effectiveDamage;
+    useStaminaCost = finisher.useStaminaCost;
+    arcColor = finisher.arcColor;
+  } else {
+    // Reset stacks on standard attack
+    combat.kiteStacks = 0;
+    combat.kiteStacksDecayTimer = 0;
+  }
+
+  // Refuse swing if stamina is too low
+  if (stamina.current < (isKiteCombo ? useStaminaCost : config.minStamina)) {
+    spawnEnvFloatingText(
+      vfx,
+      isKiteCombo ? "⚡️ too winded to kite" : "⚡️ too winded to swing",
+      Colors.ui.error,
+      player.position!,
+      entityLayer,
+    );
+    return;
+  }
+
+  // Directional Momentum Combo application
+  const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
+  const currentWeaponId = currentWeapon
+    ? typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId
+    : null;
+
+  const momentumDamageMult = processDirectionalMomentumStrike(
+    combat,
+    inputs,
+    combat.directionalMomentumConfig,
+    movement,
+    player,
+    vfx,
+    entityLayer,
+    angle,
+    currentWeaponId
+  );
+  
+  effectiveDamage = Math.round(effectiveDamage * momentumDamageMult);
+
+  if (combat.directionalMomentumState.isActive && !isKiteCombo) {
+    const count = combat.directionalMomentumState.currentStacks;
+    const colors = [
+      0x06b6d4, // Cyan (stack 1)
+      0x3b82f6, // Blue (stack 2)
+      0x8b5cf6, // Purple (stack 3)
+      0xa855f7, // Violet (stack 4)
+      0xec4899, // Pink (stack 5)
+      0xef4444, // Red (stack 6)
+    ];
+    arcColor = colors[Math.min(count - 1, colors.length - 1)] ?? 0xa855f7;
+  }
+
+  // Set attack cooldown (apply speed penalty if overloaded)
+  const speedPenaltyPct = combat.directionalMomentumState.overloadAttackSpeedPenaltyPct;
+  const speedMult = speedPenaltyPct > 0 ? (1 + speedPenaltyPct / 100) : 1.0;
+  combat.attackCooldownTimer = config.cooldown * speedMult;
+  combat.swingActiveTimer = 0.28;
+
+  combat.inCombatTimer = config.inCombatTimeout;
+  spendStamina(useStaminaCost, "burst");
+
+  // Face + animate + swing VFX.
   playerSprite.scale.x =
     ax < 0 ? -Math.abs(playerSprite.scale.x) : Math.abs(playerSprite.scale.x);
   setPlayerAnim("attack");
-  spawnSlashArc(
-    vfx,
-    entityLayer,
-    pcx,
-    pcy,
-    angle,
-    config.reach,
-    config.arcHalfAngle,
-    Colors.combat.slashArc,
-  );
-  playChopSound();
+
+  if (!isKiteCombo) {
+    spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, effectiveReach, effectiveHalfAngle, arcColor);
+    playSound("player.swing");
+  }
 
   // Resolve every hostile inside the cone.
-  const cosHalf = Math.cos(config.arcHalfAngle);
+  const cosHalf = Math.cos(effectiveHalfAngle);
   const enemyRadius = TILE * 0.4;
+  let hitCount = 0;
+
   for (const e of world.with("health", "position").entities) {
     const h = e.health!;
     if (h.faction !== "hostile" || h.current <= 0) continue;
@@ -306,18 +467,25 @@ export function playerAttackSystem(
     const dx = ex - pcx;
     const dy = ey - pcy;
     const d = Math.hypot(dx, dy);
-    if (d > config.reach + enemyRadius) continue;
+    if (d > effectiveReach + enemyRadius) continue;
     if (d > 1 && (ax * dx + ay * dy) / d < cosHalf) continue;
     const died = applyDamage(
       e,
-      config.damage,
+      effectiveDamage,
       pcx,
       pcy,
       config.knockback,
       config,
       vfx,
       entityLayer,
+      combat,
     );
     if (died) onEnemyKilled(e);
+    hitCount++;
+  }
+
+  // Handle Kite Combo stamina refunds and HP strain
+  if (isKiteCombo) {
+    handleKiteComboHit(combat, player, vfx, entityLayer, hitCount);
   }
 }

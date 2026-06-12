@@ -12,14 +12,8 @@ import {
   type ActiveShake,
   type BaseScale,
   type SlashArc,
-  Cell,
 } from "$lib/core/types";
 import { TILE } from "$lib/core/systems/map";
-import {
-  playBirdChirp,
-  playWaterBubble,
-  playWindGust,
-} from "$lib/core/audio-synthesis";
 import { Colors } from "$lib/utils/colors";
 import { EntityId } from "$lib/domain/game-events";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
@@ -37,9 +31,10 @@ export class VFXResource {
   public slashArcs: SlashArc[] = [];
   public gatherRing!: Graphics;
   public selectionRing!: Graphics;
+  public comboRing!: Graphics;
+  public chargeParticleTimer = 0;
   public selectionRingTime = 0;
   public footstepTimer = 0;
-  public ambientSoundTimer = 2 + Math.random() * 3;
 }
 
 export function particleUpdateSystem(vfx: VFXResource, dt: number, entityLayer: Container): void {
@@ -89,17 +84,44 @@ export function hitFlashUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
   }
 }
 
+// Floating-text stacking: entries sharing a stackKey never overlap. The newest
+// sits at the base; older ones are pushed up a row each and keep drifting as
+// they age. Rows are derived from age order every frame, so removals self-heal
+// (no snapping) and easing makes the shifts smooth.
+const FT_ROW_HEIGHT = 17;
+const FT_AGE_DRIFT = 14; // px/sec slow continuous rise
+const FT_EASE = 12; // position easing rate toward the stacked target
+const FT_FADE_START = 0.65; // fraction of life before fade-out begins
+
 export function floatingTextUpdateSystem(vfx: VFXResource, dt: number, entityLayer: Container): void {
+  // Age, then cull expired before re-stacking the survivors.
   for (let i = vfx.floatingTexts.length - 1; i >= 0; i--) {
     const ft = vfx.floatingTexts[i]!;
     ft.life += dt;
-    ft.textObj.y += ft.vy * dt;
-    ft.textObj.alpha = Math.max(0, 1 - ft.life / ft.maxLife);
-
     if (ft.life >= ft.maxLife) {
       entityLayer.removeChild(ft.textObj);
       ft.textObj.destroy();
       vfx.floatingTexts.splice(i, 1);
+    }
+  }
+
+  const stacks = new Map<string, FloatingText[]>();
+  for (const ft of vfx.floatingTexts) {
+    const list = stacks.get(ft.stackKey);
+    if (list) list.push(ft);
+    else stacks.set(ft.stackKey, [ft]);
+  }
+
+  const ease = Math.min(1, dt * FT_EASE);
+  for (const list of stacks.values()) {
+    list.sort((a, b) => a.life - b.life); // newest (smallest life) first -> row 0
+    for (let row = 0; row < list.length; row++) {
+      const ft = list[row]!;
+      const targetY = ft.baseY - row * FT_ROW_HEIGHT - FT_AGE_DRIFT * ft.life;
+      ft.textObj.y += (targetY - ft.textObj.y) * ease;
+      ft.textObj.x += (ft.baseX - ft.textObj.x) * ease;
+      const fade = (ft.life / ft.maxLife - FT_FADE_START) / (1 - FT_FADE_START);
+      ft.textObj.alpha = fade <= 0 ? 1 : Math.max(0, 1 - fade);
     }
   }
 }
@@ -228,6 +250,68 @@ export function gatherRingUpdateSystem(
   }
 }
 
+/**
+ * Ember-gathering charge feedback. Spawns small sparks in a ring around the
+ * player that spiral inward, communicating "energy being drawn in" without
+ * drawing UI chrome over the player. Spawn rate and density scale with charge
+ * so the effect escalates naturally from a whisper to a roar.
+ */
+export function chargeParticleSystem(
+  vfx: VFXResource,
+  dt: number,
+  playerPos: { x: number; y: number },
+  chargeProgress: number,
+  entityLayer: Container,
+): void {
+  if (chargeProgress <= 0) {
+    vfx.chargeParticleTimer = 0;
+    return;
+  }
+
+  // Interval shrinks from 110ms at 0% charge to 28ms at 100%.
+  const interval = 0.11 - chargeProgress * 0.083;
+  vfx.chargeParticleTimer -= dt;
+  if (vfx.chargeParticleTimer > 0) return;
+  vfx.chargeParticleTimer = interval;
+
+  const cx = playerPos.x + TILE / 2;
+  const cy = playerPos.y + TILE / 2;
+
+  // Minimum 2 sparks so even a light hold is clearly visible.
+  const count = chargeProgress >= 0.8 ? 5 : chargeProgress >= 0.4 ? 3 : 2;
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spawnRadius = 28 + Math.random() * 18;
+    const px = cx + Math.cos(angle) * spawnRadius;
+    const py = cy + Math.sin(angle) * spawnRadius;
+
+    // Pull toward center with a slight clockwise spiral.
+    const dx = cx - px;
+    const dy = cy - py;
+    const speed = 55 + chargeProgress * 80;
+    const len = Math.hypot(dx, dy) || 1;
+    const vx = (dx / len) * speed + (-dy / len) * speed * 0.35;
+    const vy = (dy / len) * speed + ( dx / len) * speed * 0.35;
+
+    const size = 3.5 + Math.random() * 2.5;
+    const g = new Graphics();
+    g.circle(0, 0, size).fill({ color: Colors.vfx.chargeRing, alpha: 0.9 });
+    g.x = px;
+    g.y = py;
+
+    vfx.particles.push({
+      graphic: g,
+      vx,
+      vy,
+      gravity: -20,
+      life: 0,
+      maxLife: 0.35 + Math.random() * 0.2,
+    });
+    entityLayer.addChild(g);
+  }
+}
+
 export function selectionRingUpdateSystem(
   vfx: VFXResource,
   dt: number,
@@ -313,48 +397,6 @@ export function footstepParticleSystem(
   }
 }
 
-export function ambientSoundSystem(
-  vfx: VFXResource,
-  dt: number,
-  playerPos: { x: number; y: number },
-  cells: Cell[],
-  mapW: number
-): void {
-  vfx.ambientSoundTimer -= dt;
-  if (vfx.ambientSoundTimer > 0) return;
-
-  const gx = Math.round(playerPos.x / TILE);
-  const gy = Math.round(playerPos.y / TILE);
-
-  const inBounds = gx >= 0 && gy >= 0 && gx < mapW && gy < cells.length / mapW;
-  if (!inBounds) {
-    vfx.ambientSoundTimer = 3;
-    return;
-  }
-
-  const cell = cells[gy * mapW + gx];
-  switch (cell) {
-    case Cell.Meadows:
-    case Cell.CrimsonGrove:
-    case Cell.Camp:
-      playBirdChirp();
-      vfx.ambientSoundTimer = 3 + Math.random() * 5;
-      break;
-    case Cell.Frostbane:
-    case Cell.ScorchedWastes:
-      playWindGust();
-      vfx.ambientSoundTimer = 3.5 + Math.random() * 4;
-      break;
-    case Cell.Water:
-    case Cell.FungalMire:
-      playWaterBubble();
-      vfx.ambientSoundTimer = 1.5 + Math.random() * 2.5;
-      break;
-    default:
-      vfx.ambientSoundTimer = 3;
-  }
-}
-
 export function triggerCameraShake(vfx: VFXResource, intensity: number, duration: number): void {
   if (intensity > vfx.cameraShake.intensity || vfx.cameraShake.time >= vfx.cameraShake.duration) {
     vfx.cameraShake = { intensity, duration, time: 0 };
@@ -366,7 +408,8 @@ export function spawnEnvFloatingText(
   text: string,
   color: number,
   playerPos: { x: number; y: number },
-  entityLayer: Container
+  entityLayer: Container,
+  stackKey = "player"
 ): void {
   const px = playerPos.x + TILE / 2;
   const py = playerPos.y - 12;
@@ -383,13 +426,7 @@ export function spawnEnvFloatingText(
   textObj.x = px;
   textObj.y = py;
 
-  vfx.floatingTexts.push({
-    textObj,
-    vx: 0,
-    vy: -50,
-    life: 0,
-    maxLife: 0.8,
-  });
+  vfx.floatingTexts.push({ textObj, stackKey, baseX: px, baseY: py, life: 0, maxLife: 1.1 });
   entityLayer.addChild(textObj);
 }
 
@@ -511,6 +548,22 @@ export function spawnDeathBurst(
   triggerCameraShake(vfx, 5, 0.18);
 }
 
+/** One-shot expanding ring at a world point (e.g. a focused-gather hit pop). */
+export function spawnShockwaveRing(
+  vfx: VFXResource,
+  entityLayer: Container,
+  worldX: number,
+  worldY: number,
+  color: number,
+  maxLife = 0.3
+): void {
+  const ringG = new Graphics();
+  ringG.x = worldX;
+  ringG.y = worldY;
+  entityLayer.addChild(ringG);
+  vfx.shockwaveRings.push({ graphic: ringG, life: 0, maxLife, color });
+}
+
 /** Rising damage number at a world point. Reuses the floatingTexts pool/updater. */
 export function spawnDamageNumber(
   vfx: VFXResource,
@@ -529,9 +582,12 @@ export function spawnDamageNumber(
   });
   const textObj = new Text({ text: `${amount}`, style: textStyle });
   textObj.anchor.set(0.5, 0.5);
-  textObj.x = worldX + (Math.random() - 0.5) * 10;
+  const bx = worldX + (Math.random() - 0.5) * 10;
+  textObj.x = bx;
   textObj.y = worldY;
-  vfx.floatingTexts.push({ textObj, vx: (Math.random() - 0.5) * 12, vy: -60, life: 0, maxLife: 0.7 });
+  // Group by coarse world region so repeated hits on a spot stack, not overlap.
+  const stackKey = `dmg:${Math.round(worldX / 48)}:${Math.round(worldY / 48)}`;
+  vfx.floatingTexts.push({ textObj, stackKey, baseX: bx, baseY: worldY, life: 0, maxLife: 0.8 });
   entityLayer.addChild(textObj);
 }
 

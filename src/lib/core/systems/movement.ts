@@ -6,6 +6,7 @@ import { TILE, type MapResource } from "$lib/core/systems/map";
 import type { VFXResource } from "$lib/core/vfx";
 import { spawnEnvFloatingText, spawnEnvParticles, triggerCameraShake } from "$lib/core/vfx";
 import { gameState } from "$lib/state/game-state.svelte";
+import type { CombatResource } from "$lib/core/systems/combat";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
 import { findPlayerEntity } from "$lib/core/ecs/entity-queries";
@@ -226,7 +227,8 @@ export function playerMovementSystem(
   dt: number,
   playerSprite: AnimatedSprite,
   setPlayerAnim: (state: "idle" | "run" | "attack") => void,
-  entityLayer: Container
+  entityLayer: Container,
+  combat?: CombatResource
 ): boolean {
   if (inputs.dashTriggered) {
     inputs.dashTriggered = false;
@@ -348,7 +350,12 @@ export function playerMovementSystem(
     movement.lastMoveDirection = { x: dirX, y: dirY };
   }
 
-  const currentSpeed = isSprinting ? speed * config.sprintSpeedMultiplier : speed;
+  let currentSpeed = isSprinting ? speed * config.sprintSpeedMultiplier : speed;
+  if (combat && combat.directionalMomentumState.isActive) {
+    const stacks = combat.directionalMomentumState.currentStacks;
+    const speedBonusPct = combat.directionalMomentumConfig?.stackMoveSpeedBonusPct ?? 5;
+    currentSpeed *= (1 + (speedBonusPct * stacks) / 100);
+  }
   const moveX = dirX * currentSpeed * dt;
   const moveY = dirY * currentSpeed * dt;
 
@@ -382,8 +389,11 @@ export function playerMovementSystem(
   pos.targetX = pos.x;
   pos.targetY = pos.y;
 
-  if (dirX < 0) playerSprite.scale.x = -Math.abs(playerSprite.scale.x);
-  if (dirX > 0) playerSprite.scale.x = Math.abs(playerSprite.scale.x);
+  const isAttacking = combat && combat.swingActiveTimer > 0;
+  if (!isAttacking) {
+    if (dirX < 0) playerSprite.scale.x = -Math.abs(playerSprite.scale.x);
+    if (dirX > 0) playerSprite.scale.x = Math.abs(playerSprite.scale.x);
+  }
 
   setPlayerAnim("run");
   playerSprite.x = pos.x + TILE / 2;

@@ -23,7 +23,8 @@ export function createDefaultSkills(): RpgPlayerState["skills"] {
     lumberjacking: { level: 1, xp: 0, nextXp: 100 },
     mining: { level: 1, xp: 0, nextXp: 100 },
     evade: { level: 1, xp: 0, nextXp: 100 },
-    superGather: { level: 1, xp: 0, nextXp: 100 },
+    fellSweep: { level: 1, xp: 0, nextXp: 100 },
+    kiteCombo: { level: 1, xp: 0, nextXp: 100 },
   };
 }
 

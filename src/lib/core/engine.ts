@@ -44,16 +44,11 @@ import {
   type HudState,
   type GameEngineConfig,
   type AnimState,
-  type AABB,
 } from "$lib/core/types";
 export type { HudState };
-import {
-  playChopSound,
-  playClinkSound,
-  playFallSound,
-  playDepleteSound,
-  setSoundEnabled,
-} from "$lib/core/audio-synthesis";
+import { playSound, setListener, setMuted, tickAmbient, unlock as unlockAudio } from "$lib/audio/audio-engine";
+import { loadAudioSettings } from "$lib/audio/audio-settings.svelte";
+import type { AmbientBiome } from "$lib/audio/sound-manifest";
 import { InputResource } from "$lib/core/input";
 import {
   MapResource,
@@ -74,10 +69,10 @@ import {
   slashArcUpdateSystem,
   cameraShakeSystem,
   gatherRingUpdateSystem,
+  chargeParticleSystem,
   selectionRingUpdateSystem,
   cloudDriftSystem,
   footstepParticleSystem,
-  ambientSoundSystem,
   spawnEnvFloatingText,
   spawnEnvParticles,
   spawnDeathBurst,
@@ -92,6 +87,8 @@ import {
   CombatConfig,
   CombatResource,
   playerAttackSystem,
+  trackMovementCombo,
+  fellSweepSystem,
   knockbackSystem,
   despawnEntity,
 } from "$lib/core/systems/combat";
@@ -104,6 +101,8 @@ import {
   depleteNodeSystem,
   setHighlight,
 } from "$lib/core/systems/interaction-system";
+import { FocusedGatherResource, runFocusedGatherSystem } from "$lib/core/systems/focused-gather-system";
+import { renderFocusedGatherSystem } from "$lib/core/systems/focused-gather-renderer";
 import {
   BuildingResource,
   updatePlacementPreviewSystem,
@@ -112,10 +111,9 @@ import {
   isValidPlacement,
 } from "$lib/core/systems/building-system";
 import { gameState } from "$lib/state/game-state.svelte";
-import { setRpgProfile } from "$lib/state/rpg-actions.svelte";
+import { setRpgProfile, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 import { tickStamina, stamina } from "$lib/domain/stamina.svelte";
-import { superGatherCooldown } from "$lib/domain/gathering/gather-system";
 import { tickThirst, loadSurvival } from "$lib/domain/survival.svelte";
 import {
   tickStatusEffects,
@@ -132,6 +130,39 @@ import { EntityId, SkillKey, InputAction } from "$lib/domain/game-events";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/domain/skill-xp";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
+import { getPrefabDefinition } from "$lib/domain/definition-registry";
+import { executeGameCommand } from "$lib/core/command-runtime";
+import { createEngineCommandContext } from "$lib/core/engine-command-context";
+import type { CommandSource, GameCommand, GameCommandResult } from "$lib/domain/game-command";
+import {
+  createRuntimeContext,
+  createRuntimeRegistry,
+  RuntimeScheduler,
+  validateRuntimeRegistry,
+} from "$lib/core/runtime/runtime";
+import { defaultRuntimeFeature } from "$lib/core/runtime/default-feature";
+import { composeEntityFromPrefab } from "$lib/core/runtime/prefabs";
+import { loadScenarioIntoMap } from "$lib/core/systems/scenario-loader";
+import { getScenario } from "$lib/domain/scenarios";
+import {
+  CollisionFootprints,
+  PLAYER_BODY,
+  computeRenderZ,
+  isValidCollisionFootprint,
+  resolveCollisionAabb,
+  type CollisionFootprint,
+} from "$lib/domain/collision";
+
+/** Lerp player sprite tint from white toward warm amber as charge builds. */
+function chargeTint(charge: number): number {
+  if (charge <= 0) return 0xffffff;
+  // Target: 0xffaa44 (warm amber). Lerp each channel.
+  const t = Math.min(1, charge) * 0.55;
+  const r = 0xff;
+  const g = Math.round(0xff - (0xff - 0xaa) * t); // 255 → 170
+  const b = Math.round(0xff - (0xff - 0x44) * t); // 255 → 68
+  return (r << 16) | (g << 8) | b;
+}
 
 export class GameEngine {
   private app!: Application;
@@ -147,17 +178,42 @@ export class GameEngine {
   public movementConfig = new MovementConfig();
   public movementResource = new MovementResource();
   public interactionResource = new InteractionResource();
+  public focusedGatherResource = new FocusedGatherResource();
   public buildingResource = new BuildingResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
+
+  private runtimeRegistry = createRuntimeRegistry([defaultRuntimeFeature]);
+  private scheduler = new RuntimeScheduler([
+    {
+      id: "legacy.frame",
+      phase: "simulation",
+      run: (_ctx, dt) => this.tickFrame(dt),
+    },
+  ]);
 
   // Scene Graphs
   private worldContainer = new Container();
   private tileLayer = new Container();
   private entityLayer = new Container();
+  private collisionOverlay = new Graphics();
 
   // Entity Sprite registry
   private entitySprites = new Map<string, Container>();
+  private runtimeResources = {
+    input: this.inputResource,
+    map: this.mapResource,
+    vfx: this.vfxResource,
+    movementConfig: this.movementConfig,
+    movement: this.movementResource,
+    interaction: this.interactionResource,
+    focusedGather: this.focusedGatherResource,
+    building: this.buildingResource,
+    combatConfig: this.combatConfig,
+    combat: this.combatResource,
+    sprites: this.entitySprites,
+  };
+  private runtimeContext = createRuntimeContext(world, this.runtimeResources);
 
   // Player Entity & Sprite
   private playerEntity!: Entity;
@@ -195,15 +251,24 @@ export class GameEngine {
   // Dev unique spawns counter
   private devSpawnSeq = 0;
 
+  private scenarioId: string | null = null;
+  private collisionOverrides = new Map<string, CollisionFootprint>();
+
   constructor(config: GameEngineConfig) {
     this.containerEl = config.container;
     this.onInteract = config.onInteract;
     this.onHudUpdate = config.onHudUpdate;
     this.onContextMenu = config.onContextMenu;
+    this.scenarioId = config.scenarioId ?? null;
   }
 
   public async init(): Promise<void> {
     try {
+      const registryProblems = validateRuntimeRegistry(this.runtimeRegistry);
+      if (registryProblems.length > 0) {
+        throw new Error(`runtime registry invalid:\n- ${registryProblems.join("\n- ")}`);
+      }
+
       this.app = new Application();
       await this.app.init({
         resizeTo: this.containerEl,
@@ -240,12 +305,26 @@ export class GameEngine {
 
       window.addEventListener("wheel", this.onWheel, { passive: false });
 
-      // Procedural map generation system
-      buildMapSystem(this.mapResource);
+      // Map generation: use scenario if active, otherwise procedural.
+      if (this.scenarioId) {
+        const sc = getScenario(this.scenarioId);
+        if (sc) {
+          loadScenarioIntoMap(this.mapResource, sc);
+        } else {
+          console.warn(`[scenario] unknown id "${this.scenarioId}", falling back to procedural`);
+          buildMapSystem(this.mapResource);
+        }
+      } else {
+        buildMapSystem(this.mapResource);
+      }
 
       // Attach layers to stage
+      this.entityLayer.sortableChildren = true;
+      this.collisionOverlay.zIndex = 120_000;
+      this.collisionOverlay.visible = debugConfig.showCollision;
       this.worldContainer.addChild(this.tileLayer);
       this.worldContainer.addChild(this.entityLayer);
+      this.entityLayer.addChild(this.collisionOverlay);
       this.app.stage.addChild(this.worldContainer);
 
       // Draw map tiles
@@ -263,6 +342,16 @@ export class GameEngine {
       loadStatuses();
       loadKnowledge();
       loadRecipes();
+      loadAudioSettings();
+
+      // Browsers block audio until a gesture; resume the context on the first one.
+      const unlockOnFirstInput = (): void => {
+        unlockAudio();
+        window.removeEventListener("keydown", unlockOnFirstInput);
+        window.removeEventListener("pointerdown", unlockOnFirstInput);
+      };
+      window.addEventListener("keydown", unlockOnFirstInput);
+      window.addEventListener("pointerdown", unlockOnFirstInput);
       registerPlayerFeedback((text, tone) => {
         const color =
           tone === "danger"
@@ -323,6 +412,7 @@ export class GameEngine {
 
     this.vfxResource.gatherRing?.destroy();
     this.vfxResource.selectionRing?.destroy();
+    this.vfxResource.comboRing?.destroy();
   }
 
   private onWheel = (e: WheelEvent): void => {
@@ -336,6 +426,10 @@ export class GameEngine {
   };
 
   private tick(dt: number): void {
+    this.scheduler.tick(this.runtimeContext, dt);
+  }
+
+  private tickFrame(dt: number): void {
     try {
       // Run player movement system
       const wasSprinting = playerMovementSystem(
@@ -348,8 +442,28 @@ export class GameEngine {
         dt,
         this.playerSprite,
         (state) => this.setPlayerAnim(state),
-        this.entityLayer
+        this.entityLayer,
+        this.combatResource
       );
+
+      // Zoom Lerp update
+      const rate = Math.min(1.0, this.zoomSmoothing * 60 * dt);
+      this.zoom += (this.targetZoom - this.zoom) * rate;
+      this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom));
+
+      // Sync camera matrices
+      cameraShakeSystem(
+        this.vfxResource,
+        dt,
+        this.app.screen,
+        this.playerEntity.position!,
+        this.zoom,
+        this.worldContainer
+      );
+
+      // Recalculate mouse world position based on current screen coordinates and updated camera transform
+      const localMouse = this.worldContainer.toLocal(this.inputResource.mouseScreen);
+      this.inputResource.mouseWorld = { x: localMouse.x, y: localMouse.y };
 
       // Update targeting selections based on mouse coordinates
       updateTargetSystem(
@@ -363,11 +477,36 @@ export class GameEngine {
         (f) => { this.facing = f; }
       );
 
+      // Focused Gathering runs first so it can claim the node and swallow clicks
+      // before interaction/combat see them. While a session is live, the player's
+      // own interaction and attacks pause (enemies still act).
+      runFocusedGatherSystem(
+        world,
+        this.inputResource,
+        this.interactionResource,
+        this.focusedGatherResource,
+        this.vfxResource,
+        this.entityLayer,
+        this.entitySprites,
+        dt,
+        {
+          triggerQuestEvent,
+          getTreeFrames,
+          getStumpTexture,
+          setPlayerAnim: (state) => this.setPlayerAnim(state),
+          onHit: (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
+          zeroCooldowns: gameState.rpg.profile === null,
+        }
+      );
+      renderFocusedGatherSystem(this.focusedGatherResource, this.entityLayer);
+      const focusedGatherActive = this.focusedGatherResource.session !== null;
+
       // Arbitrate the left-click between interacting and attacking. A click on a
       // hovered interactable in range (tree, ore, pickup, campfire, NPC) routes
       // to the interaction system; a click on anything else is a melee swing.
       // This preserves click-to-gather/talk while still allowing click-to-attack.
       if (
+        !focusedGatherActive &&
         this.inputResource.pendingAttack &&
         !this.buildingResource.isPlacementMode &&
         this.interactionResource.currentTarget !== null
@@ -425,7 +564,7 @@ export class GameEngine {
             );
           }
         }
-      } else {
+      } else if (!focusedGatherActive) {
         // Run interactions updates
         runInteractionSystem(
           world,
@@ -465,21 +604,43 @@ export class GameEngine {
       if (playerHealth.invulnTimer > 0) playerHealth.invulnTimer -= dt;
       if (this.attackAnimLockTimer > 0) this.attackAnimLockTimer -= dt;
 
-      playerAttackSystem(
-        world,
-        this.inputResource,
-        this.combatResource,
-        this.combatConfig,
-        this.vfxResource,
-        dt,
-        this.playerEntity,
-        this.playerSprite,
-        (state) => this.setPlayerAnim(state),
-        this.entityLayer,
-        this.movementResource.isDashing,
-        this.buildingResource.isPlacementMode,
-        (enemy) => this.handleEnemyDeath(enemy)
-      );
+      trackMovementCombo(this.combatResource, this.inputResource);
+      // The player's own swings pause during a focused-gathering session; clicks
+      // belong to the minigame.
+      if (!focusedGatherActive) {
+        playerAttackSystem(
+          world,
+          this.inputResource,
+          this.combatResource,
+          this.combatConfig,
+          this.vfxResource,
+          dt,
+          this.playerEntity,
+          this.playerSprite,
+          (state) => this.setPlayerAnim(state),
+          this.entityLayer,
+          this.movementResource,
+          this.buildingResource.isPlacementMode,
+          (enemy) => this.handleEnemyDeath(enemy)
+        );
+
+        fellSweepSystem(
+          world,
+          this.inputResource,
+          this.combatResource,
+          this.combatConfig,
+          this.vfxResource,
+          dt,
+          this.playerEntity,
+          this.playerSprite,
+          (state) => this.setPlayerAnim(state),
+          this.entityLayer,
+          this.movementResource.isDashing,
+          this.buildingResource.isPlacementMode,
+          gameState.rpg.skills?.fellSweep?.level ?? 1,
+          (enemy) => this.handleEnemyDeath(enemy)
+        );
+      }
 
       enemyAiSystem(
         world,
@@ -499,6 +660,30 @@ export class GameEngine {
       // Pin the player sprite after any knockback displacement.
       this.playerSprite.x = this.playerEntity.position!.x + TILE / 2;
       this.playerSprite.y = this.playerEntity.position!.y + TILE;
+
+      // Zero out charge VFX when the skill is on cooldown — holding the button
+      // while it can't fire yet must not produce any feedback.
+      const chargeProgress = this.combatResource.fellSweepCooldownTimer > 0
+        ? 0
+        : this.inputResource.getChargeProgress();
+
+      // Charge tremor: body shudder that grows noticeably as charge builds.
+      if (chargeProgress > 0) {
+        const amp = 3 + chargeProgress * 7; // 3px at 0%, 10px at 100%
+        this.playerSprite.x += (Math.random() - 0.5) * amp;
+        this.playerSprite.y += (Math.random() - 0.5) * amp;
+      }
+
+      // Camera rumble: intermittent shake pulses starting at ~40% charge.
+      this.chargeShakeTimer -= dt;
+      if (chargeProgress >= 0.4 && this.chargeShakeTimer <= 0) {
+        triggerCameraShake(this.vfxResource, 1.2 + chargeProgress * 3.5, 0.09);
+        this.chargeShakeTimer = 0.18 - chargeProgress * 0.12; // 180ms → 60ms at full
+      }
+      if (chargeProgress === 0) this.chargeShakeTimer = 0;
+
+      // Warm tint: player "heats up" from neutral to amber as charge builds.
+      this.playerSprite.tint = chargeTint(chargeProgress);
 
       // --- Survival ---
       // Thirst drains with activity; statuses tick once per accumulated second
@@ -534,20 +719,19 @@ export class GameEngine {
       cooldownsState.evade = Math.max(0, this.movementResource.dashCooldownTimer);
       cooldownsState.evadeMax = maxEvadeCd;
 
-      const sgLevel = gameState.rpg.skills?.superGather?.level ?? 1;
-      const maxSgCd = superGatherCooldown(this.interactionResource.superGatherCooldown, sgLevel);
-      cooldownsState.superGather = Math.max(0, this.interactionResource.superGatherCooldownTimer);
-      cooldownsState.superGatherMax = maxSgCd;
+      cooldownsState.focusedGather = Math.max(0, this.focusedGatherResource.cooldownSec);
+      cooldownsState.focusedGatherMax = this.focusedGatherResource.cooldownMaxSec;
+
+      const fsLevel = gameState.rpg.skills?.fellSweep?.level ?? 1;
+      const maxFsCd = Math.max(4.0, 8.0 - (fsLevel - 1) * 0.4);
+      cooldownsState.fellSweep = Math.max(0, this.combatResource.fellSweepCooldownTimer);
+      cooldownsState.fellSweepMax = maxFsCd;
+      cooldownsState.fellSweepCharge = chargeProgress;
 
       // Pin shadow to player feet
       const shadowPos = this.playerEntity.position!;
       this.playerShadow.x = shadowPos.x + TILE / 2;
       this.playerShadow.y = shadowPos.y + TILE;
-
-      // Zoom Lerp update
-      const rate = Math.min(1.0, this.zoomSmoothing * 60 * dt);
-      this.zoom += (this.targetZoom - this.zoom) * rate;
-      this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom));
 
       // Run VFX particle movements
       particleUpdateSystem(this.vfxResource, dt, this.entityLayer);
@@ -580,14 +764,10 @@ export class GameEngine {
         this.devShakeIntensityVal
       );
 
-      // Audio tickers
-      ambientSoundSystem(
-        this.vfxResource,
-        dt,
-        this.playerEntity.position!,
-        this.mapResource.cells,
-        this.mapResource.mapW
-      );
+      // Audio: keep the listener on the player and tick biome ambience.
+      const listenerPos = this.playerEntity.position!;
+      setListener(listenerPos.x + TILE / 2, listenerPos.y + TILE / 2);
+      tickAmbient(dt, this.currentAmbientBiome());
 
       // Render targeting circles
       gatherRingUpdateSystem(
@@ -598,21 +778,19 @@ export class GameEngine {
         this.interactionResource.gatherCooldownTimer
       );
 
+      chargeParticleSystem(
+        this.vfxResource,
+        dt,
+        this.playerEntity.position!,
+        chargeProgress,
+        this.entityLayer
+      );
+
       selectionRingUpdateSystem(
         this.vfxResource,
         dt,
         this.interactionResource.currentTarget,
         this.entitySprites
-      );
-
-      // Sync camera matrices
-      cameraShakeSystem(
-        this.vfxResource,
-        dt,
-        this.app.screen,
-        this.playerEntity.position!,
-        this.zoom,
-        this.worldContainer
       );
 
       // Cull offscreen viewport entities/tiles
@@ -631,6 +809,9 @@ export class GameEngine {
         this.campfireGlow.scale.set(((baseRadius * TILE * 1.8) / 384) * flicker);
       }
 
+      this.updateRenderOrder();
+      this.drawCollisionOverlay();
+
       // Push coordinates and lookAt entity HUD update
       this.pushHudUpdate();
     } catch (err: any) {
@@ -645,10 +826,22 @@ export class GameEngine {
   }
 
   private spawnEntities(): void {
-    const startX = Math.floor(this.mapResource.mapW / 2) * TILE;
-    const startY = Math.floor(this.mapResource.mapH / 2) * TILE;
-    const spawnX = Math.floor(this.mapResource.mapW / 2);
-    const spawnY = Math.floor(this.mapResource.mapH / 2);
+    const scenario = this.scenarioId ? getScenario(this.scenarioId) : null;
+    // Scenarios are clean rooms by default: the base-world furniture (camp,
+    // decorations, seeded enemies) is opt-in per scenario. The base world (no
+    // scenario) keeps all of it, so this branch is invisible to normal play.
+    const wantCamp = !scenario || scenario.camp === true;
+    const wantDecorations = !scenario || scenario.decorations === true;
+    const spawnX = scenario?.spawnPoint.gx ?? Math.floor(this.mapResource.mapW / 2);
+    const spawnY = scenario?.spawnPoint.gy ?? Math.floor(this.mapResource.mapH / 2);
+    const startX = spawnX * TILE;
+    const startY = spawnY * TILE;
+
+    // Equip the scenario's starter tool so tool-gated gatherables are reachable
+    // on load. The scenario panel can switch tools at runtime afterwards.
+    if (scenario?.startTool) {
+      equipLocalWeapon(scenario.startTool);
+    }
 
     // Spawn player entity in ECS. Health lives here (faction "player") so the
     // same damage path handles the player and enemies; the HUD mirrors it.
@@ -674,6 +867,7 @@ export class GameEngine {
     this.playerShadow.alpha = 0.35;
     this.playerShadow.x = startX + TILE / 2;
     this.playerShadow.y = startY + 2 * TILE;
+    this.playerShadow.zIndex = computeRenderZ(this.playerShadow.y, -5);
     this.entityLayer.addChild(this.playerShadow);
 
     // Save starting loadout weapon
@@ -697,13 +891,296 @@ export class GameEngine {
     this.playerSprite.anchor.set(0.5, 1);
     this.playerSprite.x = startX + TILE / 2;
     this.playerSprite.y = startY + 2 * TILE;
+    this.playerSprite.zIndex = computeRenderZ(this.playerSprite.y);
     this.entityLayer.addChild(this.playerSprite);
     this.entitySprites.set(EntityId.Player, this.playerSprite);
 
+    // Campfire + Commander Vane. Base world always; scenarios only when opted in.
+    if (wantCamp) {
+      this.spawnCamp(spawnX, spawnY, startX, startY);
+    }
+
+    // Scatter resource nodes
+    const gatheredPickups = gameState.rpg.profile?.gatheredPickups ?? [];
+    for (const spawn of this.mapResource.mapData.spawns) {
+      if (gatheredPickups.includes(spawn.id)) continue;
+      this.spawnResource(spawn.id, spawn.x, spawn.y, spawn.gatherableId);
+    }
+
+    // Restore constructed buildings — real world only. A scenario is a clean
+    // room and must not inherit the player's built structures.
+    if (!scenario && gameState.rpg.profile && Array.isArray(gameState.rpg.profile.buildings)) {
+      for (const b of gameState.rpg.profile.buildings) {
+        this.spawnBuilding(b.id, b.type, b.x, b.y);
+      }
+    }
+
+    // Scatter decorations. Base world always; scenarios only when opted in.
+    if (wantDecorations) {
+      this.spawnDecorations();
+    }
+
+    // Enemies: the base world seeds a few hostiles around camp so combat is
+    // testable on load; a scenario only gets the hostiles it explicitly lists.
+    if (!scenario) {
+      this.spawnInitialEnemies(spawnX, spawnY);
+    } else if (scenario.enemies) {
+      for (const e of scenario.enemies) {
+        this.spawnEnemy(e.gx, e.gy);
+      }
+    }
+
+    // Setup indicators overlay rings
+    this.vfxResource.gatherRing = new Graphics();
+    this.vfxResource.gatherRing.visible = false;
+    this.entityLayer.addChild(this.vfxResource.gatherRing);
+
+    this.vfxResource.selectionRing = new Graphics();
+    this.vfxResource.selectionRing.visible = false;
+    this.entityLayer.addChild(this.vfxResource.selectionRing);
+
+    this.vfxResource.comboRing = new Graphics();
+    this.vfxResource.comboRing.visible = false;
+    this.entityLayer.addChild(this.vfxResource.comboRing);
+  }
+
+  private spawnDecorations(): void {
+    const W = this.mapResource.mapW;
+    const H = this.mapResource.mapH;
+
+    for (let gy = 0; gy < H; gy++) {
+      for (let gx = 0; gx < W; gx++) {
+        const cell = this.mapResource.cells[gy * W + gx];
+        if (cell !== Cell.Meadows && cell !== Cell.CrimsonGrove) continue;
+        if (this.mapResource.solidCoords.has(coordKey(gx, gy))) continue;
+
+        const hash = (gx * 1031 + gy * 2053) & 0xffff;
+        if (hash > 0xffff * 0.06) continue;
+        const variant = ((hash % 4) + 1) as 1 | 2 | 3 | 4;
+        const bush = new Sprite(getBushTexture(variant));
+        bush.anchor.set(0.5, 1);
+        bush.x = gx * TILE + TILE / 2 + ((hash >> 8) % 10) - 5;
+        bush.y = gy * TILE + TILE + ((hash >> 4) % 10) - 5;
+        bush.scale.set(TILE / 80);
+        bush.alpha = 0.7 + (hash & 0x0f) / 60;
+        this.entityLayer.addChild(bush);
+      }
+    }
+
+    // Ambient cloud drift
+    for (let i = 0; i < 12; i++) {
+      const variant = ((i % 8) + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+      const cloud = new Sprite(getCloudTexture(variant));
+      cloud.anchor.set(0.5, 0.5);
+      cloud.x = (i / 12) * W * TILE + Math.random() * TILE * 10;
+      cloud.y = Math.random() * H * TILE;
+      cloud.scale.set(0.7 + Math.random() * 0.7);
+      cloud.alpha = 0.28 + Math.random() * 0.2;
+      this.entityLayer.addChild(cloud);
+      this.vfxResource.clouds.push({ sprite: cloud, vx: 8 + Math.random() * 14 });
+    }
+  }
+
+  private authoredFootprintFor(gatherableId: string): CollisionFootprint | null {
+    const override = this.collisionOverrides.get(gatherableId);
+    if (override) return override;
+    const gatherable = getGatherableDefinition(gatherableId);
+    return gatherable?.collision?.footprint ?? null;
+  }
+
+  private setTileFootprint(gx: number, gy: number, footprint: CollisionFootprint): void {
+    this.mapResource.solidCoords.add(coordKey(gx, gy));
+    this.mapResource.customSolids.set(
+      coordKey(gx, gy),
+      resolveCollisionAabb({ x: gx * TILE, y: gy * TILE }, footprint, TILE),
+    );
+  }
+
+  private refreshCollisionForGatherable(gatherableId: string): void {
+    const footprint = this.authoredFootprintFor(gatherableId);
+    for (const entity of world.with("resource", "position").entities) {
+      if (entity.resource?.gatherableId !== gatherableId) continue;
+      const gx = Math.round(entity.position!.x / TILE);
+      const gy = Math.round(entity.position!.y / TILE);
+      const key = coordKey(gx, gy);
+      if (footprint) {
+        this.setTileFootprint(gx, gy, footprint);
+      } else {
+        this.mapResource.customSolids.delete(key);
+      }
+    }
+    this.drawCollisionOverlay();
+  }
+
+  private spawnResource(id: string, gx: number, gy: number, gatherableId: string): void {
+    const ex = gx * TILE;
+    const ey = gy * TILE;
+
+    const gatherable = getGatherableDefinition(gatherableId);
+    if (!gatherable) return;
+
+    const nodeName = gatherable.displayName;
+    const drop = gatherable.yieldTable[0];
+    const dropName = drop?.itemId ?? "stick";
+    const dropQty = drop?.quantity ?? 1;
+    const isPickup = gatherable.interactionKind !== "repeated_action";
+    const isTree = gatherable.solidKind === "tree";
+    const prefab = getPrefabDefinition(gatherableId);
+    const entity = prefab
+      ? composeEntityFromPrefab(prefab, this.runtimeRegistry.components, { id: gatherableId, gx, gy, entityId: id })
+      : null;
+    const spriteTex =
+      gatherable.renderKind === "wood_pickup"
+        ? getWoodItemTexture()
+        : gatherable.renderKind === "stone_pickup"
+          ? getRockVariantTexture(1)
+          : gatherable.renderKind === "flint_pickup"
+            ? getRockVariantTexture(2)
+            : gatherable.renderKind === "forage"
+              ? getBushTexture(1)
+              : gatherable.renderKind === "moss"
+                ? getBushTexture(2)
+                : gatherable.renderKind === "tree_crimson"
+                  ? getTreeVariantTexture(2)
+                  : gatherable.renderKind === "tree_frost"
+                    ? getTreeVariantTexture(3)
+                    : gatherable.renderKind === "tree_fungal"
+                      ? getTreeVariantTexture(4)
+                      : gatherable.renderKind === "rock_copper"
+                        ? getRockVariantTexture(2)
+                        : gatherable.renderKind === "rock_iron"
+                          ? getRockVariantTexture(3)
+                          : gatherable.renderKind === "rock_toxic"
+                            ? getRockVariantTexture(4)
+                            : gatherable.renderKind === "rock"
+                              ? getRockTexture()
+                              : getTreeTexture();
+
+    if (isPickup) {
+      world.add(entity ?? {
+        id,
+        position: { x: ex, y: ey, targetX: ex, targetY: ey },
+        collider: { isSolid: false },
+        interactable: { name: nodeName, action: "pickup" },
+        pickup: { itemId: dropName, qty: dropQty, gatherableId },
+      });
+
+      const sprite = new Sprite(spriteTex);
+      sprite.anchor.set(0.5, 1);
+      sprite.x = ex + TILE / 2;
+      sprite.y = ey + TILE;
+      sprite.zIndex = computeRenderZ(sprite.y);
+      if (gatherable.renderKind === "wood_pickup") {
+        sprite.scale.set((TILE * 0.45) / 64);
+      } else if (gatherable.renderKind === "stone_pickup" || gatherable.renderKind === "flint_pickup") {
+        sprite.scale.set((TILE * 0.35) / 64);
+      } else {
+        sprite.scale.set((TILE * 0.4) / 64);
+      }
+      this.entityLayer.addChild(sprite);
+      this.entitySprites.set(id, sprite);
+    } else {
+      world.add(entity ?? {
+        id,
+        position: { x: ex, y: ey, targetX: ex, targetY: ey },
+        collider: { isSolid: true },
+        interactable: { name: nodeName, action: "gather" },
+        resource: {
+          hp: gatherable?.depletion?.hp ?? 15,
+          maxHp: gatherable?.depletion?.hp ?? 15,
+          drop: dropName,
+          gatherableId,
+          rpgAction: gatherable.syncAction,
+          rpgLocationId: gatherable.syncLocationId,
+        },
+      });
+      const footprint = this.authoredFootprintFor(gatherableId);
+      if (gatherable.collision?.solid !== false && footprint) {
+        this.setTileFootprint(gx, gy, footprint);
+      }
+
+      if (isTree) {
+        const tree = new Sprite(spriteTex);
+        tree.anchor.set(0.5, 1);
+        tree.x = ex + TILE / 2;
+        tree.y = ey + TILE;
+        tree.zIndex = computeRenderZ(tree.y);
+        tree.scale.set((TILE * 1.5) / 256);
+        this.entityLayer.addChild(tree);
+        this.entitySprites.set(id, tree);
+      } else {
+        const rock = new Sprite(spriteTex);
+        rock.anchor.set(0.5, 1);
+        rock.x = ex + TILE / 2;
+        rock.y = ey + TILE;
+        rock.width = TILE * 0.9;
+        rock.height = TILE * 0.9;
+        rock.zIndex = computeRenderZ(rock.y);
+        this.entityLayer.addChild(rock);
+        this.entitySprites.set(id, rock);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Combat: enemy spawn/death, player respawn, HP mirror
+  // ---------------------------------------------------------------------------
+
+  /** Frames provider passed to the AI system so each enemy renders in its colour. */
+  private getEnemyFrames = (entity: Entity, state: AnimState) => {
+    return getWarriorFrames(state, this.enemyColors.get(entity.id) ?? "red");
+  };
+
+  /**
+   * Spawns one hostile (ECS entity + animated sprite + shadow) at a grid cell.
+   * Skips out-of-bounds or solid cells. Returns the entity id, or null if skipped.
+   */
+  public spawnEnemy(gx: number, gy: number, arch: EnemyArchetype = GRUNT): string | null {
+    if (!this.mapResource.inBounds(gx, gy)) return null;
+    if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return null;
+
+    const id = `enemy_${this.enemySeq++}`;
+    const ex = gx * TILE;
+    const ey = gy * TILE;
+    world.add(makeEnemyEntity(id, ex, ey, arch));
+    this.enemyColors.set(id, arch.color);
+
+    const sprite = new AnimatedSprite(getWarriorFrames("idle", arch.color));
+    sprite.animationSpeed = 0.12;
+    sprite.play();
+    sprite.anchor.set(0.5, 1);
+    sprite.scale.set((TILE * 1.1) / 192);
+    sprite.x = ex + TILE / 2;
+    sprite.y = ey + TILE;
+    sprite.zIndex = computeRenderZ(sprite.y);
+    this.entityLayer.addChild(sprite);
+    this.entitySprites.set(id, sprite);
+    return id;
+  }
+
+  private spawnInitialEnemies(spawnX: number, spawnY: number): void {
+    const offsets: [number, number][] = [
+      [6, 0],
+      [-6, 3],
+      [5, -5],
+      [-5, -4],
+    ];
+    for (const [dx, dy] of offsets) {
+      this.spawnEnemy(spawnX + dx, spawnY + dy);
+    }
+  }
+
+  /**
+   * Spawns the camp furniture: the campfire (refuel + light + respawn anchor)
+   * and Commander Vane (quest giver), plus their solids. The base world always
+   * has this; a scenario only gets it when it sets `camp: true`.
+   */
+  private spawnCamp(spawnX: number, spawnY: number, startX: number, startY: number): void {
     // Campfire entity
     const campfireContainer = new Container();
     campfireContainer.x = startX + TILE / 2;
     campfireContainer.y = startY + TILE / 2;
+    campfireContainer.zIndex = computeRenderZ(startY + TILE * 0.82);
 
     const log1 = new Sprite(getWoodItemTexture());
     log1.anchor.set(0.5, 0.5);
@@ -744,13 +1221,7 @@ export class GameEngine {
       interactable: { name: "Campfire", action: "refuel" },
       collider: { isSolid: true },
     });
-    this.mapResource.solidCoords.add(coordKey(spawnX, spawnY));
-    this.mapResource.customSolids.set(coordKey(spawnX, spawnY), {
-      minX: startX + TILE * 0.25,
-      maxX: startX + TILE * 0.75,
-      minY: startY + TILE * 0.25,
-      maxY: startY + TILE * 0.75,
-    });
+    this.setTileFootprint(spawnX, spawnY, CollisionFootprints.campfire);
 
     // NPC Vane
     const npcGx = spawnX + 2;
@@ -764,13 +1235,7 @@ export class GameEngine {
       interactable: { name: "Commander Vane", action: "talk" },
       collider: { isSolid: true },
     });
-    this.mapResource.solidCoords.add(coordKey(npcGx, npcGy));
-    this.mapResource.customSolids.set(coordKey(npcGx, npcGy), {
-      minX: npcEx + TILE * 0.3,
-      maxX: npcEx + TILE * 0.7,
-      minY: npcEy + TILE * 0.7,
-      maxY: npcEy + TILE,
-    });
+    this.setTileFootprint(npcGx, npcGy, CollisionFootprints.npc);
 
     const vaneFrames = getWarriorFrames("idle", "yellow");
     const vaneSprite = new AnimatedSprite(vaneFrames);
@@ -779,239 +1244,10 @@ export class GameEngine {
     vaneSprite.anchor.set(0.5, 1);
     vaneSprite.x = npcEx + TILE / 2;
     vaneSprite.y = npcEy + TILE;
+    vaneSprite.zIndex = computeRenderZ(vaneSprite.y);
     vaneSprite.scale.set((TILE * 1.1) / 192);
     this.entityLayer.addChild(vaneSprite);
     this.entitySprites.set(EntityId.NpcVane, vaneSprite);
-
-    // Scatter resource nodes
-    const gatheredPickups = gameState.rpg.profile?.gatheredPickups ?? [];
-    for (const spawn of this.mapResource.mapData.spawns) {
-      if (gatheredPickups.includes(spawn.id)) continue;
-      this.spawnResource(spawn.id, spawn.x, spawn.y, spawn.gatherableId);
-    }
-
-    // Restore constructed buildings
-    if (gameState.rpg.profile && Array.isArray(gameState.rpg.profile.buildings)) {
-      for (const b of gameState.rpg.profile.buildings) {
-        this.spawnBuilding(b.id, b.type, b.x, b.y);
-      }
-    }
-
-    // Scatter decorations
-    this.spawnDecorations();
-
-    // Seed a few hostiles around camp so combat is testable on load.
-    this.spawnInitialEnemies(spawnX, spawnY);
-
-    // Setup indicators overlay rings
-    this.vfxResource.gatherRing = new Graphics();
-    this.vfxResource.gatherRing.visible = false;
-    this.entityLayer.addChild(this.vfxResource.gatherRing);
-
-    this.vfxResource.selectionRing = new Graphics();
-    this.vfxResource.selectionRing.visible = false;
-    this.entityLayer.addChild(this.vfxResource.selectionRing);
-  }
-
-  private spawnDecorations(): void {
-    const W = this.mapResource.mapW;
-    const H = this.mapResource.mapH;
-
-    for (let gy = 0; gy < H; gy++) {
-      for (let gx = 0; gx < W; gx++) {
-        const cell = this.mapResource.cells[gy * W + gx];
-        if (cell !== Cell.Meadows && cell !== Cell.CrimsonGrove) continue;
-        if (this.mapResource.solidCoords.has(coordKey(gx, gy))) continue;
-
-        const hash = (gx * 1031 + gy * 2053) & 0xffff;
-        if (hash > 0xffff * 0.06) continue;
-        const variant = ((hash % 4) + 1) as 1 | 2 | 3 | 4;
-        const bush = new Sprite(getBushTexture(variant));
-        bush.anchor.set(0.5, 1);
-        bush.x = gx * TILE + TILE / 2 + ((hash >> 8) % 10) - 5;
-        bush.y = gy * TILE + TILE + ((hash >> 4) % 10) - 5;
-        bush.scale.set(TILE / 80);
-        bush.alpha = 0.7 + (hash & 0x0f) / 60;
-        this.entityLayer.addChild(bush);
-      }
-    }
-
-    // Ambient cloud drift
-    for (let i = 0; i < 12; i++) {
-      const variant = ((i % 8) + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-      const cloud = new Sprite(getCloudTexture(variant));
-      cloud.anchor.set(0.5, 0.5);
-      cloud.x = (i / 12) * W * TILE + Math.random() * TILE * 10;
-      cloud.y = Math.random() * H * TILE;
-      cloud.scale.set(0.7 + Math.random() * 0.7);
-      cloud.alpha = 0.28 + Math.random() * 0.2;
-      this.entityLayer.addChild(cloud);
-      this.vfxResource.clouds.push({ sprite: cloud, vx: 8 + Math.random() * 14 });
-    }
-  }
-
-  private spawnResource(id: string, gx: number, gy: number, gatherableId: string): void {
-    const ex = gx * TILE;
-    const ey = gy * TILE;
-
-    const gatherable = getGatherableDefinition(gatherableId);
-    if (!gatherable) return;
-
-    const nodeName = gatherable.displayName;
-    const drop = gatherable.yieldTable[0];
-    const dropName = drop?.itemId ?? "stick";
-    const dropQty = drop?.quantity ?? 1;
-    const rpgLocationId = gatherable.syncLocationId;
-    const rpgAction = gatherable.syncAction;
-    const isPickup = gatherable.interactionKind !== "repeated_action";
-    const isTree = gatherable.solidKind === "tree";
-    const spriteTex =
-      gatherable.renderKind === "wood_pickup"
-        ? getWoodItemTexture()
-        : gatherable.renderKind === "stone_pickup"
-          ? getRockVariantTexture(1)
-          : gatherable.renderKind === "flint_pickup"
-            ? getRockVariantTexture(2)
-            : gatherable.renderKind === "forage"
-              ? getBushTexture(1)
-              : gatherable.renderKind === "moss"
-                ? getBushTexture(2)
-                : gatherable.renderKind === "tree_crimson"
-                  ? getTreeVariantTexture(2)
-                  : gatherable.renderKind === "tree_frost"
-                    ? getTreeVariantTexture(3)
-                    : gatherable.renderKind === "tree_fungal"
-                      ? getTreeVariantTexture(4)
-                      : gatherable.renderKind === "rock_copper"
-                        ? getRockVariantTexture(2)
-                        : gatherable.renderKind === "rock_iron"
-                          ? getRockVariantTexture(3)
-                          : gatherable.renderKind === "rock_toxic"
-                            ? getRockVariantTexture(4)
-                            : gatherable.renderKind === "rock"
-                              ? getRockTexture()
-                              : getTreeTexture();
-
-    if (isPickup) {
-      world.add({
-        id,
-        position: { x: ex, y: ey, targetX: ex, targetY: ey },
-        collider: { isSolid: false },
-        interactable: { name: nodeName, action: "pickup" },
-        pickup: { itemId: dropName, qty: dropQty, gatherableId },
-      });
-
-      const sprite = new Sprite(spriteTex);
-      sprite.anchor.set(0.5, 1);
-      sprite.x = ex + TILE / 2;
-      sprite.y = ey + TILE;
-      if (gatherable.renderKind === "wood_pickup") {
-        sprite.scale.set((TILE * 0.45) / 64);
-      } else if (gatherable.renderKind === "stone_pickup" || gatherable.renderKind === "flint_pickup") {
-        sprite.scale.set((TILE * 0.35) / 64);
-      } else {
-        sprite.scale.set((TILE * 0.4) / 64);
-      }
-      this.entityLayer.addChild(sprite);
-      this.entitySprites.set(id, sprite);
-    } else {
-      world.add({
-        id,
-        position: { x: ex, y: ey, targetX: ex, targetY: ey },
-        collider: { isSolid: true },
-        interactable: { name: nodeName, action: "gather" },
-        resource: {
-          hp: gatherable?.depletion?.hp ?? 15,
-          maxHp: gatherable?.depletion?.hp ?? 15,
-          drop: dropName,
-          gatherableId,
-          rpgAction,
-          rpgLocationId,
-        },
-      });
-      this.mapResource.solidCoords.add(coordKey(gx, gy));
-      if (gatherable.solidKind === "tree") {
-        this.mapResource.customSolids.set(coordKey(gx, gy), {
-          minX: ex + TILE * 0.35,
-          maxX: ex + TILE * 0.65,
-          minY: ey + TILE * 0.7,
-          maxY: ey + TILE,
-        });
-      } else {
-        this.mapResource.customSolids.set(coordKey(gx, gy), {
-          minX: ex + TILE * 0.2,
-          maxX: ex + TILE * 0.8,
-          minY: ey + TILE * 0.2,
-          maxY: ey + TILE * 0.8,
-        });
-      }
-
-      if (isTree) {
-        const tree = new Sprite(spriteTex);
-        tree.anchor.set(0.5, 1);
-        tree.x = ex + TILE / 2;
-        tree.y = ey + TILE;
-        tree.scale.set((TILE * 1.5) / 256);
-        this.entityLayer.addChild(tree);
-        this.entitySprites.set(id, tree);
-      } else {
-        const rock = new Sprite(spriteTex);
-        rock.anchor.set(0.5, 1);
-        rock.x = ex + TILE / 2;
-        rock.y = ey + TILE;
-        rock.width = TILE * 0.9;
-        rock.height = TILE * 0.9;
-        this.entityLayer.addChild(rock);
-        this.entitySprites.set(id, rock);
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Combat: enemy spawn/death, player respawn, HP mirror
-  // ---------------------------------------------------------------------------
-
-  /** Frames provider passed to the AI system so each enemy renders in its colour. */
-  private getEnemyFrames = (entity: Entity, state: AnimState) => {
-    return getWarriorFrames(state, this.enemyColors.get(entity.id) ?? "red");
-  };
-
-  /**
-   * Spawns one hostile (ECS entity + animated sprite + shadow) at a grid cell.
-   * Skips out-of-bounds or solid cells. Returns the entity id, or null if skipped.
-   */
-  public spawnEnemy(gx: number, gy: number, arch: EnemyArchetype = GRUNT): string | null {
-    if (!this.mapResource.inBounds(gx, gy)) return null;
-    if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return null;
-
-    const id = `enemy_${this.enemySeq++}`;
-    const ex = gx * TILE;
-    const ey = gy * TILE;
-    world.add(makeEnemyEntity(id, ex, ey, arch));
-    this.enemyColors.set(id, arch.color);
-
-    const sprite = new AnimatedSprite(getWarriorFrames("idle", arch.color));
-    sprite.animationSpeed = 0.12;
-    sprite.play();
-    sprite.anchor.set(0.5, 1);
-    sprite.scale.set((TILE * 1.1) / 192);
-    sprite.x = ex + TILE / 2;
-    sprite.y = ey + TILE;
-    this.entityLayer.addChild(sprite);
-    this.entitySprites.set(id, sprite);
-    return id;
-  }
-
-  private spawnInitialEnemies(spawnX: number, spawnY: number): void {
-    const offsets: [number, number][] = [
-      [6, 0],
-      [-6, 3],
-      [5, -5],
-      [-5, -4],
-    ];
-    for (const [dx, dy] of offsets) {
-      this.spawnEnemy(spawnX + dx, spawnY + dy);
-    }
   }
 
   /** Enemy death: reward, loot feedback, death burst, despawn. */
@@ -1031,7 +1267,9 @@ export class GameEngine {
         awardSkillXp(SkillKey.Combat, xp, this.vfxResource, this.playerEntity.position!, this.entityLayer);
       }
     }
-    playDepleteSound();
+    playSound("enemy.death", {
+      position: pos ? { x: pos.x + TILE / 2, y: pos.y + TILE / 2 } : undefined,
+    });
     this.enemyColors.delete(enemy.id);
     despawnEntity(world, enemy, this.entityLayer, this.entitySprites, this.vfxResource);
   }
@@ -1051,6 +1289,17 @@ export class GameEngine {
     this.playerEntity.knockback = { vx: 0, vy: 0, timer: 0 };
     this.playerSprite.x = pos.x + TILE / 2;
     this.playerSprite.y = pos.y + TILE;
+
+    // Reset combo states on player death
+    this.combatResource.kiteStacks = 0;
+    this.combatResource.kiteStacksDecayTimer = 0;
+
+    const dmState = this.combatResource.directionalMomentumState;
+    dmState.isActive = false;
+    dmState.lockedDirection = null;
+    dmState.currentStacks = 0;
+    dmState.validStepCount = 0;
+
     this.syncPlayerHp();
   }
 
@@ -1060,6 +1309,57 @@ export class GameEngine {
     const hp = this.playerEntity.health?.current ?? 100;
     if (profile && profile.hpCurrent !== hp) {
       setRpgProfile({ ...profile, hpCurrent: hp });
+    }
+  }
+
+  private updateRenderOrder(): void {
+    for (const entity of world.with("position").entities) {
+      const sprite = this.entitySprites.get(entity.id);
+      if (!sprite) continue;
+      sprite.zIndex = computeRenderZ(entity.position!.y + TILE);
+    }
+    this.playerShadow.zIndex = computeRenderZ(this.playerEntity.position!.y + TILE, -5);
+    this.collisionOverlay.zIndex = 120_000;
+
+    for (const p of this.vfxResource.particles) p.graphic.zIndex = 90_000;
+    for (const p of this.vfxResource.spriteParticles) p.sprite.zIndex = 90_000;
+    for (const ft of this.vfxResource.floatingTexts) ft.textObj.zIndex = 100_000;
+    for (const ring of this.vfxResource.shockwaveRings) ring.graphic.zIndex = 88_000;
+    for (const arc of this.vfxResource.slashArcs) arc.graphic.zIndex = 89_000;
+    if (this.vfxResource.gatherRing) this.vfxResource.gatherRing.zIndex = 85_000;
+    if (this.vfxResource.selectionRing) this.vfxResource.selectionRing.zIndex = 85_000;
+  }
+
+  private drawCollisionOverlay(): void {
+    this.collisionOverlay.clear();
+    this.collisionOverlay.visible = debugConfig.showCollision;
+    if (!debugConfig.showCollision) return;
+
+    for (const key of this.mapResource.solidCoords) {
+      const [gxRaw, gyRaw] = key.split(",");
+      const gx = Number(gxRaw);
+      const gy = Number(gyRaw);
+      if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
+      const aabb = this.mapResource.customSolids.get(key) ?? {
+        minX: gx * TILE,
+        maxX: (gx + 1) * TILE,
+        minY: gy * TILE,
+        maxY: (gy + 1) * TILE,
+      };
+      this.collisionOverlay
+        .rect(aabb.minX, aabb.minY, aabb.maxX - aabb.minX, aabb.maxY - aabb.minY)
+        .fill({ color: this.mapResource.customSolids.has(key) ? 0x55aaff : 0xff5555, alpha: 0.12 })
+        .stroke({ color: this.mapResource.customSolids.has(key) ? 0x55aaff : 0xff5555, width: 2, alpha: 0.75 });
+    }
+
+    const pos = this.playerEntity.position;
+    if (pos) {
+      const cx = pos.x + TILE / 2;
+      const cy = pos.y + PLAYER_BODY.cy;
+      this.collisionOverlay
+        .rect(cx - PLAYER_BODY.hx, cy - PLAYER_BODY.hy, PLAYER_BODY.hx * 2, PLAYER_BODY.hy * 2)
+        .fill({ color: 0xffdd55, alpha: 0.16 })
+        .stroke({ color: 0xffdd55, width: 2, alpha: 0.9 });
     }
   }
 
@@ -1094,6 +1394,7 @@ export class GameEngine {
   // Holds the attack pose briefly so a swing reads even while the movement
   // system is requesting "run"/"idle" every frame.
   private attackAnimLockTimer = 0;
+  private chargeShakeTimer = 0;
 
   private getPlayerSpriteConfig(): { isWarrior: boolean; tool: PawnTool } {
     const w = gameState.rpg.profile?.loadout?.weapon;
@@ -1146,7 +1447,7 @@ export class GameEngine {
     const config = this.getPlayerSpriteConfig();
     let frames: Texture[];
     if (config.isWarrior) {
-      frames = getWarriorFrames(state === "attack" ? "attack" : (state as any));
+      frames = getWarriorFrames(state);
     } else {
       let pawnAnim: PawnAnim = "idle";
       if (state === "run") {
@@ -1212,6 +1513,52 @@ export class GameEngine {
 
   public triggerInteract(): void {
     this.inputResource.pendingInteract = true;
+  }
+
+  public async execute(command: GameCommand, source: CommandSource = "player"): Promise<GameCommandResult> {
+    return executeGameCommand(createEngineCommandContext(this, source), command);
+  }
+
+  public setCollisionOverlayVisible(enabled: boolean): string {
+    debugConfig.showCollision = enabled;
+    this.drawCollisionOverlay();
+    return `collision overlay ${enabled ? "shown" : "hidden"}`;
+  }
+
+  public setCollisionFootprintOverride(id: string, footprint: CollisionFootprint): string {
+    if (!isValidCollisionFootprint(footprint)) return `invalid collision footprint for ${id}`;
+    this.collisionOverrides.set(id, footprint);
+    this.refreshCollisionForGatherable(id);
+    return `collision footprint set for ${id}`;
+  }
+
+  public clearCollisionFootprintOverride(id: string): string {
+    this.collisionOverrides.delete(id);
+    this.refreshCollisionForGatherable(id);
+    return `collision footprint reset for ${id}`;
+  }
+
+  public getCollisionDebugSnapshot(): {
+    overlayVisible: boolean;
+    overrides: { id: string; footprint: CollisionFootprint }[];
+    solids: { key: string; aabb: { minX: number; maxX: number; minY: number; maxY: number }; custom: boolean }[];
+  } {
+    return {
+      overlayVisible: debugConfig.showCollision,
+      overrides: [...this.collisionOverrides.entries()].map(([id, footprint]) => ({ id, footprint })),
+      solids: [...this.mapResource.solidCoords].map((key) => {
+        const custom = this.mapResource.customSolids.get(key);
+        if (custom) return { key, aabb: custom, custom: true };
+        const [gxRaw, gyRaw] = key.split(",");
+        const gx = Number(gxRaw);
+        const gy = Number(gyRaw);
+        return {
+          key,
+          aabb: { minX: gx * TILE, maxX: (gx + 1) * TILE, minY: gy * TILE, maxY: (gy + 1) * TILE },
+          custom: false,
+        };
+      }),
+    };
   }
 
   public isNearCampfire(): boolean {
@@ -1313,12 +1660,29 @@ export class GameEngine {
     return `speed set to ${tilesPerSec} tiles/s`;
   }
 
-  public devSpawn(gatherableId: string, gx: number, gy: number): string {
-    if (!getGatherableDefinition(gatherableId)) return `unknown gatherable: ${gatherableId}`;
+  public spawnPrefab(prefabId: string, gx: number, gy: number): string {
+    const prefab = getPrefabDefinition(prefabId);
+    if (!prefab) return `unknown prefab: ${prefabId}`;
     if (!this.mapResource.inBounds(gx, gy)) return `out of bounds: ${gx},${gy}`;
     if (this.mapResource.solidCoords.has(coordKey(gx, gy))) return `cell occupied: ${gx},${gy}`;
-    this.spawnResource(`dev_${gatherableId}_${this.devSpawnSeq++}`, gx, gy, gatherableId);
-    return `spawned ${gatherableId} at ${gx},${gy}`;
+
+    const resource = prefab.components.find((component) => component.type === "resource");
+    if (resource?.type === "resource") {
+      this.spawnResource(`dev_${prefabId}_${this.devSpawnSeq++}`, gx, gy, resource.gatherableId);
+      return `spawned ${prefabId} at ${gx},${gy}`;
+    }
+
+    const building = prefab.components.find((component) => component.type === "building");
+    if (building?.type === "building") {
+      this.spawnBuilding(`dev_${building.buildingType}_${this.devSpawnSeq++}`, building.buildingType, gx, gy);
+      return `spawned ${prefabId} at ${gx},${gy}`;
+    }
+
+    return `prefab ${prefabId} has no supported runtime spawn component`;
+  }
+
+  public devSpawn(gatherableId: string, gx: number, gy: number): string {
+    return this.spawnPrefab(gatherableId, gx, gy);
   }
 
   public devSpawnEnemy(gx?: number, gy?: number): string {
@@ -1339,6 +1703,46 @@ export class GameEngine {
     return `cleared ${n} enemies`;
   }
 
+  /**
+   * Despawns all resource and pickup entities, resets gathered state, then
+   * re-spawns every node from the current map's spawn list. Intended for the
+   * scenario panel's "respawn all nodes" button so test scenarios can be reset
+   * without a full page reload.
+   */
+  public respawnAllNodes(): void {
+    this.interactionResource.gatheringTarget = null;
+    this.interactionResource.currentTarget = null;
+
+    for (const e of world.with("resource").entities.slice()) {
+      despawnEntity(world, e, this.entityLayer, this.entitySprites, this.vfxResource);
+    }
+    for (const e of world.with("pickup").entities.slice()) {
+      despawnEntity(world, e, this.entityLayer, this.entitySprites, this.vfxResource);
+    }
+
+    // Rebuild solidCoords and spawn list from the scenario definition so that
+    // previously gathered tree/rock coords are restored before re-spawning.
+    const sc = this.scenarioId ? getScenario(this.scenarioId) : null;
+    if (sc) {
+      loadScenarioIntoMap(this.mapResource, sc);
+      // Re-add the campfire and NPC Vane solids that spawnCamp set up — but only
+      // for scenarios that actually have a camp, matching spawnEntities.
+      if (sc.camp) {
+        const spawnX = sc.spawnPoint.gx;
+        const spawnY = sc.spawnPoint.gy;
+        this.setTileFootprint(spawnX, spawnY, CollisionFootprints.campfire);
+        this.setTileFootprint(spawnX + 2, spawnY - 1, CollisionFootprints.npc);
+      }
+    }
+
+    const profile = gameState.rpg.profile;
+    if (profile) setRpgProfile({ ...profile, gatheredPickups: [] });
+
+    for (const spawn of this.mapResource.mapData.spawns) {
+      this.spawnResource(spawn.id, spawn.x, spawn.y, spawn.gatherableId);
+    }
+  }
+
   public devSetPlayerHp(hp: number): string {
     const h = this.playerEntity.health!;
     h.current = Math.max(0, Math.min(h.max, hp));
@@ -1353,11 +1757,20 @@ export class GameEngine {
 
   public devResetCooldowns(): string {
     this.movementResource.dashCooldownTimer = 0;
-    this.interactionResource.superGatherCooldownTimer = 0;
+    this.focusedGatherResource.cooldownSec = 0;
     this.interactionResource.gatherCooldownTimer = 0;
     cooldownsState.evade = 0;
-    cooldownsState.superGather = 0;
+    cooldownsState.focusedGather = 0;
     return "cooldowns reset";
+  }
+
+  /** Dev: queue a focused-gathering session on the hovered/targeted node. */
+  public devStartFocusedGather(): string {
+    this.focusedGatherResource.cooldownSec = 0;
+    this.inputResource.focusedGatherTriggered = true;
+    const target = this.interactionResource.gatheringTarget ?? this.interactionResource.currentTarget;
+    if (!target?.resource) return "no gatherable under cursor; hover a node first";
+    return `focused gathering queued on ${target.interactable?.name ?? target.id}`;
   }
 
   public devSetGatherSpeed(seconds: number): string {
@@ -1378,16 +1791,16 @@ export class GameEngine {
   public devPlaySound(name: string): string {
     switch (name) {
       case "chop":
-        playChopSound();
+        playSound("player.swing");
         return "playing chop sound";
       case "clink":
-        playClinkSound();
+        playSound("gather.strike");
         return "playing clink sound";
       case "fall":
-        playFallSound();
+        playSound("node.treefall");
         return "playing fall sound";
       case "deplete":
-        playDepleteSound();
+        playSound("node.deplete");
         return "playing deplete sound";
       default:
         return "usage: playsound <chop|clink|fall|deplete>";
@@ -1395,7 +1808,32 @@ export class GameEngine {
   }
 
   public devToggleSound(on: boolean): string {
-    setSoundEnabled(on);
-    return `sound synthesis ${on ? "enabled" : "disabled"}`;
+    setMuted(!on);
+    return `audio ${on ? "unmuted" : "muted"}`;
+  }
+
+  /** The biome the player currently stands in, for the ambient scheduler. */
+  private currentAmbientBiome(): AmbientBiome {
+    const pos = this.playerEntity.position;
+    if (!pos) return "none";
+    const gx = Math.round(pos.x / TILE);
+    const gy = Math.round(pos.y / TILE);
+    const cells = this.mapResource.cells;
+    const mapW = this.mapResource.mapW;
+    if (gx < 0 || gy < 0 || gx >= mapW || gy >= cells.length / mapW) return "none";
+    switch (cells[gy * mapW + gx]) {
+      case Cell.Meadows:
+      case Cell.CrimsonGrove:
+      case Cell.Camp:
+        return "forest";
+      case Cell.Frostbane:
+      case Cell.ScorchedWastes:
+        return "frost";
+      case Cell.Water:
+      case Cell.FungalMire:
+        return "water";
+      default:
+        return "none";
+    }
   }
 }

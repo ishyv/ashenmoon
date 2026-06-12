@@ -34,6 +34,8 @@ export const Colors = {
     playerDmgNum: 0xff6666,
     enemyDmgNum: 0xffe066,
     slashArc: 0xfff1c0,
+    kiteArc: 0x33e0a6,
+    fellSweepArc: 0xff8833,
     windupTint: 0xff6a6a,
     invulnTint: 0xffcccc,
     playerDeath: 0xff5555,
@@ -49,7 +51,8 @@ export const Colors = {
     highlight: 0xffe9a8,
     selectionRing: 0xffe9a8,
     gatherRing: 0xffe066,
-    superGather: 0xffa500,
+    chargeRing: 0xff6600,
+    focusedGather: 0xffa500,
     campfire: 0xff6600,
     campfireMsg: 0xffe066,
     footstep: 0xb09870,
@@ -77,8 +80,9 @@ export const Colors = {
   /** skill level-up announcement text, per skill family. */
   skillLevel: {
     gather: 0x55ff55,
-    superGather: 0xffaa00,
+    focusedGather: 0xffaa00,
     evade: 0x55aaff,
     combat: 0xff8855,
+    fellSweep: 0xff6622,
   },
 } as const;

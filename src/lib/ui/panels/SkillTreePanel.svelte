@@ -3,7 +3,7 @@
  * SkillTreePanel.svelte
  * Renders a glassmorphic visual skill progression dashboard, displaying levels,
  * XP progress bars, and passive/active unlock trees for Lumberjacking, Mining,
- * Evade, and Super-Gathering.
+ * and Evade.
  */
 import { fade } from "svelte/transition";
 import { gameState } from "$lib/state/game-state.svelte";
@@ -25,8 +25,10 @@ const miningBonus = $derived(skills ? (skills.mining.level - 1) * 5 : 0);
 const miningCrit = $derived(skills ? (skills.mining.level - 1) * 3 : 0);
 
 const evadeCooldown = $derived(skills ? Math.max(0.5, 1.0 - (skills.evade.level - 1) * 0.05) : 1.0);
-const sgCost = $derived(skills ? Math.max(15, 35 - (skills.superGather.level - 1) * 2) : 35);
-const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.level - 1) * 0.15) : 2.0);
+
+const kiteLevel = $derived(skills && skills.kiteCombo ? skills.kiteCombo.level : 1);
+const kiteRangeBonus = $derived(4 + 1.5 * kiteLevel);
+const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
 </script>
 
 <div
@@ -124,26 +126,25 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
                 </div>
               </div>
 
-              <!-- Connecting Line -->
-              <div class="tree-line">
-                <div class="line-glow"></div>
-              </div>
-
-              <!-- Super-Gather Node -->
-              <div class="tree-node border-orange">
-                <div class="node-icon bg-orange">💥</div>
+              <!-- Kite Specialization Node -->
+              {#if skills.kiteCombo}
+              <div class="tree-node border-orange" style="margin-top: 1rem;">
+                <div class="node-icon bg-orange">🪶</div>
                 <div class="node-details">
-                  <div class="node-name color-orange">Super-Gather</div>
-                  <div class="node-level">Level {skills.superGather.level}</div>
+                  <div class="node-name color-orange">Kite Specialization</div>
+                  <div class="node-level">Level {skills.kiteCombo.level}</div>
                   <div class="node-stats">
-                    Stamina: <span class="benefit">{sgCost}</span> | Cooldown: <span class="benefit">{sgCooldown.toFixed(2)}s</span>
+                    Bonus per stack:<br/>
+                    Range: <span class="benefit">+{kiteRangeBonus.toFixed(1)}%</span> |
+                    Damage: <span class="benefit">+{kiteDamageBonus.toFixed(1)}%</span>
                   </div>
                   <div class="xp-bar-container mini-bar">
-                    <div class="xp-fill sg-fill" style="width: {getXpPercent(skills.superGather.xp, skills.superGather.nextXp)}%"></div>
+                    <div class="xp-fill orange-fill" style="width: {getXpPercent(skills.kiteCombo.xp, skills.kiteCombo.nextXp)}%; background: #ffaa00;"></div>
                   </div>
-                  <div class="xp-text mini-text">{skills.superGather.xp}/{skills.superGather.nextXp} XP</div>
+                  <div class="xp-text mini-text">{skills.kiteCombo.xp}/{skills.kiteCombo.nextXp} XP</div>
                 </div>
               </div>
+              {/if}
             </div>
           </div>
         </div>
@@ -364,11 +365,6 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
     box-shadow: 0 0 4px rgba(85, 158, 200, 0.4);
   }
 
-  .sg-fill {
-    background: linear-gradient(90deg, #a65b1c, #e68d45);
-    box-shadow: 0 0 4px rgba(230, 141, 69, 0.4);
-  }
-
   .xp-text {
     position: absolute;
     inset: 0;
@@ -422,7 +418,7 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
   }
 
   .border-cyan { border-color: rgba(0, 170, 255, 0.18) !important; }
-  .border-orange { border-color: rgba(255, 120, 0, 0.18) !important; }
+  .border-orange { border-color: rgba(255, 170, 0, 0.18) !important; }
 
   .tree-node:hover {
     background: rgba(30, 24, 20, 0.8);
@@ -430,7 +426,7 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
   }
 
   .tree-node:hover.border-cyan { border-color: rgba(0, 170, 255, 0.45) !important; }
-  .tree-node:hover.border-orange { border-color: rgba(255, 120, 0, 0.45) !important; }
+  .tree-node:hover.border-orange { border-color: rgba(255, 170, 0, 0.45) !important; }
 
   .node-icon {
     width: 42px;
@@ -448,10 +444,9 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
     background: rgba(0, 170, 255, 0.15);
     border: 1px solid rgba(0, 170, 255, 0.4);
   }
-
   .bg-orange {
-    background: rgba(255, 120, 0, 0.15);
-    border: 1px solid rgba(255, 120, 0, 0.4);
+    background: rgba(255, 170, 0, 0.15);
+    border: 1px solid rgba(255, 170, 0, 0.4);
   }
 
   .node-details {
@@ -468,7 +463,7 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
   }
 
   .color-cyan { color: #55c8ff; }
-  .color-orange { color: #ff9d55; }
+  .color-orange { color: #ffaa33; }
 
   .node-level {
     font-family: "IBM Plex Mono", monospace;
@@ -500,18 +495,4 @@ const sgCooldown = $derived(skills ? Math.max(0.5, 2.0 - (skills.superGather.lev
     color: rgba(255,255,255,0.4);
   }
 
-  /* Connecting tree line */
-  .tree-line {
-    position: relative;
-    height: 30px;
-    width: 2px;
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .line-glow {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, #55aaff, #ffa500);
-    opacity: 0.3;
-  }
 </style>

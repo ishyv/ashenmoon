@@ -25,6 +25,8 @@ export interface GameEngineConfig {
   onHudUpdate: (state: HudState) => void;
   /** Called when the player right-clicks an interactable entity. Use to show a context menu. */
   onContextMenu?: (name: string, action: string, screenX: number, screenY: number) => void;
+  /** If set, loads this scenario id instead of the procedural map. */
+  scenarioId?: string;
 }
 
 /**
@@ -101,8 +103,11 @@ export interface SpriteParticle {
 
 export interface FloatingText {
   textObj: Text;
-  vx: number;
-  vy: number;
+  /** Stack group. Entries sharing a key stack vertically instead of overlapping. */
+  stackKey: string;
+  /** Anchor the stack rises from, in world px (eased toward each frame). */
+  baseX: number;
+  baseY: number;
   life: number;
   maxLife: number;
 }

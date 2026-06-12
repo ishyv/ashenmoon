@@ -7,6 +7,14 @@
  */
 import { onMount } from "svelte";
 import { uiPreferences, saveUiPreferences } from "$lib/state/runtime-ui-state.svelte";
+import { audioSettings, setVolume, setAudioMuted, type VolumeKey } from "$lib/audio/audio-settings.svelte";
+
+const VOLUME_ROWS: { key: VolumeKey; label: string }[] = [
+  { key: "master", label: "master" },
+  { key: "sfx", label: "effects" },
+  { key: "ambient", label: "ambience" },
+  { key: "ui", label: "interface" },
+];
 
 // Action keys type
 export type ActionId = "MOVE_UP" | "MOVE_DOWN" | "MOVE_LEFT" | "MOVE_RIGHT" | "HARVEST" | "CONSOLE" | "SPRINT";
@@ -304,6 +312,41 @@ function clearSlot(action: ActionId, slotIndex: number): void {
           </div>
           <input type="checkbox" bind:checked={uiPreferences.equipOnlyWithStash} onchange={saveUiPreferences} />
         </label>
+      </div>
+
+      <div class="ui-preferences-section">
+        <h3 class="section-title">🔊 audio</h3>
+
+        <label class="preference-row">
+          <div class="preference-info">
+            <span class="preference-name">muted</span>
+            <span class="preference-desc">silence all game audio</span>
+          </div>
+          <input
+            type="checkbox"
+            checked={audioSettings.muted}
+            onchange={(e) => setAudioMuted(e.currentTarget.checked)}
+          />
+        </label>
+
+        {#each VOLUME_ROWS as row (row.key)}
+          <label class="preference-row volume-row">
+            <div class="preference-info">
+              <span class="preference-name">{row.label}</span>
+              <span class="preference-value">{Math.round(audioSettings[row.key] * 100)}%</span>
+            </div>
+            <input
+              class="volume-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={audioSettings[row.key]}
+              disabled={audioSettings.muted}
+              oninput={(e) => setVolume(row.key, Number(e.currentTarget.value))}
+            />
+          </label>
+        {/each}
       </div>
     </div>
 
@@ -636,6 +679,23 @@ function clearSlot(action: ActionId, slotIndex: number): void {
     font-size: 0.65rem;
     color: rgba(255, 255, 255, 0.45);
     line-height: 1.3;
+  }
+
+  .preference-value {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .volume-slider {
+    width: 130px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .volume-slider:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
   /* Custom styling for checkbox */

@@ -42,6 +42,11 @@ export interface Entity {
     gatherableId?: string;
   };
 
+  /** Station marker for generic station/process interactions. */
+  station?: {
+    stationId: string;
+  };
+
   // --- Combat components -----------------------------------------------------
   // These compose to make any entity a combat participant. The player carries
   // `health` + `knockback`; a hostile additionally carries `mover` + `ai` +

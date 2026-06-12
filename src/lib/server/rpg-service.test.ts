@@ -52,7 +52,7 @@ describe("normalizePlayerState", () => {
 
     expect(normalized.profile.hpCurrent).toBe(100);
     expect(normalized.inventory.slots).toEqual({});
-    expect(normalized.skills.superGather.level).toBe(1);
+    expect(normalized.skills.mining.level).toBe(1);
   });
 });
 

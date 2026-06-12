@@ -1,8 +1,7 @@
 /**
  * Skill XP + level-up, deduplicated. The same award/level-up/announce sequence
- * was copy-pasted four times (lumberjacking, mining, super-gather in
- * interaction-system; evade in movement; combat in engine). This is the one
- * implementation.
+ * was copy-pasted across the gathering, movement, and combat systems. This is
+ * the one implementation.
  *
  * INVARIANT: this is the only place that writes a skill's level. Callers decide
  * which skill and how much XP; the per-skill label and announcement color live
@@ -22,14 +21,15 @@ interface SkillDisplay {
   levelColor: number;
 }
 
-type RuntimeSkillMap = RpgPlayerState["skills"] & Partial<Record<SkillKey.Combat, RpgSkillState>>;
+type RuntimeSkillMap = RpgPlayerState["skills"] & Partial<Record<SkillKey.Combat | SkillKey.FellSweep, RpgSkillState>>;
 
 const SKILL_DISPLAY: Record<SkillKey, SkillDisplay> = {
   [SkillKey.Lumberjacking]: { label: "Lumberjacking", levelColor: Colors.skillLevel.gather },
   [SkillKey.Mining]: { label: "Mining", levelColor: Colors.skillLevel.gather },
-  [SkillKey.SuperGather]: { label: "Super-Gather", levelColor: Colors.skillLevel.superGather },
   [SkillKey.Evade]: { label: "Evade", levelColor: Colors.skillLevel.evade },
   [SkillKey.Combat]: { label: "Combat", levelColor: Colors.skillLevel.combat },
+  [SkillKey.FellSweep]: { label: "Fell Sweep", levelColor: Colors.skillLevel.fellSweep },
+  [SkillKey.KiteCombo]: { label: "Kite Specialization", levelColor: Colors.skillLevel.combat },
 };
 
 /**

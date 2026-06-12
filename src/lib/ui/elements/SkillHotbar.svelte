@@ -1,27 +1,30 @@
 <script lang="ts">
 /**
  * SkillHotbar.svelte
- * Displays the active skill slots (Evade, Super-Gather) with glowing
- * hextech-themed circular icons and radial cooldown clock overlays.
+ * Displays the active skill slots (Evade, Focused Gathering, Fell Sweep) with
+ * glowing circular icons and radial cooldown clock overlays.
  */
-import { fade } from "svelte/transition";
 import { gameState } from "$lib/state/game-state.svelte";
-import { cooldownsState, uiPreferences } from "$lib/state/runtime-ui-state.svelte";
+import { cooldownsState } from "$lib/state/runtime-ui-state.svelte";
 import { stamina } from "$lib/domain/stamina.svelte";
 
 const evadeCooldown = $derived(cooldownsState.evade);
 const evadeMax = $derived(cooldownsState.evadeMax);
-const sgCooldown = $derived(cooldownsState.superGather);
-const sgMax = $derived(cooldownsState.superGatherMax);
+const fgCooldown = $derived(cooldownsState.focusedGather);
+const fgMax = $derived(cooldownsState.focusedGatherMax);
+const fsCooldown = $derived(cooldownsState.fellSweep);
+const fsMax = $derived(cooldownsState.fellSweepMax);
+const fsCharge = $derived(cooldownsState.fellSweepCharge);
 
 // Compute percentages (100 is fully on cooldown, 0 is fully off cooldown)
 const evadePercent = $derived(evadeCooldown > 0 ? (evadeCooldown / evadeMax) * 100 : 0);
-const sgPercent = $derived(sgCooldown > 0 ? (sgCooldown / sgMax) * 100 : 0);
+const fgPercent = $derived(fgCooldown > 0 ? (fgCooldown / fgMax) * 100 : 0);
+const fsPercent = $derived(fsCooldown > 0 ? (fsCooldown / fsMax) * 100 : 0);
 
-// Evade Stamina Check
+// Stamina checks (focused gathering's cheapest tier costs 10).
 const hasEvadeStam = $derived(stamina.current >= 25);
-// Super-Gather Stamina Check
-const hasSgStam = $derived(stamina.current >= 35);
+const hasFgStam = $derived(stamina.current >= 10);
+const hasFsStam = $derived(stamina.current >= 20);
 </script>
 
 <div class="hotbar-container">
@@ -49,27 +52,59 @@ const hasSgStam = $derived(stamina.current >= 35);
     </div>
   </div>
 
-  <!-- Super-Gather Skill Icon -->
-  <div class="skill-slot" class:on-cooldown={sgCooldown > 0} class:out-of-stamina={!hasSgStam}>
+  <!-- Focused Gathering Skill Icon -->
+  <div class="skill-slot" class:on-cooldown={fgCooldown > 0} class:out-of-stamina={!hasFgStam}>
     <!-- SVG Circular Radial Cooldown Overlay -->
-    {#if sgCooldown > 0}
+    {#if fgCooldown > 0}
       <svg class="cooldown-overlay" viewBox="0 0 36 36">
         <path
           class="cooldown-progress"
           stroke-dasharray="100, 100"
-          stroke-dashoffset={100 - sgPercent}
+          stroke-dashoffset={100 - fgPercent}
           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
         />
       </svg>
-      <div class="cooldown-time">{sgCooldown.toFixed(1)}s</div>
+      <div class="cooldown-time">{fgCooldown.toFixed(1)}s</div>
     {/if}
-    
-    <div class="skill-icon sg-bg">sg</div>
+
+    <div class="skill-icon fg-bg">fg</div>
     <div class="skill-key">EE</div>
     <div class="tooltip">
-      <div class="title">Super-Gather (Lvl {gameState.rpg.skills?.superGather?.level ?? 1})</div>
-      <div class="desc">Double-tap E to execute a strong strike yielding double drops and doubling impact feedback.</div>
-      <div class="cost">Cost: {Math.max(15, 35 - ((gameState.rpg.skills?.superGather?.level ?? 1) - 1) * 2)} Stamina</div>
+      <div class="title">focused gathering</div>
+      <div class="desc">double-tap e on a node to commit it and break it open by hand. click the targets in order and on time. read it well and you profit, botch it and you waste the source.</div>
+      <div class="cost">cost / cooldown scale with node difficulty</div>
+    </div>
+  </div>
+
+  <!-- Fell Sweep Skill Icon -->
+  <div class="skill-slot" class:on-cooldown={fsCooldown > 0} class:out-of-stamina={!hasFsStam} class:charging={fsCharge > 0}>
+    {#if fsCooldown > 0}
+      <svg class="cooldown-overlay" viewBox="0 0 36 36">
+        <path
+          class="cooldown-progress"
+          stroke-dasharray="100, 100"
+          stroke-dashoffset={100 - fsPercent}
+          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+      </svg>
+      <div class="cooldown-time">{fsCooldown.toFixed(1)}s</div>
+    {:else if fsCharge > 0}
+      <svg class="cooldown-overlay charge-overlay" viewBox="0 0 36 36">
+        <path
+          class="charge-progress"
+          stroke-dasharray="100, 100"
+          stroke-dashoffset={100 - fsCharge * 100}
+          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+      </svg>
+    {/if}
+
+    <div class="skill-icon fs-bg">fs</div>
+    <div class="skill-key">HOLD</div>
+    <div class="tooltip">
+      <div class="title">Fell Sweep (Lvl {gameState.rpg.skills?.fellSweep?.level ?? 1})</div>
+      <div class="desc">Hold left-click and release to sweep. Any hold lands a blow — longer hold widens the arc and extends reach up to 30%. Release early for a quick weaker strike.</div>
+      <div class="cost">Cost: {Math.max(10, 20 - ((gameState.rpg.skills?.fellSweep?.level ?? 1) - 1))} Stamina / {Math.max(4, 8 - ((gameState.rpg.skills?.fellSweep?.level ?? 1) - 1) * 0.4).toFixed(1)}s cooldown</div>
     </div>
   </div>
 </div>
@@ -132,8 +167,43 @@ const hasSgStam = $derived(stamina.current >= 35);
     color: var(--color-cold, skyblue);
   }
 
-  .sg-bg {
+  .fg-bg {
     color: var(--color-warning, gold);
+  }
+
+  .fs-bg {
+    color: #ff7733;
+  }
+
+  .charging {
+    border-color: rgba(255, 120, 40, 0.8);
+    animation: charge-pulse 0.55s ease-in-out infinite;
+  }
+
+  @keyframes charge-pulse {
+    0%, 100% {
+      box-shadow: 0 0 8px rgba(255, 100, 20, 0.4), inset 0 0 6px rgba(0, 0, 0, 0.6);
+    }
+    50% {
+      box-shadow: 0 0 22px rgba(255, 100, 20, 0.75), 0 0 8px rgba(255, 160, 60, 0.4), inset 0 0 3px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .charge-overlay {
+    position: absolute;
+    inset: -1.5px;
+    width: calc(100% + 3px);
+    height: calc(100% + 3px);
+    transform: rotate(-90deg);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .charge-progress {
+    fill: none;
+    stroke: rgba(255, 100, 20, 0.85);
+    stroke-width: 2px;
+    stroke-linecap: round;
   }
 
   /* Hotkey labels underneath slot */

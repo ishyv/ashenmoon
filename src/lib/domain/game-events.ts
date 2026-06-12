@@ -40,8 +40,9 @@ export enum SkillKey {
   Lumberjacking = "lumberjacking",
   Mining = "mining",
   Evade = "evade",
-  SuperGather = "superGather",
   Combat = "combat",
+  FellSweep = "fellSweep",
+  KiteCombo = "kiteCombo",
 }
 
 /** Logical input actions resolved through `InputResource.bindings`. */
@@ -63,4 +64,5 @@ export const StorageKeys = {
   statuses: "ashenmoor_statuses",
   knowledge: "ashenmoor_knowledge",
   recipes: "ashenmoor_recipes",
+  audio: "ashenmoor_audio",
 } as const;

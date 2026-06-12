@@ -8,11 +8,12 @@ import {
   spawnEnvFloatingText,
   spawnEnvParticles,
 } from "$lib/core/vfx";
-import { playCraftSound } from "$lib/core/audio-synthesis";
+import { playSound } from "$lib/audio/audio-engine";
 import { Cell } from "$lib/core/types";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { getBuildingSpec } from "$lib/domain/building-specs";
+import { CollisionFootprints, computeRenderZ, resolveCollisionAabb } from "$lib/domain/collision";
 import {
   isValidBuildingPlacement,
   type BuildingPlacementContext,
@@ -93,6 +94,10 @@ export function spawnBuildingSystem(
   for (let dy = 0; dy < h; dy++) {
     for (let dx = 0; dx < w; dx++) {
       map.solidCoords.add(coordKey(gx + dx, gy + dy));
+      map.customSolids.set(
+        coordKey(gx + dx, gy + dy),
+        resolveCollisionAabb({ x: (gx + dx) * TILE, y: (gy + dy) * TILE }, CollisionFootprints.building, TILE),
+      );
     }
   }
 
@@ -104,6 +109,7 @@ export function spawnBuildingSystem(
   sprite.y = (gy + h) * TILE;
   sprite.width = spec.sprite.w * TILE;
   sprite.height = spec.sprite.h * TILE;
+  sprite.zIndex = computeRenderZ(sprite.y);
 
   entityLayer.addChild(sprite);
   entitySprites.set(id, sprite);
@@ -142,7 +148,7 @@ export async function placeBuildingSystem(
   const id = `building_${type}_${Date.now()}`;
   spawnBuildingSystem(id, type, gx, gy, world, map, entityLayer, entitySprites, getBuildingTexture);
 
-  playCraftSound();
+  playSound("build.place");
   spawnEnvFloatingText(vfx, "constructed", Colors.building.success, player.position!, entityLayer);
   spawnEnvParticles(vfx, Colors.building.particle, 15, "smoke", player.position!, entityLayer);
 
@@ -174,4 +180,3 @@ export function updatePlacementPreviewSystem(
   const valid = isValidPlacement(mx, my, type, map, playerPos);
   building.previewSprite.tint = valid ? Colors.building.validPlace : Colors.building.invalidPlace;
 }
-

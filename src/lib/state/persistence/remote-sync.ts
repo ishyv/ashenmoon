@@ -44,13 +44,9 @@ export interface GatherSync {
   toolBroken: boolean;
 }
 
-/** Resource gather (mine/forest). `superGather` doubles yield server-side. */
-export function syncGather(
-  action: string,
-  locationId: string,
-  superGather: boolean,
-): Promise<SyncResult<GatherSync>> {
-  return postJson<GatherSync>("/api/rpg/gather", { action, locationId, superGather });
+/** Resource gather (mine/forest): one swing, one unit of the node's drop. */
+export function syncGather(action: string, locationId: string): Promise<SyncResult<GatherSync>> {
+  return postJson<GatherSync>("/api/rpg/gather", { action, locationId });
 }
 
 /** Ground pickup. `itemId` is the gathered item; `pickupId` the world entity id. */

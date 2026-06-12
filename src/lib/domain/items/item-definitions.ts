@@ -20,6 +20,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 1.2, stackLimit: 30 },
+    iconUrl: "/assets/icons/rock.png",
   }),
   stick: Item({
     id: itemId("stick"),
@@ -28,6 +29,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Timber,
     physical: { carryClass: "pocket", weight: 0.2, stackLimit: 20 },
+    iconUrl: "/assets/icons/twigs.png",
   }).with(
     Flammable({
       ignitionTemp: 95,
@@ -56,6 +58,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pocket", weight: 0.15, stackLimit: 20 },
+    iconUrl: "/assets/icons/flint_shard.png",
   }),
   grass_fiber: Item({
     id: itemId("grass_fiber"),
@@ -64,6 +67,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 40 },
+    iconUrl: "/assets/icons/fiber.png",
   }),
   leaves: Item({
     id: itemId("leaves"),
@@ -72,6 +76,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.03, stackLimit: 50 },
+    iconUrl: "/assets/icons/leaves.png",
   }).with(
     Flammable({
       ignitionTemp: 70,
@@ -86,6 +91,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.1, stackLimit: 30 },
+    iconUrl: "/assets/icons/tree_bark.png",
   }).with(
     Flammable({
       ignitionTemp: 90,
@@ -100,6 +106,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
+    iconUrl: "/assets/icons/berries.png",
   }).with(
     Consumable({
       verb: "eat",
@@ -117,6 +124,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.08, stackLimit: 20 },
+    iconUrl: "/assets/icons/mushroom.png",
   }).with(
     Consumable({
       verb: "eat",
@@ -134,6 +142,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.8, stackLimit: 20 },
+    iconUrl: "/assets/icons/mud.png",
   }).with(
     TemperatureSensitive({
       minSafeTemp: -100,
@@ -156,6 +165,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.04, stackLimit: 30 },
+    iconUrl: "/assets/icons/wild_herb.png",
   }),
   ash: Item({
     id: itemId("ash"),
@@ -304,10 +314,16 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.7, stackLimit: 30 },
   }),
+  // --- Tools -----------------------------------------------------------------
+  // Two families, five tiers each. Pickaxes (⛏️) mine ore/stone; axes (🪓) chop
+  // trees. The id substring ("pickaxe"/"axe") is what the gather gate keys off,
+  // so every pickaxe id must contain "pickaxe" and every axe id must contain
+  // "axe" without "pickaxe". Emoji icons are placeholders until sprites exist.
   starter_pickaxe: Item({
     id: itemId("starter_pickaxe"),
     name: "Starter Pickaxe",
     description: "A tired pickaxe with a worn iron head.",
+    icon: "⛏️",
     rarity: Rarity.Common,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 2, stackLimit: 1 },
@@ -316,6 +332,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("starter_axe"),
     name: "Starter Axe",
     description: "A simple hand axe with a notched blade.",
+    icon: "🪓",
     rarity: Rarity.Common,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.6, stackLimit: 1 },
@@ -323,7 +340,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
   stone_pickaxe: Item({
     id: itemId("stone_pickaxe"),
     name: "Stone Pickaxe",
-    description: "A pickaxe bound with flint and twine.",
+    description: "A stone pick lashed to a wooden haft.",
+    icon: "⛏️",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
@@ -332,6 +350,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("stone_axe"),
     name: "Stone Axe",
     description: "A heavy axe with a polished stone head.",
+    icon: "🪓",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
@@ -339,7 +358,8 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
   flint_pickaxe: Item({
     id: itemId("flint_pickaxe"),
     name: "Flint Pickaxe",
-    description: "A pickaxe bound with flint and twine.",
+    description: "A knapped flint pick bound with twine.",
+    icon: "⛏️",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.4, stackLimit: 1 },
@@ -348,6 +368,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("flint_axe"),
     name: "Flint Axe",
     description: "A simple axe made of sharp flint stone and wood.",
+    icon: "🪓",
     rarity: Rarity.Uncommon,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.2, stackLimit: 1 },
@@ -356,6 +377,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("copper_pickaxe"),
     name: "Copper Pickaxe",
     description: "Malleable copper pickaxe. Gleams brightly.",
+    icon: "⛏️",
     rarity: Rarity.Rare,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.7, stackLimit: 1 },
@@ -364,6 +386,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("copper_axe"),
     name: "Copper Axe",
     description: "A copper woodsman axe with a sharp edge.",
+    icon: "🪓",
     rarity: Rarity.Rare,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.5, stackLimit: 1 },
@@ -372,6 +395,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("iron_pickaxe"),
     name: "Iron Pickaxe",
     description: "A heavy, professional iron mining tool.",
+    icon: "⛏️",
     rarity: Rarity.Legendary,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 2.2, stackLimit: 1 },
@@ -380,6 +404,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     id: itemId("iron_axe"),
     name: "Iron Axe",
     description: "Tempered iron head on a sturdy oak shaft.",
+    icon: "🪓",
     rarity: Rarity.Legendary,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.9, stackLimit: 1 },
@@ -418,6 +443,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.2, stackLimit: 30 },
+    iconUrl: "/assets/icons/coal.png",
   }),
   volatile_ash: Item({
     id: itemId("volatile_ash"),

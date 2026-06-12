@@ -9,17 +9,24 @@ export interface UiPreferences {
 export const cooldownsState = $state<{
   evade: number;
   evadeMax: number;
-  superGather: number;
-  superGatherMax: number;
+  focusedGather: number;
+  focusedGatherMax: number;
+  fellSweep: number;
+  fellSweepMax: number;
+  fellSweepCharge: number;
 }>({
   evade: 0,
   evadeMax: 1,
-  superGather: 0,
-  superGatherMax: 2,
+  focusedGather: 0,
+  focusedGatherMax: 12,
+  fellSweep: 0,
+  fellSweepMax: 8,
+  fellSweepCharge: 0,
 });
 
-export const debugConfig = $state<{ zeroCooldowns: boolean }>({
+export const debugConfig = $state<{ zeroCooldowns: boolean; showCollision: boolean }>({
   zeroCooldowns: false,
+  showCollision: false,
 });
 
 export const uiPreferences = $state<UiPreferences>({
@@ -57,4 +64,3 @@ export function saveUiPreferences(): void {
     console.error("failed to save ui preferences:", e);
   }
 }
-

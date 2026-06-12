@@ -86,6 +86,8 @@ const weaponMeta = $derived(() => {
           {#if meta}
             {#if meta.iconUrl}
               <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+            {:else if meta.icon}
+              <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
             {:else}
               <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
             {/if}
@@ -272,6 +274,11 @@ const weaponMeta = $derived(() => {
 
   .slot-icon {
     font-size: 1.4rem;
+  }
+
+  .slot-icon-emoji {
+    font-size: 1.6rem;
+    line-height: 1;
   }
 
   .slot-details {

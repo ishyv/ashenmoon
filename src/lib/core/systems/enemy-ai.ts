@@ -180,7 +180,7 @@ export function enemyAiSystem(
           if (melee.windupTimer <= 0) {
             // Strike resolves only if the player is still in reach (dodgeable).
             if (distPlayer <= melee.range * 1.4) {
-              applyDamage(player, melee.damage, ecx, ecy, melee.knockback, config, vfx, entityLayer);
+              applyDamage(player, melee.damage, ecx, ecy, melee.knockback, config, vfx, entityLayer, combat);
             }
             melee.cooldownTimer = melee.cooldown;
             ai.state = "recover";

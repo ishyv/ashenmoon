@@ -2,14 +2,10 @@
   "playerStates": {
     "mock_user": {
       "profile": {
-        "hpCurrent": 52,
+        "hpCurrent": 41,
         "stashSize": 60,
         "loadout": {
-          "weapon": {
-            "instanceId": "standalone_flint_axe_1781187333962",
-            "itemId": "flint_axe",
-            "durability": 20
-          },
+          "weapon": null,
           "shield": null,
           "helmet": null,
           "chest": null,
@@ -54,11 +50,7 @@
           "last_flint_mq9ky6tq",
           "last_fiber_mq9ky6tq",
           "last_leaves_mq9ky6tq",
-          "pickup_bark_strip_5",
-          "pickup_flint_shard_pickup_2",
-          "pickup_bark_strip_4",
-          "pickup_flint_shard_pickup_1",
-          "pickup_loose_stone_pickup_2"
+          "sc_moss_patch"
         ]
       },
       "inventory": {
@@ -67,7 +59,7 @@
             "qty": 3
           },
           "stone": {
-            "qty": 3
+            "qty": 10
           },
           "leaves": {
             "qty": 10
@@ -76,13 +68,25 @@
             "qty": 4
           },
           "bark": {
-            "qty": 3
+            "qty": 1
           },
           "oak_wood": {
-            "qty": 17
+            "qty": 20
           },
-          "flint_shard": {
-            "qty": 2
+          "spruce_wood": {
+            "qty": 52
+          },
+          "copper_ore": {
+            "qty": 22
+          },
+          "palm_wood": {
+            "qty": 22
+          },
+          "pine_wood": {
+            "qty": 25
+          },
+          "moss": {
+            "qty": 1
           }
         }
       },
@@ -99,13 +103,18 @@
         },
         "evade": {
           "level": 1,
-          "xp": 0,
+          "xp": 45,
           "nextXp": 100
         },
-        "superGather": {
+        "fellSweep": {
           "level": 1,
           "xp": 0,
           "nextXp": 100
+        },
+        "kiteCombo": {
+          "level": 2,
+          "xp": 125,
+          "nextXp": 200
         }
       }
     }

@@ -68,7 +68,10 @@ export interface ItemDefinition {
   category: Category;
   physical: ItemPhysicalProperties;
   traits: ItemTrait[];
+  /** Path to a sprite icon. Preferred when present. */
   iconUrl?: string;
+  /** Emoji placeholder, shown when no iconUrl is set. Lets items read at a glance before art exists. */
+  icon?: string;
 }
 
 /**

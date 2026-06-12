@@ -34,7 +34,6 @@ function state(overrides: Partial<RpgPlayerState> = {}): RpgPlayerState {
       lumberjacking: { level: 1, xp: 0, nextXp: 100 },
       mining: { level: 1, xp: 0, nextXp: 100 },
       evade: { level: 1, xp: 0, nextXp: 100 },
-      superGather: { level: 1, xp: 0, nextXp: 100 },
     },
     ...overrides,
   };

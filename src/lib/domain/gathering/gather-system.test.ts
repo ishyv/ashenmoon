@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   checkGatherTool,
   gatherInterval,
-  gatherQuantity,
   matchesToolKind,
   requiredToolKind,
-  superGatherCooldown,
-  superGatherCost,
   toolKindOf,
 } from "./gather-system";
 
@@ -41,17 +38,5 @@ describe("scaling", () => {
     expect(gatherInterval(0.6, 1)).toBeCloseTo(0.6);
     expect(gatherInterval(0.6, 5)).toBeCloseTo(0.6 * 0.95 ** 4);
     expect(gatherInterval(0.6, 100)).toBe(0.15);
-  });
-
-  it("doubles yield on super-gather", () => {
-    expect(gatherQuantity(false)).toBe(1);
-    expect(gatherQuantity(true)).toBe(2);
-  });
-
-  it("scales super-gather cost and cooldown with floors", () => {
-    expect(superGatherCost(35, 1)).toBe(35);
-    expect(superGatherCost(35, 100)).toBe(15);
-    expect(superGatherCooldown(2, 1)).toBe(2);
-    expect(superGatherCooldown(2, 100)).toBe(0.5);
   });
 });

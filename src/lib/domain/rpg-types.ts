@@ -63,7 +63,8 @@ export interface RpgPlayerState {
     lumberjacking: RpgSkillState;
     mining: RpgSkillState;
     evade: RpgSkillState;
-    superGather: RpgSkillState;
+    fellSweep?: RpgSkillState;
+    kiteCombo?: RpgSkillState;
   };
 }
 

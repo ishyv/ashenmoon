@@ -10,19 +10,11 @@ import {
   triggerCameraShake,
 } from "$lib/core/vfx";
 import { Cell } from "$lib/core/types";
-import {
-  playChopSound,
-  playClinkSound,
-  playPickupSound,
-  playCraftSound,
-  playFallSound,
-  playDepleteSound,
-  playWaterBubble,
-} from "$lib/core/audio-synthesis";
+import { playSound } from "$lib/audio/audio-engine";
+import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { gameState } from "$lib/state/game-state.svelte";
 import { applyRpgState, setRpgInventory } from "$lib/state/rpg-actions.svelte";
 import { getItemDef } from "$lib/domain/items";
-import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import { awardSkillXp } from "$lib/domain/skill-xp";
@@ -32,14 +24,7 @@ import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remot
 import { transformStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
 import { getStationDefinition } from "$lib/domain/stations";
-import {
-  checkGatherTool,
-  gatherInterval,
-  gatherQuantity,
-  requiredToolKind,
-  superGatherCooldown,
-  superGatherCost,
-} from "$lib/domain/gathering/gather-system";
+import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
 import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
 import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
@@ -51,18 +36,169 @@ import {
   isPointInTreeFallZone,
 } from "$lib/domain/hazards/tree-fall-hazard";
 import { learnAbout } from "$lib/domain/knowledge.svelte";
+import { InteractionDispatcher } from "$lib/core/runtime/interactions";
+import type { RuntimeResourceMap } from "$lib/core/runtime/runtime";
 
 const INTERACT_RANGE = 2;
 const CAMPFIRE_STATION = getStationDefinition("campfire");
+
+interface ImmediateInteractionDeps {
+  interaction: InteractionResource;
+  vfx: VFXResource;
+  entityLayer: Container;
+  entitySprites: Map<string, Container>;
+  playerSprite: AnimatedSprite;
+  triggerQuestEvent: (evt: string, arg?: any, arg2?: any) => void;
+  dialogueState: any;
+  getTreeFrames: () => any[];
+  getStumpTexture: () => any;
+}
+
+interface ImmediateInteractionResources extends RuntimeResourceMap {
+  deps: ImmediateInteractionDeps;
+}
+
+const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateInteractionResources>([
+  {
+    id: "pickup",
+    handle: ({ world, target, resources }) => {
+      const { interaction, vfx, entityLayer, entitySprites, playerSprite, triggerQuestEvent, getTreeFrames, getStumpTexture } = resources.deps;
+      const baseScale = (TILE * 1.1) / 192;
+      playerSprite.scale.y = baseScale * 0.75;
+      setTimeout(() => {
+        playerSprite.scale.y = baseScale;
+      }, 150);
+
+      playSound("pickup");
+
+      if (target.pickup) {
+        const item = target.pickup.itemId;
+        const qty = target.pickup.qty;
+
+        void syncPickup(item, target.id, qty).then((r) => {
+          if (r.ok) applyRpgState(r.data.playerState);
+        });
+
+        const itemName = getItemDef(item)?.name ?? item;
+        const playerEntity = getPlayerEntity();
+        spawnEnvFloatingText(vfx, `+${qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
+        triggerQuestEvent(GameEvent.Pickup, item, qty);
+      }
+
+      depleteNodeSystem(
+        world,
+        target,
+        interaction,
+        vfx,
+        entityLayer,
+        entitySprites,
+        triggerQuestEvent,
+        getTreeFrames,
+        getStumpTexture
+      );
+    },
+  },
+  {
+    id: "refuel",
+    handle: ({ resources }) => {
+      const { interaction, vfx, entityLayer, triggerQuestEvent } = resources.deps;
+      const playerEntity = getPlayerEntity();
+
+      // Processing takes the first interaction when the player carries processable
+      // items: it costs nothing, can't fail, and is the core loop's reason to
+      // visit the station. A second interaction (while processing) reaches refuel.
+      const processable =
+        !interaction.activeProcess && !interaction.refuelPendingConfirm && gameState.rpg.inventory && CAMPFIRE_STATION
+          ? findProcessableItem(gameState.rpg.inventory, CAMPFIRE_STATION)
+          : null;
+
+      if (processable) {
+        interaction.activeProcess = {
+          itemId: processable.itemId,
+          effect: processable.effect,
+          remainingSec: processable.durationSec,
+          bubbleTimer: 0,
+        };
+        playSound("station.boil");
+        const itemName = getItemDef(processable.itemId)?.name ?? processable.itemId;
+        spawnEnvFloatingText(
+          vfx,
+          `boiling ${itemName}...`,
+          Colors.vfx.campfireMsg,
+          playerEntity.position!,
+          entityLayer
+        );
+        return;
+      }
+
+      const woodQty = getItemQty("oak_wood");
+      if (woodQty >= 5) {
+        if (!interaction.refuelPendingConfirm) {
+          interaction.refuelPendingConfirm = true;
+          interaction.refuelConfirmTimer = 2.5;
+          spawnEnvFloatingText(
+            vfx,
+            "interact again to refuel (5x wood)",
+            Colors.vfx.campfireMsg,
+            playerEntity.position!,
+            entityLayer
+          );
+          return;
+        }
+
+        interaction.refuelPendingConfirm = false;
+        interaction.refuelConfirmTimer = 0;
+
+        void syncRefuel().then((r) => {
+          if (r.ok) applyRpgState(r.data.playerState);
+        });
+
+        playSound("craft");
+
+        interaction.campfireHeatRadius = 7.0;
+        interaction.campfireRefuelTimer = 60.0;
+        if (interaction.campfireSprite) {
+          interaction.campfireSprite.scale.set((TILE * 1.3) / 48);
+        }
+        spawnEnvParticles(vfx, Colors.vfx.campfire, 25, "smoke", playerEntity.position!, entityLayer);
+        spawnEnvFloatingText(
+          vfx,
+          "🔥 Campfire refueled! Heat radius extended.",
+          Colors.resource.gold,
+          playerEntity.position!,
+          entityLayer
+        );
+
+        triggerQuestEvent(GameEvent.Refuel);
+      } else {
+        spawnEnvFloatingText(
+          vfx,
+          "❌ Needs 5x Oak Wood to refuel",
+          Colors.ui.error,
+          playerEntity.position!,
+          entityLayer
+        );
+      }
+    },
+  },
+  {
+    id: "talk",
+    handle: ({ target, resources }) => {
+      const { dialogueState, triggerQuestEvent } = resources.deps;
+      dialogueState.activeNpc = {
+        id: target.id,
+        name: target.interactable?.name ?? "NPC",
+      };
+
+      triggerQuestEvent(GameEvent.Talk, target.id);
+    },
+  },
+]);
 
 export class InteractionResource {
   public gatherInterval = 0.6;
   public gatherCooldownTimer = 0;
   public currentGatherInterval = 0.6;
-  public superGatherCooldown = 2.0;
-  public superGatherCooldownTimer = 0;
-  public superGatherStaminaCost = 35;
-  public triggerSuperGatherNextSwing = false;
   public gatheringTarget: Entity | null = null;
   public currentTarget: Entity | null = null;
   public campfireRefuelTimer = 0;
@@ -148,38 +284,6 @@ export function updateTargetSystem(
 }
 
 /**
- * Triggers a double-tap E super-gather action.
- */
-export function triggerSuperGatherSystem(
-  interaction: InteractionResource,
-  vfx: VFXResource,
-  playerEntity: Entity,
-  entityLayer: Container,
-  zeroCooldowns: boolean
-): void {
-  if (interaction.triggerSuperGatherNextSwing) return; // already queued
-  if (!zeroCooldowns && interaction.superGatherCooldownTimer > 0) return;
-
-  const sgLevel = gameState.rpg.skills?.superGather?.level ?? 1;
-  const currentCost = superGatherCost(interaction.superGatherStaminaCost, sgLevel);
-
-  if (stamina.current < currentCost) {
-    spawnEnvFloatingText(vfx, "⚡️ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
-    return;
-  }
-
-  spendStamina(currentCost, "burst");
-
-  const currentCooldown = superGatherCooldown(interaction.superGatherCooldown, sgLevel);
-  interaction.superGatherCooldownTimer = currentCooldown;
-
-  interaction.triggerSuperGatherNextSwing = true;
-  interaction.gatherCooldownTimer = 0; // Trigger first swing immediately
-  spawnEnvFloatingText(vfx, "⚡ SUPER GATHER! ⚡", Colors.vfx.superGather, playerEntity.position!, entityLayer);
-  playClinkSound();
-}
-
-/**
  * Handles hit visual feedback (squash, shake, hit flash, particles, floating texts).
  */
 export function handleHitFeedbackSystem(
@@ -196,11 +300,10 @@ export function handleHitFeedbackSystem(
   const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
   const isTree = gatherable?.solidKind === "tree";
 
-  if (isTree) {
-    playChopSound();
-  } else {
-    playClinkSound();
-  }
+  const hitPos = entity.position
+    ? { x: entity.position.x + TILE / 2, y: entity.position.y + TILE / 2 }
+    : undefined;
+  playSound(gatherSoundId(gatherable?.gatherSound), { position: hitPos });
 
   const sprite = entitySprites.get(entity.id);
   if (sprite && entity.position) {
@@ -247,10 +350,11 @@ export function handleHitFeedbackSystem(
 
     vfx.floatingTexts.push({
       textObj,
-      vx: isSuper ? (Math.random() - 0.5) * 15 : 0,
-      vy: isSuper ? -65 : -45,
+      stackKey: `node:${entity.id}`,
+      baseX: textObj.x,
+      baseY: textObj.y,
       life: 0,
-      maxLife: isSuper ? 0.95 : 0.75,
+      maxLife: isSuper ? 1.1 : 0.9,
     });
     entityLayer.addChild(textObj);
 
@@ -461,7 +565,7 @@ export function depleteNodeSystem(
     };
 
     setTimeout(() => {
-      playFallSound();
+      playSound("node.treefall", { position: { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 } });
       const latestPlayer = getPlayerEntity();
       if (latestPlayer.position) {
         const latestCenter = {
@@ -478,7 +582,7 @@ export function depleteNodeSystem(
       fallingSprite.play();
     }, hazard.dodgeWindowSec * 1000);
   } else {
-    playDepleteSound();
+    playSound("node.deplete", { position: { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 } });
   }
 }
 
@@ -498,130 +602,39 @@ export function triggerImmediateInteraction(
   getTreeFrames: () => any[],
   getStumpTexture: () => any
 ): void {
-  const action = target.interactable?.action;
-  if (!action) return;
-
-  if (action === "pickup") {
-    const baseScale = (TILE * 1.1) / 192;
-    playerSprite.scale.y = baseScale * 0.75;
-    setTimeout(() => {
-      playerSprite.scale.y = baseScale;
-    }, 150);
-
-    playPickupSound();
-
-    if (target.pickup) {
-      const item = target.pickup.itemId;
-      const qty = target.pickup.qty;
-
-      void syncPickup(item, target.id, qty).then((r) => {
-        if (r.ok) applyRpgState(r.data.playerState);
-      });
-
-      const itemName = getItemDef(item)?.name ?? item;
-      const playerEntity = getPlayerEntity();
-      spawnEnvFloatingText(vfx, `+${qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
-      triggerQuestEvent(GameEvent.Pickup, item, qty);
-    }
-
-    depleteNodeSystem(
-      world,
-      target,
-      interaction,
-      vfx,
-      entityLayer,
-      entitySprites,
-      triggerQuestEvent,
-      getTreeFrames,
-      getStumpTexture
-    );
-  } else if (action === "refuel") {
-    const playerEntity = getPlayerEntity();
-
-    // Processing takes the first interaction when the player carries processable
-    // items: it costs nothing, can't fail, and is the core loop's reason to
-    // visit the station. A second interaction (while processing) reaches refuel.
-    const processable =
-      !interaction.activeProcess && !interaction.refuelPendingConfirm && gameState.rpg.inventory && CAMPFIRE_STATION
-        ? findProcessableItem(gameState.rpg.inventory, CAMPFIRE_STATION)
-        : null;
-
-    if (processable) {
-      interaction.activeProcess = {
-        itemId: processable.itemId,
-        effect: processable.effect,
-        remainingSec: processable.durationSec,
-        bubbleTimer: 0,
-      };
-      playWaterBubble();
-      const itemName = getItemDef(processable.itemId)?.name ?? processable.itemId;
-      spawnEnvFloatingText(
+  immediateInteractionDispatcher.dispatch({
+    world,
+    target,
+    resources: {
+      deps: {
+        interaction,
         vfx,
-        `boiling ${itemName}...`,
-        Colors.vfx.campfireMsg,
-        playerEntity.position!,
-        entityLayer
-      );
-      return;
-    }
-
-
-    const woodQty = getItemQty("oak_wood");
-    if (woodQty >= 5) {
-      if (!interaction.refuelPendingConfirm) {
-        interaction.refuelPendingConfirm = true;
-        interaction.refuelConfirmTimer = 2.5;
-        spawnEnvFloatingText(
-          vfx,
-          "interact again to refuel (5x wood)",
-          Colors.vfx.campfireMsg,
-          playerEntity.position!,
-          entityLayer
-        );
-        return;
-      }
-
-      interaction.refuelPendingConfirm = false;
-      interaction.refuelConfirmTimer = 0;
-
-      void syncRefuel().then((r) => {
-        if (r.ok) applyRpgState(r.data.playerState);
-      });
-
-      playCraftSound();
-
-      interaction.campfireHeatRadius = 7.0;
-      interaction.campfireRefuelTimer = 60.0;
-      if (interaction.campfireSprite) {
-        interaction.campfireSprite.scale.set((TILE * 1.3) / 48);
-      }
-      spawnEnvParticles(vfx, Colors.vfx.campfire, 25, "smoke", playerEntity.position!, entityLayer);
-      spawnEnvFloatingText(
+        entityLayer,
+        entitySprites,
+        playerSprite,
+        triggerQuestEvent,
+        dialogueState,
+        getTreeFrames,
+        getStumpTexture,
+      },
+    },
+    events: [],
+    emit: () => undefined,
+    getResource: <T>(key: string) => {
+      if (key !== "deps") throw new Error(`missing runtime resource: ${key}`);
+      return {
+        interaction,
         vfx,
-        "🔥 Campfire refueled! Heat radius extended.",
-        Colors.resource.gold,
-        playerEntity.position!,
-        entityLayer
-      );
-
-      triggerQuestEvent(GameEvent.Refuel);
-    } else {
-      spawnEnvFloatingText(
-        vfx,
-        "❌ Needs 5x Oak Wood to refuel",
-        Colors.ui.error,
-        playerEntity.position!,
-        entityLayer
-      );
-    }
-  } else if (action === "talk") {
-    dialogueState.activeNpc = {
-      id: target.id,
-      name: target.interactable?.name ?? "NPC",
-    };
-
-    triggerQuestEvent(GameEvent.Talk, target.id);
-  }
+        entityLayer,
+        entitySprites,
+        playerSprite,
+        triggerQuestEvent,
+        dialogueState,
+        getTreeFrames,
+        getStumpTexture,
+      } as T;
+    },
+  });
 }
 
 /**
@@ -694,7 +707,7 @@ export function runInteractionSystem(
       if (proc.bubbleTimer <= 0 && campfire?.position) {
         proc.bubbleTimer = 0.8;
         spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", campfire.position, entityLayer);
-        playWaterBubble();
+        playSound("station.boil");
       }
       if (proc.remainingSec <= 0) {
         if (gameState.rpg.inventory) {
@@ -718,7 +731,7 @@ export function runInteractionSystem(
               playerEntity.position!,
               entityLayer
             );
-            playCraftSound();
+            playSound("craft");
 
             if (proc.effect.kind === "transform") {
               learnAbout(proc.itemId, "boilable");
@@ -780,21 +793,6 @@ export function runInteractionSystem(
   if (interaction.gatherCooldownTimer > 0) {
     interaction.gatherCooldownTimer -= dt;
   }
-  if (interaction.superGatherCooldownTimer > 0) {
-    interaction.superGatherCooldownTimer -= dt;
-  }
-
-  if (inputs.superGatherTriggered) {
-    inputs.superGatherTriggered = false;
-    const playerEntity = getPlayerEntity();
-    triggerSuperGatherSystem(
-      interaction,
-      vfx,
-      playerEntity,
-      entityLayer,
-      gameState.rpg.profile === null
-    );
-  }
 
   // Cancel gathering if moving, dashing, or target changes/depletes
   if (interaction.gatheringTarget !== null) {
@@ -836,7 +834,14 @@ export function runInteractionSystem(
             textObj.anchor.set(0.5, 1);
             textObj.x = playerEntity.position!.x + TILE / 2;
             textObj.y = playerEntity.position!.y;
-            vfx.floatingTexts.push({ textObj, vx: 0, vy: -28, life: 0, maxLife: 0.6 });
+            vfx.floatingTexts.push({
+              textObj,
+              stackKey: "player",
+              baseX: textObj.x,
+              baseY: textObj.y,
+              life: 0,
+              maxLife: 0.8,
+            });
             entityLayer.addChild(textObj);
           };
 
@@ -905,13 +910,9 @@ export function runInteractionSystem(
       interaction.currentGatherInterval = scaledInterval;
       interaction.gatherCooldownTimer = scaledInterval;
 
-      const isSuper = interaction.triggerSuperGatherNextSwing;
-      interaction.triggerSuperGatherNextSwing = false;
-
-      const quantity = gatherQuantity(isSuper);
       const dropName = gatherable?.yieldTable[0]?.itemId ?? res?.drop ?? "resource";
 
-      onHit(target, dropName, quantity);
+      onHit(target, dropName, 1);
 
       // Bare-hand gathering (forage nodes with no tool requirement) can wound.
       // Tool-gated nodes always have a tool here, so they never trigger this.
@@ -944,12 +945,9 @@ export function runInteractionSystem(
       // Award XP. awardSkillXp no-ops if a skill isn't loaded, so no guard needed.
       const xpPos = getPlayerEntity().position!;
       awardSkillXp(isTree ? SkillKey.Lumberjacking : SkillKey.Mining, 10, vfx, xpPos, entityLayer);
-      if (isSuper) {
-        awardSkillXp(SkillKey.SuperGather, 15, vfx, xpPos, entityLayer);
-      }
 
       if (res) {
-        res.hp -= quantity;
+        res.hp -= 1;
         if (res.hp <= 0) {
           devConsoleLog(`${target.interactable?.name ?? target.id} depleted`);
           depleteNodeSystem(
@@ -969,7 +967,7 @@ export function runInteractionSystem(
 
       // Backend sync (persists yields + tool durability).
       if (res && res.rpgLocationId && res.rpgAction) {
-        void syncGather(res.rpgAction, res.rpgLocationId, isSuper).then((r) => {
+        void syncGather(res.rpgAction, res.rpgLocationId).then((r) => {
           if (r.ok) {
             applyRpgState(r.data.playerState);
             for (const mat of r.data.materialsGained) {
