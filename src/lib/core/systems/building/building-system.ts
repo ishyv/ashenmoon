@@ -1,13 +1,13 @@
 import { Container, Sprite } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import type { InputResource } from "$lib/core/input";
-import { TILE, type MapResource } from "$lib/core/systems/map";
+import type { InputResource } from "$lib/core/input/input";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import {
   type VFXResource,
   spawnEnvFloatingText,
   spawnEnvParticles,
-} from "$lib/core/vfx";
+} from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { Cell } from "$lib/core/types";
 import { Colors } from "$lib/utils/colors";

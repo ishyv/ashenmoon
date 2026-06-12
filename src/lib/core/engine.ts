@@ -10,16 +10,12 @@ import {
   TilingSprite,
 } from "pixi.js";
 import {
-  getRockTexture,
   getStumpTexture,
   getTreeFrames,
-  getTreeTexture,
   getWarriorFrames,
   loadGameAssets,
   getBiomeTileTexture,
   getShadowTexture,
-  getTreeVariantTexture,
-  getRockVariantTexture,
   getParticleFXFrames,
   loadAssets,
   pawnBundleForColor,
@@ -36,7 +32,7 @@ import {
   BUNDLE_RESOURCES,
   BUNDLE_WARRIORS,
   type UnitColor,
-} from "$lib/core/assets";
+} from "$lib/core/assets/assets";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import { type Entity, world } from "$lib/core/ecs/ecs-miniplex";
 import {
@@ -49,7 +45,7 @@ export type { HudState };
 import { playSound, setListener, setMuted, tickAmbient, unlock as unlockAudio } from "$lib/audio/audio-engine";
 import { loadAudioSettings } from "$lib/audio/audio-settings.svelte";
 import type { AmbientBiome } from "$lib/audio/sound-manifest";
-import { InputResource } from "$lib/core/input";
+import { InputResource } from "$lib/core/input/input";
 import {
   MapResource,
   buildMapSystem,
@@ -57,7 +53,7 @@ import {
   cullViewportSystem,
   getAmbientEnvironment,
   TILE,
-} from "$lib/core/systems/map";
+} from "$lib/core/systems/map/map";
 import {
   VFXResource,
   particleUpdateSystem,
@@ -77,12 +73,12 @@ import {
   spawnEnvParticles,
   spawnDeathBurst,
   triggerCameraShake,
-} from "$lib/core/vfx";
+} from "$lib/core/vfx/vfx";
 import {
   MovementConfig,
   MovementResource,
   playerMovementSystem,
-} from "$lib/core/systems/movement";
+} from "$lib/core/systems/movement/movement";
 import {
   CombatConfig,
   CombatResource,
@@ -91,8 +87,8 @@ import {
   fellSweepSystem,
   knockbackSystem,
   despawnEntity,
-} from "$lib/core/systems/combat";
-import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai";
+} from "$lib/core/systems/combat/combat";
+import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
 import {
   InteractionResource,
   updateTargetSystem,
@@ -100,16 +96,16 @@ import {
   handleHitFeedbackSystem,
   depleteNodeSystem,
   setHighlight,
-} from "$lib/core/systems/interaction-system";
-import { FocusedGatherResource, runFocusedGatherSystem } from "$lib/core/systems/focused-gather-system";
-import { renderFocusedGatherSystem } from "$lib/core/systems/focused-gather-renderer";
+} from "$lib/core/systems/interaction/interaction-system";
+import { FocusedGatherResource, runFocusedGatherSystem } from "$lib/core/systems/focused-gather/focused-gather-system";
+import { renderFocusedGatherSystem } from "$lib/core/systems/focused-gather/focused-gather-renderer";
 import {
   BuildingResource,
   updatePlacementPreviewSystem,
   placeBuildingSystem,
   spawnBuildingSystem,
   isValidPlacement,
-} from "$lib/core/systems/building-system";
+} from "$lib/core/systems/building/building-system";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgProfile, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
@@ -123,7 +119,8 @@ import {
 } from "$lib/domain/status-effects.svelte";
 import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$lib/ui/player-feedback";
 import { setEnvironment } from "$lib/state/environment-state.svelte";
-import { tickExposureSystem } from "$lib/core/systems/exposure-system";
+import { tickExposureSystem } from "$lib/core/systems/exposure/exposure-system";
+import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { loadKnowledge } from "$lib/domain/knowledge.svelte";
 import { loadRecipes } from "$lib/domain/crafting.svelte";
@@ -135,8 +132,8 @@ import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/domain/skill-xp";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { getPrefabDefinition } from "$lib/domain/definition-registry";
-import { executeGameCommand } from "$lib/core/command-runtime";
-import { createEngineCommandContext } from "$lib/core/engine-command-context";
+import { executeGameCommand } from "$lib/core/command-runtime/command-runtime";
+import { createEngineCommandContext } from "$lib/core/command-runtime/engine-command-context";
 import type { CommandSource, GameCommand, GameCommandResult } from "$lib/domain/game-command";
 import {
   createRuntimeContext,
@@ -146,7 +143,7 @@ import {
 } from "$lib/core/runtime/runtime";
 import { defaultRuntimeFeature } from "$lib/core/runtime/default-feature";
 import { composeEntityFromPrefab } from "$lib/core/runtime/prefabs";
-import { loadScenarioIntoMap } from "$lib/core/systems/scenario-loader";
+import { loadScenarioIntoMap } from "$lib/core/systems/scenario/scenario-loader";
 import { getScenario } from "$lib/domain/scenarios";
 import {
   CollisionFootprints,
@@ -713,7 +710,7 @@ export class GameEngine {
         }
       }
 
-      tickExposureSystem(this.mapResource, dt, this.vfxResource, this.entityLayer);
+      tickExposureSystem(world, this.mapResource, dt, this.vfxResource, this.entityLayer);
 
       // --- Random Forest Events ---
       this.forestEventTimer -= dt;
@@ -1064,38 +1061,10 @@ export class GameEngine {
     const dropName = drop?.itemId ?? "stick";
     const dropQty = drop?.quantity ?? 1;
     const isPickup = gatherable.interactionKind !== "repeated_action";
-    const isTree = gatherable.solidKind === "tree";
     const prefab = getPrefabDefinition(gatherableId);
     const entity = prefab
       ? composeEntityFromPrefab(prefab, this.runtimeRegistry.components, { id: gatherableId, gx, gy, entityId: id })
       : null;
-    const spriteTex =
-      gatherable.renderKind === "wood_pickup"
-        ? getWoodItemTexture()
-        : gatherable.renderKind === "stone_pickup"
-          ? getRockVariantTexture(1)
-          : gatherable.renderKind === "flint_pickup"
-            ? getRockVariantTexture(2)
-            : gatherable.renderKind === "forage"
-              ? getBushTexture(1)
-              : gatherable.renderKind === "moss"
-                ? getBushTexture(2)
-                : gatherable.renderKind === "tree_crimson"
-                  ? getTreeVariantTexture(2)
-                  : gatherable.renderKind === "tree_frost"
-                    ? getTreeVariantTexture(3)
-                    : gatherable.renderKind === "tree_fungal"
-                      ? getTreeVariantTexture(4)
-                      : gatherable.renderKind === "rock_copper"
-                        ? getRockVariantTexture(2)
-                        : gatherable.renderKind === "rock_iron"
-                          ? getRockVariantTexture(3)
-                          : gatherable.renderKind === "rock_toxic"
-                            ? getRockVariantTexture(4)
-                            : gatherable.renderKind === "rock"
-                              ? getRockTexture()
-                              : getTreeTexture();
-
     if (isPickup) {
       world.add(entity ?? {
         id,
@@ -1105,18 +1074,7 @@ export class GameEngine {
         pickup: { itemId: dropName, qty: dropQty, gatherableId },
       });
 
-      const sprite = new Sprite(spriteTex);
-      sprite.anchor.set(0.5, 1);
-      sprite.x = ex + TILE / 2;
-      sprite.y = ey + TILE;
-      sprite.zIndex = computeRenderZ(sprite.y);
-      if (gatherable.renderKind === "wood_pickup") {
-        sprite.scale.set((TILE * 0.45) / 64);
-      } else if (gatherable.renderKind === "stone_pickup" || gatherable.renderKind === "flint_pickup") {
-        sprite.scale.set((TILE * 0.35) / 64);
-      } else {
-        sprite.scale.set((TILE * 0.4) / 64);
-      }
+      const sprite = createGatherableRenderSprite(gatherable, ex, ey);
       this.entityLayer.addChild(sprite);
       this.entitySprites.set(id, sprite);
     } else {
@@ -1139,26 +1097,9 @@ export class GameEngine {
         this.setTileFootprint(gx, gy, footprint);
       }
 
-      if (isTree) {
-        const tree = new Sprite(spriteTex);
-        tree.anchor.set(0.5, 1);
-        tree.x = ex + TILE / 2;
-        tree.y = ey + TILE;
-        tree.zIndex = computeRenderZ(tree.y);
-        tree.scale.set((TILE * 1.5) / 256);
-        this.entityLayer.addChild(tree);
-        this.entitySprites.set(id, tree);
-      } else {
-        const rock = new Sprite(spriteTex);
-        rock.anchor.set(0.5, 1);
-        rock.x = ex + TILE / 2;
-        rock.y = ey + TILE;
-        rock.width = TILE * 0.9;
-        rock.height = TILE * 0.9;
-        rock.zIndex = computeRenderZ(rock.y);
-        this.entityLayer.addChild(rock);
-        this.entitySprites.set(id, rock);
-      }
+      const sprite = createGatherableRenderSprite(gatherable, ex, ey);
+      this.entityLayer.addChild(sprite);
+      this.entitySprites.set(id, sprite);
     }
   }
 

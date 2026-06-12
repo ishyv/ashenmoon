@@ -15,12 +15,14 @@ import {
   type GatherableRenderKind,
   type GatherableSolidKind,
 } from "$lib/domain/gathering/gatherables";
+import { isInteractionId, type InteractionId } from "$lib/domain/interactions";
 import {
   ITEM_DEFINITIONS,
   validateItemRegistryProblems,
   type ItemDefinition,
 } from "$lib/domain/items";
-import { STATION_DEFINITIONS, type StationDefinition } from "$lib/domain/stations";
+import { STATION_PROCESSES, validateStationProcesses, type StationProcess } from "$lib/domain/systems/station-process";
+import { STATION_DEFINITIONS, type StationDefinition, type StationId } from "$lib/domain/stations";
 import { STATUS_DEFINITIONS, type StatusDefinition } from "$lib/domain/systems/status-types";
 
 export type PrefabComponentSpec =
@@ -29,7 +31,7 @@ export type PrefabComponentSpec =
   | { type: "pickup"; gatherableId: string }
   | { type: "collider"; solidKind: GatherableSolidKind }
   | { type: "building"; buildingType: string }
-  | { type: "station"; stationId: string }
+  | { type: "station"; stationId: StationId }
   | { type: "hazard"; hazardType: string }
   | { type: "enemy"; archetypeId: string };
 
@@ -41,7 +43,7 @@ export interface PrefabDefinition {
     kind: GatherableRenderKind | "building" | "station" | "enemy" | "hazard";
   };
   interaction?: {
-    kind: "gather" | "pickup" | "harvest" | "liquid" | "build" | "process" | "combat";
+    kind: InteractionId;
   };
   persistence?: {
     syncAction?: string;
@@ -60,6 +62,7 @@ export interface DefinitionRegistry {
   recipes: readonly CraftRecipe[];
   buildings: Readonly<Record<string, BuildingSpec>>;
   stations: Readonly<Record<string, StationDefinition>>;
+  stationProcesses: readonly StationProcess[];
   statuses: Readonly<Record<string, StatusDefinition>>;
   prefabs: Readonly<Record<string, PrefabDefinition>>;
   commands: readonly string[];
@@ -175,6 +178,7 @@ export function createDefinitionRegistry(): DefinitionRegistry {
     recipes: CRAFT_RECIPES,
     buildings: BUILDING_SPECS,
     stations: STATION_DEFINITIONS,
+    stationProcesses: STATION_PROCESSES,
     statuses: STATUS_DEFINITIONS,
     prefabs: { ...gatherablePrefabs, ...buildingPrefabs },
     commands: COMMAND_IDS,
@@ -195,6 +199,7 @@ export function validateDefinitionRegistry(registry: DefinitionRegistry = DEFINI
   problems.push(...validateItemRegistryProblems(registry.items));
   problems.push(...validateCraftRecipes(registry.recipes, itemIds));
   problems.push(...validateBuildingSpecs(registry.buildings));
+  problems.push(...validateStationProcesses(registry.stationProcesses, registry.stations, registry.items));
 
   for (const [id, def] of Object.entries(registry.gatherables)) {
     if (id !== def.id) problems.push(`gatherable key ${id} does not match id ${def.id}`);
@@ -227,6 +232,9 @@ export function validateDefinitionRegistry(registry: DefinitionRegistry = DEFINI
     if (!prefab.displayName.trim()) problems.push(`prefab ${id} has no displayName`);
     if (prefab.components.length === 0) problems.push(`prefab ${id} has no components`);
     if (!prefab.feedback?.spawn && !prefab.feedback?.interact) problems.push(`prefab ${id} has no feedback`);
+    if (prefab.interaction && !isInteractionId(prefab.interaction.kind)) {
+      problems.push(`prefab ${id} uses unsupported interaction ${prefab.interaction.kind}`);
+    }
     if (prefab.collision?.footprint && !isValidCollisionFootprint(prefab.collision.footprint)) {
       problems.push(`prefab ${id} has invalid collision footprint`);
     }

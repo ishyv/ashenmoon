@@ -1,15 +1,15 @@
 import { Graphics, Container, TextStyle, Text } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import type { InputResource } from "$lib/core/input";
-import type { VFXResource } from "$lib/core/vfx";
-import type { MovementResource } from "$lib/core/systems/movement";
-import type { CombatResource, CombatConfig } from "$lib/core/systems/combat";
-import { TILE } from "$lib/core/systems/map";
+import type { InputResource } from "$lib/core/input/input";
+import type { VFXResource } from "$lib/core/vfx/vfx";
+import type { MovementResource } from "$lib/core/systems/movement/movement";
+import type { CombatResource, CombatConfig } from "./combat";
+import { TILE } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
-import { spawnEnvFloatingText, triggerCameraShake, flashEntity } from "$lib/core/vfx";
+import { spawnEnvFloatingText, triggerCameraShake, flashEntity } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { InputAction } from "$lib/domain/game-events";
 

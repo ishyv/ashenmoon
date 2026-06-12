@@ -5,7 +5,7 @@
  */
 
 import type { GameEngine } from "$lib/core/engine";
-import { commandResultToConsoleText } from "$lib/core/command-runtime";
+import { commandResultToConsoleText } from "$lib/core/command-runtime/command-runtime";
 import { parseDevCommand } from "$lib/domain/game-command";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { devConsole } from "$lib/ui/debug/dev-console";

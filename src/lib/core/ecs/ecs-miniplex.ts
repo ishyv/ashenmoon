@@ -1,5 +1,6 @@
 import { World } from "miniplex";
 import type { InteractionId } from "$lib/domain/interactions";
+import type { StationId } from "$lib/domain/stations";
 import type { AiState, AnimState, Faction } from "$lib/core/types";
 
 /**
@@ -34,7 +35,9 @@ export interface Entity {
     rpgLocationId?: string;
   };
   /**
-   * Present on entities that are ground pickups (picked up by pressing E bare-handed).
+   * Present on entities that are ground pickups. Exposure fields are runtime
+   * state for dropped/placed items reacting to world conditions; they are kept
+   * explicit so pickup authors do not hide rules in item definitions.
    */
   pickup?: {
     itemId: string;
@@ -46,7 +49,7 @@ export interface Entity {
 
   /** Station marker for generic station/process interactions. */
   station?: {
-    stationId: string;
+    stationId: StationId;
   };
 
   // --- Combat components -----------------------------------------------------

@@ -19,9 +19,9 @@ import type { World } from "miniplex";
 import { Graphics } from "pixi.js";
 import type { AnimatedSprite, Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import { TILE, type MapResource } from "$lib/core/systems/map";
-import { collidesWithSolid, type MovementResource } from "$lib/core/systems/movement";
-import type { InputResource } from "$lib/core/input";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import { collidesWithSolid, type MovementResource } from "$lib/core/systems/movement/movement";
+import type { InputResource } from "$lib/core/input/input";
 import { InputAction } from "$lib/domain/game-events";
 import {
   type DirectionalMomentumComboState,
@@ -43,7 +43,7 @@ import {
   spawnSlashArc,
   spawnEnvFloatingText,
   triggerCameraShake,
-} from "$lib/core/vfx";
+} from "$lib/core/vfx/vfx";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import { Colors } from "$lib/utils/colors";

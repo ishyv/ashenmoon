@@ -1,12 +1,12 @@
 import type { AnimatedSprite, Container } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import type { InputResource } from "$lib/core/input";
-import { TILE, type MapResource } from "$lib/core/systems/map";
-import type { VFXResource } from "$lib/core/vfx";
-import { spawnEnvFloatingText, spawnEnvParticles, triggerCameraShake } from "$lib/core/vfx";
+import type { InputResource } from "$lib/core/input/input";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import type { VFXResource } from "$lib/core/vfx/vfx";
+import { spawnEnvFloatingText, spawnEnvParticles, triggerCameraShake } from "$lib/core/vfx/vfx";
 import { gameState } from "$lib/state/game-state.svelte";
-import type { CombatResource } from "$lib/core/systems/combat";
+import type { CombatResource } from "$lib/core/systems/combat/combat";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
 import { findPlayerEntity } from "$lib/core/ecs/entity-queries";

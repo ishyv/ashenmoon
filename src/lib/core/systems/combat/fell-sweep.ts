@@ -1,11 +1,11 @@
 import type { World } from "miniplex";
 import type { AnimatedSprite, Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import { TILE } from "$lib/core/systems/map";
-import type { InputResource } from "$lib/core/input";
+import { TILE } from "$lib/core/systems/map/map";
+import type { InputResource } from "$lib/core/input/input";
 import { CombatResource, CombatConfig, applyDamage } from "./combat";
-import type { VFXResource } from "$lib/core/vfx";
-import { spawnEnvFloatingText, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx";
+import type { VFXResource } from "$lib/core/vfx/vfx";
+import { spawnEnvFloatingText, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";

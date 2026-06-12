@@ -11,10 +11,10 @@
 import type { Container, Graphics, Text } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import { TILE, type MapResource } from "$lib/core/systems/map";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
-import type { InputResource } from "$lib/core/input";
-import { spawnEnvFloatingText, spawnShockwaveRing, type VFXResource } from "$lib/core/vfx";
+import type { InputResource } from "$lib/core/input/input";
+import { spawnEnvFloatingText, spawnShockwaveRing, type VFXResource } from "$lib/core/vfx/vfx";
 import { Colors } from "$lib/utils/colors";
 import { stamina, spendStamina } from "$lib/domain/stamina.svelte";
 import { playSound } from "$lib/audio/audio-engine";
@@ -41,7 +41,7 @@ import {
 } from "$lib/domain/gathering/focused-gather/focused-gather-session";
 import { scoreSession } from "$lib/domain/gathering/focused-gather/focused-gather-scoring";
 import { computeResult, resolveYieldItems } from "$lib/domain/gathering/focused-gather/focused-gather-rewards";
-import { depleteNodeSystem, type InteractionResource } from "$lib/core/systems/interaction-system";
+import { depleteNodeSystem, type InteractionResource } from "$lib/core/systems/interaction/interaction-system";
 
 /** A session cancels if the player ends up this far (world px) from the node. */
 const CANCEL_DISTANCE = TILE * 3.5;

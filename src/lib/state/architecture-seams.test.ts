@@ -65,4 +65,11 @@ describe("architecture seams", () => {
       expect(haystack).not.toContain(token);
     }
   });
+
+  it("keeps gatherable render-kind content branches out of GameEngine", () => {
+    const engine = readFileSync(join(srcRoot, "lib/core/engine.ts"), "utf8");
+
+    expect(engine).not.toContain("gatherable.renderKind ===");
+    expect(engine).toContain("createGatherableRenderSprite");
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { executeGameCommand, type CommandContext } from "$lib/core/command-runtime";
+import { executeGameCommand, type CommandContext } from "./command-runtime";
 import { StatusId } from "$lib/domain/systems/status-types";
 
 function fakeContext(): CommandContext {

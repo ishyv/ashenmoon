@@ -13,7 +13,7 @@ import {
   type BaseScale,
   type SlashArc,
 } from "$lib/core/types";
-import { TILE } from "$lib/core/systems/map";
+import { TILE } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
 import { EntityId } from "$lib/domain/game-events";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";

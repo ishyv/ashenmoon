@@ -16,11 +16,11 @@ import type { World } from "miniplex";
 import type { AnimatedSprite, Container, Texture } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { AnimState } from "$lib/core/types";
-import type { UnitColor } from "$lib/core/assets";
-import { TILE, type MapResource } from "$lib/core/systems/map";
-import { collidesWithSolid } from "$lib/core/systems/movement";
-import { type VFXResource, spawnEnvFloatingText } from "$lib/core/vfx";
-import { applyDamage, type CombatConfig, type CombatResource } from "$lib/core/systems/combat";
+import type { UnitColor } from "$lib/core/assets/assets";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import { collidesWithSolid } from "$lib/core/systems/movement/movement";
+import { type VFXResource, spawnEnvFloatingText } from "$lib/core/vfx/vfx";
+import { applyDamage, type CombatConfig, type CombatResource } from "$lib/core/systems/combat/combat";
 import { Colors } from "$lib/utils/colors";
 
 const ENEMY_HX = TILE * 0.3;

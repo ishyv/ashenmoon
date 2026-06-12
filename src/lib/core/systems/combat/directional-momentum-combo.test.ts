@@ -4,20 +4,20 @@ import {
   CombatConfig,
   CombatResource,
   playerAttackSystem,
-} from "$lib/core/systems/combat";
+} from "./combat";
 import {
   getComboDirection,
   getVectorFromDirection,
   breakCombo,
-} from "$lib/core/systems/directional-momentum-combo";
-import { InputResource } from "$lib/core/input";
-import { MovementResource } from "$lib/core/systems/movement";
+} from "./directional-momentum-combo";
+import { InputResource } from "$lib/core/input/input";
+import { MovementResource } from "$lib/core/systems/movement/movement";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { gameState } from "$lib/state/game-state.svelte";
 import { stamina, setStamina } from "$lib/domain/stamina.svelte";
 import { InputAction } from "$lib/domain/game-events";
 
-vi.mock("$lib/core/vfx", () => ({
+vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
   spawnSlashArc: vi.fn(),
   triggerCameraShake: vi.fn(),

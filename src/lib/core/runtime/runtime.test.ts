@@ -12,8 +12,10 @@ import {
 } from "$lib/core/runtime/runtime";
 import { InteractionDispatcher } from "$lib/core/runtime/interactions";
 import { composeEntityFromPrefab, spawnPrefabEntity } from "$lib/core/runtime/prefabs";
-import type { PrefabDefinition } from "$lib/domain/definition-registry";
+import { DEFINITION_REGISTRY, type PrefabDefinition } from "$lib/domain/definition-registry";
 import { defaultRuntimeFeature } from "$lib/core/runtime/default-feature";
+import { isInteractionId } from "$lib/domain/interactions";
+import { validateGatherableRenderAdapters } from "$lib/core/systems/gatherable-render-adapter";
 
 const positionFactory = ({ gx, gy }: { gx: number; gy: number }) => ({
   position: { x: gx * 64, y: gy * 64, targetX: gx * 64, targetY: gy * 64 },
@@ -156,6 +158,19 @@ describe("default runtime feature", () => {
     const registry = createRuntimeRegistry([defaultRuntimeFeature]);
 
     expect(validateRuntimeRegistry(registry)).toEqual([]);
+  });
+
+  it("keeps authored prefab interactions on the canonical interaction contract", () => {
+    for (const prefab of Object.values(DEFINITION_REGISTRY.prefabs)) {
+      if (!prefab.interaction) continue;
+      expect(isInteractionId(prefab.interaction.kind), prefab.id).toBe(true);
+    }
+  });
+
+  it("has a render adapter for every authored gatherable render kind", () => {
+    const renderKinds = Object.values(DEFINITION_REGISTRY.gatherables).map((def) => def.renderKind);
+
+    expect(validateGatherableRenderAdapters(renderKinds)).toEqual([]);
   });
 
   it("composes authored gatherable prefabs without engine-specific spawn branches", () => {

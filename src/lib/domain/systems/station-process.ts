@@ -1,17 +1,18 @@
-import { STATION_DEFINITIONS, type StationId } from "$lib/domain/stations";
+import { ITEM_DEFINITIONS, type ItemDefinition } from "$lib/domain/items";
+import { STATION_DEFINITIONS, type ProcessType, type StationDefinition, type StationId } from "$lib/domain/stations";
 import type { Inventory } from "./inventory-system";
 
 export interface StationProcess {
-  id: string;
-  stationId: StationId;
-  inputs: Record<string, number>;
-  processType: string;
-  durationSec: number;
-  outputItemId: string;
-  outputQty: number;
+  readonly id: string;
+  readonly stationId: StationId;
+  readonly inputs: Readonly<Record<string, number>>;
+  readonly processType: ProcessType;
+  readonly durationSec: number;
+  readonly outputItemId: string;
+  readonly outputQty: number;
 }
 
-export const STATION_PROCESSES: StationProcess[] = [
+export const STATION_PROCESSES: readonly StationProcess[] = [
   // Campfire processes
   {
     id: "boil_water",
@@ -79,6 +80,48 @@ export const STATION_PROCESSES: StationProcess[] = [
     outputQty: 1,
   },
 ];
+
+export function validateStationProcesses(
+  processes: readonly StationProcess[] = STATION_PROCESSES,
+  stations: Readonly<Partial<Record<string, StationDefinition>>> = STATION_DEFINITIONS,
+  items: Readonly<Record<string, ItemDefinition>> = ITEM_DEFINITIONS,
+): string[] {
+  const problems: string[] = [];
+
+  for (const process of processes) {
+    const station = stations[process.stationId];
+    if (!station) {
+      problems.push(`station process ${process.id} references unknown station ${process.stationId}`);
+    } else if (!station.processTypes.includes(process.processType)) {
+      problems.push(
+        `station process ${process.id} uses ${process.processType}, which ${station.id} does not accept`,
+      );
+    }
+
+    const inputEntries = Object.entries(process.inputs);
+    if (inputEntries.length === 0) {
+      problems.push(`station process ${process.id} has no inputs`);
+    }
+    for (const [itemId, qty] of inputEntries) {
+      if (!items[itemId]) problems.push(`station process ${process.id} references unknown input ${itemId}`);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        problems.push(`station process ${process.id} input ${itemId} quantity must be positive`);
+      }
+    }
+
+    if (!items[process.outputItemId]) {
+      problems.push(`station process ${process.id} references unknown output ${process.outputItemId}`);
+    }
+    if (!Number.isFinite(process.durationSec) || process.durationSec <= 0) {
+      problems.push(`station process ${process.id} duration must be positive`);
+    }
+    if (!Number.isFinite(process.outputQty) || process.outputQty <= 0) {
+      problems.push(`station process ${process.id} output quantity must be positive`);
+    }
+  }
+
+  return problems;
+}
 
 /** Finds the first process for a station whose ingredients are present in inventory. */
 export function findProcessForStation(

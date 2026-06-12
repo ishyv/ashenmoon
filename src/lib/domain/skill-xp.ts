@@ -14,7 +14,7 @@ import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
 import { SkillKey } from "$lib/domain/game-events";
 import type { RpgPlayerState, RpgSkillState } from "$lib/domain/rpg-types";
 import { Colors } from "$lib/utils/colors";
-import { spawnEnvFloatingText, type VFXResource } from "$lib/core/vfx";
+import { spawnEnvFloatingText, type VFXResource } from "$lib/core/vfx/vfx";
 
 interface SkillDisplay {
   label: string;

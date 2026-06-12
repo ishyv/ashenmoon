@@ -6,17 +6,17 @@ import {
   playerAttackSystem,
   trackMovementCombo,
   applyDamage,
-} from "$lib/core/systems/combat";
-import { InputResource } from "$lib/core/input";
+} from "./combat";
+import { InputResource } from "$lib/core/input/input";
 import { InputAction, SkillKey } from "$lib/domain/game-events";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
 import { stamina, setStamina } from "$lib/domain/stamina.svelte";
-import { MovementResource, playerMovementSystem } from "$lib/core/systems/movement";
+import { MovementResource, playerMovementSystem } from "$lib/core/systems/movement/movement";
 
 // Mocking dependencies that aren't available in node/test environment
-vi.mock("$lib/core/vfx", () => ({
+vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
   spawnSlashArc: vi.fn(),
   triggerCameraShake: vi.fn(),

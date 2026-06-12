@@ -1,15 +1,15 @@
 import { Graphics, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import type { InputResource } from "$lib/core/input";
-import type { VFXResource } from "$lib/core/vfx";
-import { TILE } from "$lib/core/systems/map";
+import type { InputResource } from "$lib/core/input/input";
+import type { VFXResource } from "$lib/core/vfx/vfx";
+import { TILE } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
 import { stamina, staminaConfig } from "$lib/domain/stamina.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { awardSkillXp } from "$lib/domain/skill-xp";
 import { InputAction, SkillKey } from "$lib/domain/game-events";
 import { CombatResource, CombatConfig } from "./combat";
-import { spawnEnvFloatingText, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx";
+import { spawnEnvFloatingText, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 
 /**

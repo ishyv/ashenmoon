@@ -1,14 +1,14 @@
 import { AnimatedSprite, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import type { InputResource } from "$lib/core/input";
-import { TILE, type MapResource } from "$lib/core/systems/map";
+import type { InputResource } from "$lib/core/input/input";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import {
   type VFXResource,
   spawnEnvFloatingText,
   spawnEnvParticles,
   triggerCameraShake,
-} from "$lib/core/vfx";
+} from "$lib/core/vfx/vfx";
 import { Cell } from "$lib/core/types";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
@@ -23,7 +23,7 @@ import { getItemQty, getEquippedWeaponId } from "$lib/domain/inventory-api";
 import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remote-sync";
 import { transformStackQty, removeStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
-import { getStationDefinition } from "$lib/domain/stations";
+import { getStationDefinition, type StationId } from "$lib/domain/stations";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
 import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
 import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
@@ -235,7 +235,7 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         return;
       }
 
-      const proc = findProcessForStation(gameState.rpg.inventory, stationId as any);
+      const proc = findProcessForStation(gameState.rpg.inventory, stationId);
       if (proc) {
         interaction.activeProcess = {
           stationId: proc.stationId,
@@ -297,7 +297,7 @@ export class InteractionResource {
   public refuelConfirmTimer = 0;
   /** Active item process (boiling, smelting); null when nothing is processing. */
   public activeProcess: {
-    stationId: string;
+    stationId: StationId;
     targetEntityId: string;
     itemId: string;
     outputItemId: string;
@@ -965,7 +965,7 @@ export function runInteractionSystem(
     if (target) {
       const res = target.resource;
       const gatherable = res?.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
-      const isBareHanded = gatherable && !gatherable.requiredToolKind;
+      const isBareHanded = gatherable && !gatherable.requiredToolKind && gatherable.solidKind === "none";
 
       if (res && !isBareHanded) {
         const expectedKind = gatherable?.requiredToolKind ?? (res.rpgAction ? requiredToolKind(res.rpgAction) : null);

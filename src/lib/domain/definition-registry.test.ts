@@ -4,6 +4,7 @@ import {
   getPrefabDefinition,
   validateDefinitionRegistry,
 } from "$lib/domain/definition-registry";
+import type { StationProcess } from "$lib/domain/systems/station-process";
 
 describe("definition registry", () => {
   it("validates the canonical content surface", () => {
@@ -52,5 +53,27 @@ describe("definition registry", () => {
     };
 
     expect(validateDefinitionRegistry(registry)).toContain("prefab stone_node has invalid collision footprint");
+  });
+
+  it("rejects invalid station processes through canonical registry validation", () => {
+    const registry = {
+      ...DEFINITION_REGISTRY,
+      stationProcesses: [
+        ...DEFINITION_REGISTRY.stationProcesses,
+        {
+          id: "bad_station_process",
+          stationId: "drying_rack",
+          inputs: { dirty_water: 1 },
+          processType: "boil",
+          durationSec: 1,
+          outputItemId: "clean_water",
+          outputQty: 1,
+        } as unknown as StationProcess,
+      ],
+    };
+
+    expect(validateDefinitionRegistry(registry)).toContain(
+      "station process bad_station_process uses boil, which drying_rack does not accept",
+    );
   });
 });

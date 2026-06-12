@@ -1,25 +1,30 @@
-import { world } from "../ecs/ecs-miniplex";
-import { getAmbientEnvironment, TILE } from "./map";
+import type { World } from "miniplex";
+import type { Container } from "pixi.js";
+import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import { getAmbientEnvironment, TILE, type MapResource } from "$lib/core/systems/map/map";
 import { getItemDef } from "$lib/domain/items";
 import { learnAbout } from "$lib/domain/knowledge.svelte";
 import { learnRecipe } from "$lib/domain/crafting.svelte";
-import { spawnEnvFloatingText, spawnEnvParticles } from "../vfx";
+import { spawnEnvFloatingText, spawnEnvParticles, type VFXResource } from "$lib/core/vfx/vfx";
 import { Colors } from "$lib/utils/colors";
 import { playSound } from "$lib/audio/audio-engine";
 import { tickPlacedItemExposure } from "$lib/domain/exposure/placed-exposure";
 import { EntityId } from "$lib/domain/game-events";
 
 export function tickExposureSystem(
-  map: any,
+  ecsWorld: World<Entity>,
+  map: MapResource,
   dt: number,
-  vfx: any,
-  entityLayer: any
+  vfx: VFXResource,
+  entityLayer: Container,
 ): void {
-  // Find campfire
-  const campfire = world.with("position").entities.find((e) => e.id === EntityId.Campfire || e.station?.stationId === "campfire");
-  
-  // Find all pickups on the ground
-  const pickups = world.with("pickup", "position").entities;
+  // Foundation pass: per-frame ticking is retained for behaviour compatibility.
+  // Migration target: drive reactions from exposure intervals/events once item
+  // placement, fire radius changes, and climate changes publish clear events.
+  const campfire = ecsWorld
+    .with("position")
+    .entities.find((e) => e.id === EntityId.Campfire || e.station?.stationId === "campfire");
+  const pickups = ecsWorld.with("pickup", "position").entities;
 
   for (const entity of pickups) {
     const pickup = entity.pickup!;
@@ -87,7 +92,7 @@ export function tickExposureSystem(
         }
       } else {
         // Destroyed (rotted away / ash residue)
-        world.remove(entity);
+        ecsWorld.remove(entity);
         spawnEnvFloatingText(vfx, "rotted away", Colors.ui.muted, pos, entityLayer);
       }
     }

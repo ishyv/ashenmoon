@@ -1,6 +1,7 @@
 import type { Application, Container } from "pixi.js";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import { InputAction, StorageKeys } from "$lib/domain/game-events";
+import { unlock } from "$lib/audio/audio-engine";
 
 export class InputResource {
   public keys: Record<string, boolean> = {};
@@ -52,6 +53,7 @@ export class InputResource {
     getCurrentTarget: () => { id: string; interactable?: { name: string; action: string } } | null
   ): () => void {
     const onKeyDown = (e: KeyboardEvent): void => {
+      unlock();
       if (e.key === "Escape" && isPlacementMode()) {
         cancelPlacement();
         e.preventDefault();
@@ -75,6 +77,7 @@ export class InputResource {
     };
 
     const onMouseDown = (e: MouseEvent): void => {
+      unlock();
       if (devConsole.open) return;
       if (e.button === 0) {
         this.isMouseHeld = true;

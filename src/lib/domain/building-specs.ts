@@ -7,7 +7,7 @@
  * Units are tiles; multiply `sprite` dimensions by TILE at render time. `sprite`
  * height can exceed the footprint (e.g. a tower's art is taller than its base).
  */
-import type { BuildingType } from "$lib/core/assets";
+import type { BuildingType } from "$lib/core/assets/assets";
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
 

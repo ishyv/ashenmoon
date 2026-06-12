@@ -9,7 +9,7 @@ import {
 import { setThirst, thirst, thirstConfig } from "$lib/domain/survival.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
 import type { GameEngine } from "$lib/core/engine";
-import type { CommandContext } from "$lib/core/command-runtime";
+import type { CommandContext } from "./command-runtime";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgInventory, setRpgProfile, setRpgSkills } from "$lib/state/rpg-actions.svelte";
 import { devEquip, devGiveItem, devSetHp } from "$lib/state/dev-rpg-actions";

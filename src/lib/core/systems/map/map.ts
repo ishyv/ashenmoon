@@ -9,7 +9,7 @@ import {
   getTreeVariantTexture,
   getRockVariantTexture,
   getWoodItemTexture,
-} from "$lib/core/assets";
+} from "$lib/core/assets/assets";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId } from "$lib/domain/game-events";

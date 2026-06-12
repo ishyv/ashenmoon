@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InputResource } from "$lib/core/input";
+import { InputResource } from "./input";
 import { InputAction } from "$lib/domain/game-events";
 
 describe("InputResource focused gathering", () => {

@@ -1,5 +1,5 @@
 import { Cell } from "$lib/core/types";
-import { type MapResource, type SpawnNode } from "$lib/core/systems/map";
+import { type MapResource, type SpawnNode } from "$lib/core/systems/map/map";
 import { coordKey } from "$lib/utils/coord-utils";
 import { GATHERABLE_DEFINITIONS } from "$lib/domain/gathering/gatherables";
 import type { ScenarioDefinition } from "$lib/domain/scenarios/scenario-types";
