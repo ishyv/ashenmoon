@@ -1,0 +1,192 @@
+import { Container, Sprite, Texture } from "pixi.js";
+import type { World } from "miniplex";
+import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import type { InputResource } from "$lib/core/input/input";
+import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import {
+  type VFXResource,
+  spawnEnvFloatingText,
+  spawnEnvParticles,
+} from "$lib/core/vfx/vfx";
+import { playSound } from "$lib/audio/audio-engine";
+import { Cell } from "$lib/core/types";
+import { Colors } from "$lib/utils/colors";
+import { coordKey } from "$lib/utils/coord-utils";
+import { getItemDef } from "$lib/domain/items";
+import { computeRenderZ } from "$lib/domain/collision";
+import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
+import { syncPlaceItem } from "$lib/state/persistence/remote-sync";
+import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { isValidItemPlacement, type ItemPlacementContext } from "$lib/domain/items/item-placement";
+import {
+  getWoodItemTexture,
+  getRockVariantTexture,
+  getToolTexture,
+  getBushTexture,
+  getMeatItemTexture
+} from "$lib/core/assets/assets";
+
+export class ItemPlacementResource {
+  public isPlacementMode = false;
+  public currentItemId: string | null = null;
+  public previewSprite: Sprite | null = null;
+  public onPlacementCancelCb?: () => void;
+  public onPlacementCompleteCb?: () => void;
+}
+
+export function getItemTexture(itemId: string): Texture {
+  const def = getItemDef(itemId);
+  if (!def) return getWoodItemTexture();
+
+  if (def.iconUrl) {
+    return Texture.from(def.iconUrl);
+  }
+
+  if (itemId.includes("pickaxe")) {
+    return getToolTexture(1);
+  }
+  if (itemId.includes("axe")) {
+    return getToolTexture(2);
+  }
+  if (itemId === "meat" || itemId.includes("raw_meat")) {
+    return getMeatItemTexture();
+  }
+  if (def.category === "timber" || itemId.includes("wood") || itemId.includes("plank") || itemId.includes("stick")) {
+    return getWoodItemTexture();
+  }
+  if (def.category === "mineral" || itemId.includes("clay") || itemId.includes("stone") || itemId.includes("ore")) {
+    return getRockVariantTexture(1);
+  }
+  if (def.category === "herb" || itemId.includes("berries") || itemId.includes("mushroom") || itemId.includes("moss")) {
+    return getBushTexture(1);
+  }
+
+  return getWoodItemTexture();
+}
+
+function itemPlacementContext(map: MapResource, playerPos: { x: number; y: number }): ItemPlacementContext {
+  const waterTiles = new Set<string>();
+  for (let y = 0; y < map.mapH; y++) {
+    for (let x = 0; x < map.mapW; x++) {
+      if (map.cells[y * map.mapW + x] === Cell.Water) {
+        waterTiles.add(coordKey(x, y));
+      }
+    }
+  }
+
+  return {
+    mapW: map.mapW,
+    mapH: map.mapH,
+    blockedTiles: map.solidCoords,
+    waterTiles,
+    playerTile: {
+      x: Math.floor(playerPos.x / TILE),
+      y: Math.floor(playerPos.y / TILE),
+    },
+    maxDistanceTiles: 4.5,
+  };
+}
+
+export function isValidItemPlacementGrid(
+  mx: number,
+  my: number,
+  map: MapResource,
+  playerPos: { x: number; y: number },
+): boolean {
+  return isValidItemPlacement(mx, my, itemPlacementContext(map, playerPos));
+}
+
+export function spawnPlacedItemSystem(
+  id: string,
+  itemId: string,
+  gx: number,
+  gy: number,
+  world: World<Entity>,
+  entityLayer: Container,
+  entitySprites: Map<string, Container>,
+): void {
+  const ex = gx * TILE;
+  const ey = gy * TILE;
+
+  const def = getItemDef(itemId);
+  const name = def?.name ?? itemId;
+
+  // Spawns the ECS pickup entity on the ground
+  world.add({
+    id,
+    position: { x: ex, y: ey, targetX: ex, targetY: ey },
+    collider: { isSolid: false },
+    interactable: { name, action: "pickup" },
+    pickup: { itemId, qty: 1 },
+  });
+
+  // Create its PIXI Sprite
+  const sprite = new Sprite(getItemTexture(itemId));
+  sprite.anchor.set(0.5, 1);
+  sprite.x = ex + TILE / 2;
+  sprite.y = ey + TILE;
+  sprite.scale.set((TILE * 0.4) / 64);
+  sprite.zIndex = computeRenderZ(sprite.y);
+
+  entityLayer.addChild(sprite);
+  entitySprites.set(id, sprite);
+}
+
+export async function placeItemSystem(
+  itemId: string,
+  gx: number,
+  gy: number,
+  world: World<Entity>,
+  map: MapResource,
+  vfx: VFXResource,
+  entityLayer: Container,
+  entitySprites: Map<string, Container>,
+  cancelPlacement: () => void,
+  onCompleteCb: (() => void) | undefined,
+): Promise<void> {
+  const result = await syncPlaceItem(itemId, 1);
+  const player = getPlayerEntity();
+
+  if (!result.ok) {
+    spawnEnvFloatingText(
+      vfx,
+      `placement failed: ${result.error || "unknown error"}`,
+      Colors.ui.error,
+      player.position!,
+      entityLayer,
+    );
+    return;
+  }
+
+  applyRpgState(result.data);
+
+  const id = `pickup_${itemId}_${Date.now()}`;
+  spawnPlacedItemSystem(id, itemId, gx, gy, world, entityLayer, entitySprites);
+
+  playSound("pickup");
+  spawnEnvFloatingText(vfx, "placed", Colors.ui.success, player.position!, entityLayer);
+  spawnEnvParticles(vfx, Colors.building.particle, 8, "smoke", player.position!, entityLayer);
+
+  cancelPlacement();
+  onCompleteCb?.();
+}
+
+export function updateItemPlacementPreviewSystem(
+  inputs: InputResource,
+  itemPlacement: ItemPlacementResource,
+  map: MapResource,
+  playerPos: { x: number; y: number },
+): void {
+  if (!itemPlacement.isPlacementMode || !itemPlacement.currentItemId || !itemPlacement.previewSprite) {
+    return;
+  }
+
+  const mx = Math.floor(inputs.mouseWorld.x / TILE);
+  const my = Math.floor(inputs.mouseWorld.y / TILE);
+
+  itemPlacement.previewSprite.x = (mx + 0.5) * TILE;
+  itemPlacement.previewSprite.y = (my + 1) * TILE;
+
+  const valid = isValidItemPlacementGrid(mx, my, map, playerPos);
+  itemPlacement.previewSprite.tint = valid ? Colors.building.validPlace : Colors.building.invalidPlace;
+}

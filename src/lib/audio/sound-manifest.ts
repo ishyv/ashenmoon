@@ -62,7 +62,10 @@ export type SoundId =
   | "combo.momentum.overload"
   | "combo.crosscut"
   | "combo.crosscut.excellent"
-  | "combo.crosscut.bleed";
+  | "combo.crosscut.bleed"
+  | "combo.driving_thrust"
+  | "combo.driving_thrust.hit"
+  | "combo.driving_thrust.denied";
 
 export const SOUNDS: Record<SoundId, SoundDef> = {
   "gather.chop": { bus: "sfx", recipe: "chop", spatial: true, throttleMs: 60 },
@@ -101,6 +104,9 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "combo.crosscut": { bus: "sfx", recipe: "crosscut", spatial: true, throttleMs: 60 },
   "combo.crosscut.excellent": { bus: "sfx", recipe: "crosscutExcellent", spatial: true, throttleMs: 80 },
   "combo.crosscut.bleed": { bus: "sfx", recipe: "crosscutBleed", spatial: true, throttleMs: 90 },
+  "combo.driving_thrust": { bus: "sfx", recipe: "drivingThrust", spatial: true, throttleMs: 80 },
+  "combo.driving_thrust.hit": { bus: "sfx", recipe: "drivingThrustHit", spatial: true, throttleMs: 60 },
+  "combo.driving_thrust.denied": { bus: "ui", recipe: "fellSweepDenied", throttleMs: 160 },
 };
 
 const GATHER_SOUND_IDS: Record<GatherSoundKey, SoundId> = {

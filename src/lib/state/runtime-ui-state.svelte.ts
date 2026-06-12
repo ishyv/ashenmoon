@@ -14,6 +14,8 @@ export const cooldownsState = $state<{
   fellSweep: number;
   fellSweepMax: number;
   fellSweepCharge: number;
+  drivingThrust: number;
+  drivingThrustMax: number;
 }>({
   evade: 0,
   evadeMax: 1,
@@ -22,6 +24,8 @@ export const cooldownsState = $state<{
   fellSweep: 0,
   fellSweepMax: 8,
   fellSweepCharge: 0,
+  drivingThrust: 0,
+  drivingThrustMax: 3.5,
 });
 
 export const debugConfig = $state<{ zeroCooldowns: boolean; showCollision: boolean }>({

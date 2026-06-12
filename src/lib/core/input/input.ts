@@ -3,6 +3,12 @@ import { devConsole } from "$lib/ui/debug/dev-console";
 import { InputAction, StorageKeys } from "$lib/domain/game-events";
 import { unlock } from "$lib/audio/audio-engine";
 import { chargeProgressFromHeldMs } from "$lib/domain/combat/fell-sweep";
+import {
+  DEFAULT_DRIVING_THRUST_CONFIG,
+  resolveDrivingThrustSwipe,
+  type DrivingThrustPendingInput,
+  type Vec2,
+} from "$lib/domain/combat/driving-thrust";
 
 export class InputResource {
   public keys: Record<string, boolean> = {};
@@ -26,6 +32,12 @@ export class InputResource {
   public pendingAttack = false;
   /** Set when mouse is released after a charge hold (>= 200ms). */
   public pendingFellSweep = false;
+  /** Set when a short LMB swipe resolves into the fixed-distance thrust special. */
+  public pendingDrivingThrust: DrivingThrustPendingInput | null = null;
+  public primarySwipeStartScreen: Vec2 | null = null;
+  public primarySwipeStartWorld: Vec2 | null = null;
+  public primarySwipeCurrentScreen: Vec2 | null = null;
+  public primarySwipeCurrentWorld: Vec2 | null = null;
   /** 0–1 charge level captured at mouseup. */
   public fellSweepCharge = 0;
   /** True while the left mouse button is held down. */
@@ -42,6 +54,67 @@ export class InputResource {
 
   public getMouseHeldMs(now = performance.now()): number {
     return this.isMouseHeld ? Math.max(0, now - this.mouseDownAt) : 0;
+  }
+
+  public handlePrimaryMouseDown(args: { nowMs: number; screen: Vec2; world: Vec2 }): void {
+    this.isMouseHeld = true;
+    this.mouseDownAt = args.nowMs;
+    this.mouseScreen = { ...args.screen };
+    this.mouseWorld = { ...args.world };
+    this.primarySwipeStartScreen = { ...args.screen };
+    this.primarySwipeStartWorld = { ...args.world };
+    this.primarySwipeCurrentScreen = { ...args.screen };
+    this.primarySwipeCurrentWorld = { ...args.world };
+  }
+
+  public handlePrimaryMouseMove(args: { screen: Vec2; world: Vec2 }): void {
+    this.mouseScreen = { ...args.screen };
+    this.mouseWorld = { ...args.world };
+    if (!this.isMouseHeld) return;
+    this.primarySwipeCurrentScreen = { ...args.screen };
+    this.primarySwipeCurrentWorld = { ...args.world };
+  }
+
+  public handlePrimaryMouseUp(args: { nowMs: number; screen: Vec2; world: Vec2 }): void {
+    if (!this.isMouseHeld) return;
+
+    this.handlePrimaryMouseMove({ screen: args.screen, world: args.world });
+    const heldMs = this.getMouseHeldMs(args.nowMs);
+    this.isMouseHeld = false;
+
+    if (heldMs < 200) {
+      const screenStart = this.primarySwipeStartScreen ?? args.screen;
+      const worldStart = this.primarySwipeStartWorld ?? args.world;
+      const result = resolveDrivingThrustSwipe({
+        screenStart,
+        screenEnd: args.screen,
+        worldStart,
+        worldEnd: args.world,
+        config: DEFAULT_DRIVING_THRUST_CONFIG,
+      });
+      if (result.triggered) {
+        this.pendingDrivingThrust = {
+          direction: result.direction,
+          screenStart: result.screenStart,
+          screenEnd: result.screenEnd,
+          worldStart: result.worldStart,
+          worldEnd: result.worldEnd,
+        };
+      } else {
+        this.pendingAttack = true;
+      }
+    } else {
+      this.pendingFellSweep = true;
+      this.fellSweepCharge = chargeProgressFromHeldMs(heldMs);
+    }
+  }
+
+  public clearPrimarySwipeState(): void {
+    this.primarySwipeStartScreen = null;
+    this.primarySwipeStartWorld = null;
+    this.primarySwipeCurrentScreen = null;
+    this.primarySwipeCurrentWorld = null;
+    this.pendingDrivingThrust = null;
   }
 
   constructor() {
@@ -75,32 +148,32 @@ export class InputResource {
       const rect = canvas.getBoundingClientRect();
       const clientX = e.clientX - rect.left;
       const clientY = e.clientY - rect.top;
-      this.mouseScreen = { x: clientX, y: clientY };
       const local = worldContainer.toLocal({ x: clientX, y: clientY });
-      this.mouseWorld = { x: local.x, y: local.y };
+      this.handlePrimaryMouseMove({
+        screen: { x: clientX, y: clientY },
+        world: { x: local.x, y: local.y },
+      });
     };
 
     const onMouseDown = (e: MouseEvent): void => {
       unlock();
       if (devConsole.open) return;
       if (e.button === 0) {
-        this.isMouseHeld = true;
-        this.mouseDownAt = performance.now();
+        this.handlePrimaryMouseDown({
+          nowMs: performance.now(),
+          screen: this.mouseScreen,
+          world: this.mouseWorld,
+        });
       }
     };
 
     const onMouseUp = (e: MouseEvent): void => {
       if (e.button === 0 && this.isMouseHeld) {
-        const heldMs = this.getMouseHeldMs();
-        this.isMouseHeld = false;
-        if (heldMs < 200) {
-          // Fast click — normal swing.
-          this.pendingAttack = true;
-        } else {
-          // Any hold >= 200ms fires Fell Sweep (weakest at 200ms, max at 3000ms).
-          this.pendingFellSweep = true;
-          this.fellSweepCharge = chargeProgressFromHeldMs(heldMs);
-        }
+        this.handlePrimaryMouseUp({
+          nowMs: performance.now(),
+          screen: this.mouseScreen,
+          world: this.mouseWorld,
+        });
       }
     };
 

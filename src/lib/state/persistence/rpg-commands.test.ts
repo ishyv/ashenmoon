@@ -120,4 +120,19 @@ describe("local RPG commands", () => {
     expect(result.reactions.length).toBeGreaterThan(0);
     expect(getLocalRpgState()).toEqual(result.playerState);
   });
+
+  it("deducts items when placeItem is called", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.clay = { qty: 3 };
+    saveLocalRpgState(state);
+
+    const next = localRpgCommands.placeItem("clay", 1);
+    expect(next.inventory.slots.clay).toEqual({ qty: 2 });
+    expect(getLocalRpgState().inventory.slots.clay).toEqual({ qty: 2 });
+
+    const next2 = localRpgCommands.placeItem("clay", 2);
+    expect(next2.inventory.slots.clay).toBeUndefined();
+
+    expect(() => localRpgCommands.placeItem("clay", 1)).toThrow("Insufficient clay in inventory");
+  });
 });

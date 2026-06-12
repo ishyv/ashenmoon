@@ -15,16 +15,21 @@ const fgMax = $derived(cooldownsState.focusedGatherMax);
 const fsCooldown = $derived(cooldownsState.fellSweep);
 const fsMax = $derived(cooldownsState.fellSweepMax);
 const fsCharge = $derived(cooldownsState.fellSweepCharge);
+const dtCooldown = $derived(cooldownsState.drivingThrust);
+const dtMax = $derived(cooldownsState.drivingThrustMax);
 
 // Compute percentages (100 is fully on cooldown, 0 is fully off cooldown)
 const evadePercent = $derived(evadeCooldown > 0 ? (evadeCooldown / evadeMax) * 100 : 0);
 const fgPercent = $derived(fgCooldown > 0 ? (fgCooldown / fgMax) * 100 : 0);
 const fsPercent = $derived(fsCooldown > 0 ? (fsCooldown / fsMax) * 100 : 0);
+const dtPercent = $derived(dtCooldown > 0 ? (dtCooldown / dtMax) * 100 : 0);
 
 // Stamina checks (focused gathering's cheapest tier costs 10).
 const hasEvadeStam = $derived(stamina.current >= 25);
 const hasFgStam = $derived(stamina.current >= 10);
 const hasFsStam = $derived(stamina.current >= 20);
+const hasDtStam = $derived(stamina.current >= 12);
+const combatSkillLevel = $derived((gameState.rpg.skills as typeof gameState.rpg.skills & { combat?: { level: number } } | null)?.combat?.level ?? 1);
 </script>
 
 <div class="hotbar-container">
@@ -73,6 +78,28 @@ const hasFsStam = $derived(stamina.current >= 20);
       <div class="title">focused gathering</div>
       <div class="desc">press f on a large source to commit it and break it open by hand. click the targets in order and on time. read it well and you profit, botch it and you waste the source.</div>
       <div class="cost">cost / cooldown scale with node difficulty</div>
+    </div>
+  </div>
+
+  <div class="skill-slot" class:on-cooldown={dtCooldown > 0} class:out-of-stamina={!hasDtStam}>
+    {#if dtCooldown > 0}
+      <svg class="cooldown-overlay" viewBox="0 0 36 36">
+        <path
+          class="cooldown-progress"
+          stroke-dasharray="100, 100"
+          stroke-dashoffset={100 - dtPercent}
+          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+      </svg>
+      <div class="cooldown-time">{dtCooldown.toFixed(1)}s</div>
+    {/if}
+
+    <div class="skill-icon dt-bg">dt</div>
+    <div class="skill-key">SWIPE</div>
+    <div class="tooltip">
+      <div class="title">Driving Thrust (Lvl {combatSkillLevel})</div>
+      <div class="desc">Short-swipe left-click to lunge in the swipe direction and punch through enemies in a line.</div>
+      <div class="cost">Cost: 18 Stamina / {dtMax.toFixed(1)}s cooldown</div>
     </div>
   </div>
 
@@ -173,6 +200,10 @@ const hasFsStam = $derived(stamina.current >= 20);
 
   .fs-bg {
     color: #ff7733;
+  }
+
+  .dt-bg {
+    color: #bef264;
   }
 
   .charging {

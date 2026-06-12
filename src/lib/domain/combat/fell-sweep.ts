@@ -24,6 +24,10 @@ export interface FellSweepConfig {
   knockbackMaxMultiplier: number;
   chargeMoveSpeedMinMultiplier: number;
   chargeMoveSpeedMaxMultiplier: number;
+  whirlRequiredTurnRad: number;
+  whirlDamageMultiplier: number;
+  whirlReachMultiplier: number;
+  whirlKnockbackMultiplier: number;
 }
 
 export interface FellSweepChargeState {
@@ -36,6 +40,9 @@ export interface FellSweepChargeState {
   aimDirection: Vec2;
   lastStage: FellSweepChargeStage;
   interrupted: boolean;
+  isWhirlReady: boolean;
+  whirlAngularTravelRad: number;
+  lastWhirlAimAngleRad: number | null;
 }
 
 export interface FellSweepScaling {
@@ -64,6 +71,10 @@ export const DEFAULT_FELL_SWEEP_CONFIG: FellSweepConfig = {
   knockbackMaxMultiplier: 2.5,
   chargeMoveSpeedMinMultiplier: 0.85,
   chargeMoveSpeedMaxMultiplier: 0.45,
+  whirlRequiredTurnRad: Math.PI * 2,
+  whirlDamageMultiplier: 1.3,
+  whirlReachMultiplier: 1.2,
+  whirlKnockbackMultiplier: 1.35,
 };
 
 export function createInitialFellSweepChargeState(): FellSweepChargeState {
@@ -77,6 +88,9 @@ export function createInitialFellSweepChargeState(): FellSweepChargeState {
     aimDirection: { x: 1, y: 0 },
     lastStage: "none",
     interrupted: false,
+    isWhirlReady: false,
+    whirlAngularTravelRad: 0,
+    lastWhirlAimAngleRad: null,
   };
 }
 
@@ -126,12 +140,20 @@ export function fellSweepScaling(
   progress: number,
   combatConfig: { damage: number; reach: number; arcHalfAngle: number; knockback: number },
   config: FellSweepConfig = DEFAULT_FELL_SWEEP_CONFIG,
+  isWhirlReady = false,
 ): FellSweepScaling {
-  return {
+  const base = {
     damage: Math.round(combatConfig.damage * lerp(config.damageMinMultiplier, config.damageMaxMultiplier, progress)),
     reach: combatConfig.reach * lerp(config.reachMinMultiplier, config.reachMaxMultiplier, progress),
     arcHalfAngle: combatConfig.arcHalfAngle * lerp(config.arcMinMultiplier, config.arcMaxMultiplier, progress),
     knockback: combatConfig.knockback * lerp(config.knockbackMinMultiplier, config.knockbackMaxMultiplier, progress),
+  };
+  if (!isWhirlReady) return base;
+  return {
+    damage: Math.round(base.damage * config.whirlDamageMultiplier),
+    reach: base.reach * config.whirlReachMultiplier,
+    arcHalfAngle: Math.PI,
+    knockback: base.knockback * config.whirlKnockbackMultiplier,
   };
 }
 
@@ -139,6 +161,38 @@ export function normalizeAimDirection(dx: number, dy: number, fallback: Vec2 = {
   const len = Math.hypot(dx, dy);
   if (len <= 0.0001) return fallback;
   return { x: dx / len, y: dy / len };
+}
+
+export interface FellSweepWhirlTrackingState {
+  isWhirlReady: boolean;
+  whirlAngularTravelRad: number;
+  lastWhirlAimAngleRad: number | null;
+}
+
+function normalizeSignedAngleDelta(delta: number): number {
+  let d = delta;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+export function trackFellSweepWhirl<T extends FellSweepWhirlTrackingState>(
+  state: T,
+  aimAngleRad: number,
+  config: FellSweepConfig = DEFAULT_FELL_SWEEP_CONFIG,
+): T {
+  if (state.lastWhirlAimAngleRad === null) {
+    return { ...state, lastWhirlAimAngleRad: aimAngleRad };
+  }
+
+  const delta = normalizeSignedAngleDelta(aimAngleRad - state.lastWhirlAimAngleRad);
+  const whirlAngularTravelRad = state.whirlAngularTravelRad + Math.abs(delta);
+  return {
+    ...state,
+    lastWhirlAimAngleRad: aimAngleRad,
+    whirlAngularTravelRad,
+    isWhirlReady: state.isWhirlReady || whirlAngularTravelRad >= config.whirlRequiredTurnRad,
+  };
 }
 
 export function smoothFellSweepAim(current: Vec2, target: Vec2, chargeProgress: number): Vec2 {

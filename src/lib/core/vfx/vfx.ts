@@ -35,6 +35,7 @@ export class VFXResource {
   public selectionRing!: Graphics;
   public comboRing!: Graphics;
   public fourfoldRing!: Graphics;
+  public drivingThrustPreview: Graphics | null = null;
   public chargeParticleTimer = 0;
   public selectionRingTime = 0;
   public footstepTimer = 0;
@@ -530,6 +531,23 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
       }
       continue;
     }
+    if (arc.variant === "driving_thrust") {
+      const length = arc.reach;
+      const width = arc.halfAngle;
+      const alpha = (1 - t) * 0.78;
+      arc.graphic.moveTo(0, 0);
+      arc.graphic.lineTo(Math.cos(arc.angle) * length, Math.sin(arc.angle) * length);
+      arc.graphic.stroke({ color: arc.color ?? Colors.combat.drivingThrust, width, alpha: alpha * 0.28 });
+      arc.graphic.moveTo(0, 0);
+      arc.graphic.lineTo(Math.cos(arc.angle) * length, Math.sin(arc.angle) * length);
+      arc.graphic.stroke({ color: Colors.ui.white, width: 2.5, alpha });
+      if (arc.life >= arc.maxLife) {
+        entityLayer.removeChild(arc.graphic);
+        arc.graphic.destroy();
+        vfx.slashArcs.splice(i, 1);
+      }
+      continue;
+    }
     arc.graphic.moveTo(Math.cos(a0) * inner, Math.sin(a0) * inner);
     arc.graphic.arc(0, 0, r, a0, a1);
     arc.graphic.arc(0, 0, inner, a1, a0, true);
@@ -627,6 +645,53 @@ export function spawnCrosscutSlash(
       gravity: 40,
       life: 0,
       maxLife: 0.25 + Math.random() * 0.22,
+    });
+    entityLayer.addChild(p);
+  }
+}
+
+export function spawnDrivingThrustSlash(
+  vfx: VFXResource,
+  entityLayer: Container,
+  origin: { x: number; y: number },
+  direction: { x: number; y: number },
+  lengthPx: number,
+  widthPx: number,
+): void {
+  const angle = Math.atan2(direction.y, direction.x);
+  const g = new Graphics();
+  g.x = origin.x;
+  g.y = origin.y;
+  entityLayer.addChild(g);
+  vfx.slashArcs.push({
+    graphic: g,
+    life: 0,
+    maxLife: 0.26,
+    angle,
+    reach: lengthPx,
+    halfAngle: widthPx,
+    color: Colors.combat.drivingThrust,
+    variant: "driving_thrust",
+  });
+
+  const count = 18;
+  for (let i = 0; i < count; i++) {
+    const along = Math.random() * lengthPx;
+    const side = (Math.random() - 0.5) * widthPx;
+    const px = origin.x + direction.x * along + -direction.y * side;
+    const py = origin.y + direction.y * along + direction.x * side;
+    const p = new Graphics();
+    p.rect(-2, -2, 4, 4).fill({ color: Colors.combat.drivingThrust, alpha: 0.86 });
+    p.x = px;
+    p.y = py;
+    const speed = 60 + Math.random() * 110;
+    vfx.particles.push({
+      graphic: p,
+      vx: direction.x * speed + (Math.random() - 0.5) * 35,
+      vy: direction.y * speed + (Math.random() - 0.5) * 35,
+      gravity: 60,
+      life: 0,
+      maxLife: 0.22 + Math.random() * 0.22,
     });
     entityLayer.addChild(p);
   }

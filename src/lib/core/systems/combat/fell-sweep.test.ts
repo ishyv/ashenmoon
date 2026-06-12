@@ -68,6 +68,26 @@ describe("Fell Sweep runtime", () => {
     expect(combat.fellSweepChargeState.chargeStage).toBe("building");
   });
 
+  it("arms whirl mode after the held aim makes a full circle around the player", () => {
+    const { inputs, combat, vfx, player, entityLayer } = setup();
+    inputs.isMouseHeld = true;
+    inputs.heldMs = 1600;
+
+    for (const mouseWorld of [
+      { x: 128, y: 32 },
+      { x: 32, y: 128 },
+      { x: -64, y: 32 },
+      { x: 32, y: -64 },
+      { x: 128, y: 32 },
+    ]) {
+      inputs.mouseWorld = mouseWorld;
+      updateFellSweepChargeSystem(inputs, combat, vfx, 0.016, player, entityLayer, false, false);
+    }
+
+    expect(combat.fellSweepChargeState.isWhirlReady).toBe(true);
+    expect(combat.fellSweepChargeState.whirlAngularTravelRad).toBeGreaterThanOrEqual(Math.PI * 2);
+  });
+
   it("denies cooldown charge once per hold attempt", () => {
     const { inputs, combat, vfx, player, entityLayer } = setup();
     inputs.isMouseHeld = true;
@@ -104,6 +124,32 @@ describe("Fell Sweep runtime", () => {
     expect(combat.fellSweepCooldownTimer).toBe(8);
     expect(spawnSlashArc).toHaveBeenCalled();
     expect(playSound).toHaveBeenCalledWith("player.fellsweep.release.high");
+    expect(spawnShockwaveRing).toHaveBeenCalled();
+  });
+
+  it("releases whirl mode as a full-circle hit that knocks enemies outward", () => {
+    const { world, inputs, combat, config, vfx, player, playerSprite, entityLayer, setPlayerAnim, onEnemyKilled } = setup();
+    const enemyBehindAim: Entity = {
+      id: "enemy_behind",
+      position: { x: -56, y: 0, targetX: -56, targetY: 0 },
+      health: { current: 100, max: 100, faction: "hostile", invulnTimer: 0 },
+      knockback: { vx: 0, vy: 0, timer: 0 },
+    };
+    world.add(enemyBehindAim);
+    inputs.pendingFellSweep = true;
+    combat.fellSweepChargeState = {
+      ...combat.fellSweepChargeState,
+      isCharging: true,
+      chargeProgress: 1,
+      chargeStage: "full",
+      aimDirection: { x: 1, y: 0 },
+      isWhirlReady: true,
+    };
+
+    fellSweepSystem(world, inputs, combat, config, vfx, 0.016, player, playerSprite, setPlayerAnim, entityLayer, false, false, 1, onEnemyKilled);
+
+    expect(enemyBehindAim.health?.current).toBe(2);
+    expect(enemyBehindAim.knockback?.vx).toBeLessThan(0);
     expect(spawnShockwaveRing).toHaveBeenCalled();
   });
 

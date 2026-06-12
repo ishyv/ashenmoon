@@ -1,6 +1,7 @@
 export interface InventoryEngine {
   isNearCampfire(): boolean;
   startBuildingPlacement(type: string, onConfirm: () => void, onCancel: () => void): void;
+  startItemPlacement(itemId: string, onConfirm: () => void, onCancel: () => void): void;
 }
 
 export interface InventoryItemView {

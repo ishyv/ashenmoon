@@ -378,6 +378,18 @@ function environmentTick(env: { temperature: number; humidity: number; toxins: n
   return { mutated, reactions, playerState: state };
 }
 
+function placeItem(itemId: string, qty = 1): RpgPlayerState {
+  const placeQuantity = Math.max(1, Math.floor(qty));
+  return mutateAndSave((state) => {
+    const slots = { ...state.inventory.slots };
+    if (getQty(slots[itemId]) < placeQuantity) {
+      throw new Error(`Insufficient ${itemId} in inventory`);
+    }
+    removeQty(slots, itemId, placeQuantity);
+    state.inventory = { slots };
+  });
+}
+
 export const localRpgCommands = {
   getPlayerState: getLocalRpgState,
   savePlayerState: saveLocalRpgState,
@@ -388,6 +400,7 @@ export const localRpgCommands = {
   build,
   craft,
   environmentTick,
+  placeItem,
 };
 
 export type LocalRpgCommandResult = Omit<

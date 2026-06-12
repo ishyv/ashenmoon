@@ -7,6 +7,7 @@ import {
   fellSweepMoveMultiplier,
   fellSweepScaling,
   fellSweepStage,
+  trackFellSweepWhirl,
   smoothFellSweepAim,
 } from "./fell-sweep";
 
@@ -74,5 +75,54 @@ describe("Fell Sweep charge rules", () => {
     expect(low.y).toBeGreaterThan(high.y);
     expect(Math.hypot(low.x, low.y)).toBeCloseTo(1);
     expect(Math.hypot(high.x, high.y)).toBeCloseTo(1);
+  });
+
+  it("tracks mouse angular travel across the wraparound seam", () => {
+    const state = {
+      ...DEFAULT_FELL_SWEEP_CONFIG,
+    };
+    const tracked = trackFellSweepWhirl(
+      {
+        isWhirlReady: false,
+        whirlAngularTravelRad: 0,
+        lastWhirlAimAngleRad: Math.PI - 0.05,
+      },
+      -Math.PI + 0.05,
+    );
+
+    expect(tracked.whirlAngularTravelRad).toBeCloseTo(0.1);
+    expect(tracked.isWhirlReady).toBe(false);
+    expect(state.whirlRequiredTurnRad).toBeCloseTo(Math.PI * 2);
+  });
+
+  it("arms whirl mode after a full 360-degree mouse turn", () => {
+    let state = {
+      isWhirlReady: false,
+      whirlAngularTravelRad: 0,
+      lastWhirlAimAngleRad: 0,
+    };
+
+    for (const angle of [Math.PI / 2, Math.PI, -Math.PI / 2, 0]) {
+      state = trackFellSweepWhirl(state, angle);
+    }
+
+    expect(state.whirlAngularTravelRad).toBeCloseTo(Math.PI * 2);
+    expect(state.isWhirlReady).toBe(true);
+  });
+
+  it("scales Fell Sweep into full-circle whirl damage when armed", () => {
+    const combatConfig = {
+      damage: 25,
+      reach: 64,
+      arcHalfAngle: Math.PI / 6,
+      knockback: 240,
+    };
+
+    expect(fellSweepScaling(1, combatConfig, DEFAULT_FELL_SWEEP_CONFIG, true)).toEqual({
+      damage: 98,
+      reach: 64 * 1.5 * 1.2,
+      arcHalfAngle: Math.PI,
+      knockback: 240 * 2.5 * 1.35,
+    });
   });
 });

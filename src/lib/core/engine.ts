@@ -92,6 +92,10 @@ import {
   despawnEntity,
   updateFellSweepChargeSystem,
 } from "$lib/core/systems/combat/combat";
+import {
+  drivingThrustSystem,
+  renderDrivingThrustPreview,
+} from "$lib/core/systems/combat/driving-thrust";
 import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
 import {
   InteractionResource,
@@ -133,6 +137,13 @@ import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$l
 import { setEnvironment } from "$lib/state/environment-state.svelte";
 import { tickExposureSystem } from "$lib/core/systems/exposure/exposure-system";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
+import {
+  ItemPlacementResource,
+  updateItemPlacementPreviewSystem,
+  placeItemSystem,
+  getItemTexture,
+  isValidItemPlacementGrid,
+} from "$lib/core/systems/item-placement/item-placement-system";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { loadKnowledge } from "$lib/domain/knowledge.svelte";
 import { loadRecipes } from "$lib/domain/crafting.svelte";
@@ -184,6 +195,7 @@ export class GameEngine {
   public interactionResource = new InteractionResource();
   public focusedGatherResource = new FocusedGatherResource();
   public buildingResource = new BuildingResource();
+  public itemPlacementResource = new ItemPlacementResource();
   public craftingResource = new CraftingResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
@@ -300,8 +312,8 @@ export class GameEngine {
       const cleanInputListeners = this.inputResource.setupListeners(
         canvas,
         this.worldContainer,
-        () => this.buildingResource.isPlacementMode,
-        () => this.cancelBuildingPlacement(),
+        () => this.buildingResource.isPlacementMode || this.itemPlacementResource.isPlacementMode,
+        () => { this.cancelBuildingPlacement(); this.cancelItemPlacement(); },
         this.onContextMenu,
         () => this.interactionResource.currentTarget
       );
@@ -530,6 +542,7 @@ export class GameEngine {
         !focusedGatherActive &&
         this.inputResource.pendingAttack &&
         !this.buildingResource.isPlacementMode &&
+        !this.itemPlacementResource.isPlacementMode &&
         this.interactionResource.currentTarget !== null
       ) {
         this.inputResource.pendingAttack = false;
@@ -540,6 +553,14 @@ export class GameEngine {
       updatePlacementPreviewSystem(
         this.inputResource,
         this.buildingResource,
+        this.mapResource,
+        this.playerEntity.position!
+      );
+
+      // Update item placement preview position
+      updateItemPlacementPreviewSystem(
+        this.inputResource,
+        this.itemPlacementResource,
         this.mapResource,
         this.playerEntity.position!
       );
@@ -574,6 +595,44 @@ export class GameEngine {
               triggerQuestEvent,
               () => this.cancelBuildingPlacement(),
               this.buildingResource.onPlacementCompleteCb
+            );
+          } else {
+            spawnEnvFloatingText(
+              this.vfxResource,
+              "❌ Invalid Position!",
+              Colors.ui.error,
+              this.playerEntity.position!,
+              this.entityLayer
+            );
+          }
+        }
+      } else if (
+        this.itemPlacementResource.isPlacementMode &&
+        this.itemPlacementResource.currentItemId &&
+        this.itemPlacementResource.previewSprite
+      ) {
+        const wantsPlacement =
+          this.inputResource.isActionPressed(InputAction.Harvest) ||
+          this.inputResource.pendingInteract ||
+          this.inputResource.pendingAttack;
+        this.inputResource.pendingInteract = false;
+        this.inputResource.pendingAttack = false;
+        if (wantsPlacement) {
+          const itemId = this.itemPlacementResource.currentItemId;
+          const mx = Math.floor(this.inputResource.mouseWorld.x / TILE);
+          const my = Math.floor(this.inputResource.mouseWorld.y / TILE);
+          if (isValidItemPlacementGrid(mx, my, this.mapResource, this.playerEntity.position!)) {
+            placeItemSystem(
+              itemId,
+              mx,
+              my,
+              world,
+              this.mapResource,
+              this.vfxResource,
+              this.entityLayer,
+              this.entitySprites,
+              () => this.cancelItemPlacement(),
+              this.itemPlacementResource.onPlacementCompleteCb
             );
           } else {
             spawnEnvFloatingText(
@@ -664,6 +723,23 @@ export class GameEngine {
       // The player's own swings pause during a focused-gathering session; clicks
       // belong to the minigame.
       if (!focusedGatherActive) {
+        drivingThrustSystem(
+          world,
+          this.inputResource,
+          this.combatResource,
+          this.combatConfig,
+          this.vfxResource,
+          dt,
+          this.playerEntity,
+          this.playerSprite,
+          (state) => this.setPlayerAnim(state),
+          this.entityLayer,
+          this.movementResource,
+          this.mapResource,
+          this.buildingResource.isPlacementMode,
+          (enemy) => this.handleEnemyDeath(enemy)
+        );
+
         playerAttackSystem(
           world,
           this.inputResource,
@@ -696,6 +772,8 @@ export class GameEngine {
           gameState.rpg.skills?.fellSweep?.level ?? 1,
           (enemy) => this.handleEnemyDeath(enemy)
         );
+      } else {
+        this.inputResource.pendingDrivingThrust = null;
       }
 
       enemyAiSystem(
@@ -809,6 +887,8 @@ export class GameEngine {
       cooldownsState.fellSweep = Math.max(0, this.combatResource.fellSweepCooldownTimer);
       cooldownsState.fellSweepMax = maxFsCd;
       cooldownsState.fellSweepCharge = chargeProgress;
+      cooldownsState.drivingThrust = Math.max(0, this.combatResource.drivingThrustCooldownTimer);
+      cooldownsState.drivingThrustMax = this.combatResource.drivingThrustConfig.cooldownMs / 1000;
 
       // Pin shadow to player feet
       const shadowPos = this.playerEntity.position!;
@@ -867,6 +947,14 @@ export class GameEngine {
         this.playerEntity,
         this.playerSprite,
         this.entityLayer
+      );
+
+      renderDrivingThrustPreview(
+        this.vfxResource,
+        this.entityLayer,
+        this.playerEntity.position,
+        this.inputResource,
+        this.combatResource.drivingThrustConfig
       );
 
       selectionRingUpdateSystem(
@@ -1666,6 +1754,42 @@ export class GameEngine {
     this.buildingResource.onPlacementCompleteCb = undefined;
   }
 
+  public startItemPlacement(
+    itemId: string,
+    onCancel?: () => void,
+    onComplete?: () => void
+  ): void {
+    this.itemPlacementResource.currentItemId = itemId;
+    this.itemPlacementResource.isPlacementMode = true;
+    this.itemPlacementResource.onPlacementCancelCb = onCancel;
+    this.itemPlacementResource.onPlacementCompleteCb = onComplete;
+
+    if (this.itemPlacementResource.previewSprite) {
+      this.itemPlacementResource.previewSprite.destroy();
+    }
+
+    const tex = getItemTexture(itemId);
+
+    this.itemPlacementResource.previewSprite = new Sprite(tex);
+    this.itemPlacementResource.previewSprite.anchor.set(0.5, 1);
+    this.itemPlacementResource.previewSprite.alpha = 0.6;
+    this.itemPlacementResource.previewSprite.scale.set((TILE * 0.4) / 64);
+    this.entityLayer.addChild(this.itemPlacementResource.previewSprite);
+  }
+
+  public cancelItemPlacement(): void {
+    this.itemPlacementResource.isPlacementMode = false;
+    this.itemPlacementResource.currentItemId = null;
+    if (this.itemPlacementResource.previewSprite) {
+      this.entityLayer.removeChild(this.itemPlacementResource.previewSprite);
+      this.itemPlacementResource.previewSprite.destroy();
+      this.itemPlacementResource.previewSprite = null;
+    }
+    this.itemPlacementResource.onPlacementCancelCb?.();
+    this.itemPlacementResource.onPlacementCancelCb = undefined;
+    this.itemPlacementResource.onPlacementCompleteCb = undefined;
+  }
+
   public startCrafting(): void {
     this.craftingResource.requestOpen = true;
   }
@@ -1827,6 +1951,7 @@ export class GameEngine {
     this.interactionResource.gatherCooldownTimer = 0;
     cooldownsState.evade = 0;
     cooldownsState.focusedGather = 0;
+    cooldownsState.drivingThrust = 0;
     return "cooldowns reset";
   }
 

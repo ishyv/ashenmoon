@@ -19,6 +19,7 @@ import {
   fellSweepStage,
   normalizeAimDirection,
   smoothFellSweepAim,
+  trackFellSweepWhirl,
   type FellSweepChargeStage,
 } from "$lib/domain/combat/fell-sweep";
 
@@ -106,6 +107,13 @@ export function updateFellSweepChargeSystem(
   const pcx = pos.x + TILE / 2;
   const pcy = pos.y + TILE / 2;
   const targetAim = normalizeAimDirection(inputs.mouseWorld.x - pcx, inputs.mouseWorld.y - pcy, state.aimDirection);
+  const targetAimAngle = Math.atan2(targetAim.y, targetAim.x);
+  const whirl = trackFellSweepWhirl(
+    state.isCharging
+      ? state
+      : { ...state, whirlAngularTravelRad: 0, lastWhirlAimAngleRad: null, isWhirlReady: false },
+    targetAimAngle,
+  );
   const aimDirection = state.isCharging ? smoothFellSweepAim(state.aimDirection, targetAim, progress) : targetAim;
   const startedAtMs = state.isCharging ? state.startedAtMs : performance.now() - heldMs;
 
@@ -134,6 +142,9 @@ export function updateFellSweepChargeSystem(
     aimDirection,
     lastStage: state.chargeStage,
     interrupted: false,
+    isWhirlReady: whirl.isWhirlReady,
+    whirlAngularTravelRad: whirl.whirlAngularTravelRad,
+    lastWhirlAimAngleRad: whirl.lastWhirlAimAngleRad,
   };
 }
 
@@ -161,7 +172,8 @@ export function renderFellSweepChargeFeedback(
   const pos = player.position;
   const pcx = pos.x + TILE / 2;
   const pcy = pos.y + TILE / 2;
-  const amp = stage === "full" ? 10 : stage === "critical" ? 8 : 3 + charge * 5;
+  const isWhirl = state.isWhirlReady;
+  const amp = isWhirl ? 13 : stage === "full" ? 10 : stage === "critical" ? 8 : 3 + charge * 5;
   playerSprite.x += (Math.random() - 0.5) * amp;
   playerSprite.y += (Math.random() - 0.5) * amp * 0.65;
   playerSprite.tint = chargeTint(charge);
@@ -169,17 +181,24 @@ export function renderFellSweepChargeFeedback(
   combat.fellSweepDustTimer -= dt;
   const dustInterval = stage === "full" ? 0.09 : stage === "critical" ? 0.12 : stage === "building" ? 0.18 : 0.28;
   if (combat.fellSweepDustTimer <= 0) {
-    spawnEnvParticles(vfx, stage === "bracing" ? Colors.vfx.footstep : Colors.world.dirt, stage === "full" ? 5 : 2, "smoke", pos, entityLayer);
-    combat.fellSweepDustTimer = dustInterval;
+    spawnEnvParticles(
+      vfx,
+      isWhirl ? Colors.combat.fellSweepArc : stage === "bracing" ? Colors.vfx.footstep : Colors.world.dirt,
+      isWhirl ? 8 : stage === "full" ? 5 : 2,
+      "smoke",
+      pos,
+      entityLayer,
+    );
+    combat.fellSweepDustTimer = isWhirl ? Math.min(dustInterval, 0.08) : dustInterval;
   }
 
   combat.fellSweepVfxPulseTimer -= dt;
   if ((stage === "building" || stage === "critical" || stage === "full") && combat.fellSweepVfxPulseTimer <= 0) {
-    triggerCameraShake(vfx, stage === "full" ? 4.8 : stage === "critical" ? 3.6 : 1.7, 0.08 + charge * 0.04);
-    if (stage === "full") {
-      spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, 0.28);
+    triggerCameraShake(vfx, isWhirl ? 5.8 : stage === "full" ? 4.8 : stage === "critical" ? 3.6 : 1.7, 0.08 + charge * 0.04);
+    if (stage === "full" || isWhirl) {
+      spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, isWhirl ? 0.38 : 0.28);
     }
-    combat.fellSweepVfxPulseTimer = stage === "full" ? 0.55 : 0.32 - charge * 0.12;
+    combat.fellSweepVfxPulseTimer = isWhirl ? 0.22 : stage === "full" ? 0.55 : 0.32 - charge * 0.12;
   }
 
   const preview = vfx.fellSweepChargeArc ?? new Graphics();
@@ -194,9 +213,16 @@ export function renderFellSweepChargeFeedback(
   preview.clear();
   preview.x = pcx;
   preview.y = pcy;
-  preview.moveTo(Math.cos(angle - halfAngle) * TILE * 0.3, Math.sin(angle - halfAngle) * TILE * 0.3);
-  preview.arc(0, 0, reach, angle - halfAngle, angle + halfAngle);
-  preview.stroke({ color: Colors.combat.fellSweepArc, width: stage === "full" ? 5 : 2.5 + charge * 2, alpha });
+  if (isWhirl) {
+    preview.circle(0, 0, reach * 1.2);
+    preview.stroke({ color: Colors.combat.fellSweepArc, width: 6, alpha: Math.max(alpha, 0.5) });
+    preview.circle(0, 0, reach * 0.72);
+    preview.stroke({ color: Colors.ui.white, width: 2, alpha: 0.28 });
+  } else {
+    preview.moveTo(Math.cos(angle - halfAngle) * TILE * 0.3, Math.sin(angle - halfAngle) * TILE * 0.3);
+    preview.arc(0, 0, reach, angle - halfAngle, angle + halfAngle);
+    preview.stroke({ color: Colors.combat.fellSweepArc, width: stage === "full" ? 5 : 2.5 + charge * 2, alpha });
+  }
 }
 
 /**
@@ -235,7 +261,8 @@ export function fellSweepSystem(
 
   const charge = combat.fellSweepChargeState.chargeProgress || inputs.fellSweepCharge;
   const stage = fellSweepStage(charge);
-  const scaling = fellSweepScaling(charge, config, DEFAULT_FELL_SWEEP_CONFIG);
+  const isWhirl = combat.fellSweepChargeState.isWhirlReady;
+  const scaling = fellSweepScaling(charge, config, DEFAULT_FELL_SWEEP_CONFIG, isWhirl);
 
   const pos = player.position!;
   const pcx = pos.x + TILE / 2;
@@ -256,10 +283,10 @@ export function fellSweepSystem(
   setPlayerAnim("attack");
   spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, scaling.reach, scaling.arcHalfAngle, Colors.combat.fellSweepArc);
   playSound(releaseSoundForStage(stage));
-  triggerCameraShake(vfx, 4 + charge * 5, 0.2 + charge * 0.14);
-  spawnEnvParticles(vfx, Colors.world.dirt, stage === "full" || stage === "critical" ? 18 : 9, "smoke", pos, entityLayer);
-  if (stage === "critical" || stage === "full") {
-    spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, stage === "full" ? 0.5 : 0.35);
+  triggerCameraShake(vfx, isWhirl ? 10 : 4 + charge * 5, isWhirl ? 0.42 : 0.2 + charge * 0.14);
+  spawnEnvParticles(vfx, isWhirl ? Colors.combat.fellSweepArc : Colors.world.dirt, isWhirl ? 30 : stage === "full" || stage === "critical" ? 18 : 9, "smoke", pos, entityLayer);
+  if (stage === "critical" || stage === "full" || isWhirl) {
+    spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, isWhirl ? 0.65 : stage === "full" ? 0.5 : 0.35);
   }
 
   const cosHalf = Math.cos(scaling.arcHalfAngle);
@@ -274,7 +301,7 @@ export function fellSweepSystem(
     const dy = ey - pcy;
     const d = Math.hypot(dx, dy);
     if (d > scaling.reach + enemyRadius) continue;
-    if (d > 1 && (ax * dx + ay * dy) / d < cosHalf) continue;
+    if (!isWhirl && d > 1 && (ax * dx + ay * dy) / d < cosHalf) continue;
     const died = applyDamage(e, scaling.damage, pcx, pcy, scaling.knockback, config, vfx, entityLayer);
     hitCount++;
     if (died) onEnemyKilled(e);

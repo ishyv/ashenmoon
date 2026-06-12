@@ -78,6 +78,12 @@ import {
   type FourfoldSlashResult,
   type FourfoldSlashType,
 } from "$lib/domain/combat/fourfold-slash";
+import {
+  DEFAULT_DRIVING_THRUST_CONFIG,
+  createInitialDrivingThrustState,
+  type DrivingThrustConfig,
+  type DrivingThrustState,
+} from "$lib/domain/combat/driving-thrust";
 
 export { trackMovementCombo } from "./kite-combo";
 export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
@@ -153,6 +159,9 @@ export class CombatResource {
   public lastCrosscutWeaponId: string | null = null;
   public fourfoldState: FourfoldSlashState = createInitialFourfoldSlashState();
   public fourfoldConfig: FourfoldSlashConfig = createDefaultFourfoldSlashConfig();
+  public drivingThrustState: DrivingThrustState = createInitialDrivingThrustState();
+  public drivingThrustConfig: DrivingThrustConfig = { ...DEFAULT_DRIVING_THRUST_CONFIG };
+  public drivingThrustCooldownTimer = 0;
   public directionalMomentumState: DirectionalMomentumComboState = {
     isActive: false,
     lockedDirection: null,

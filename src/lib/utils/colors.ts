@@ -36,6 +36,8 @@ export const Colors = {
     slashArc: 0xfff1c0,
     kiteArc: 0x33e0a6,
     fellSweepArc: 0xff8833,
+    drivingThrust: 0xd9f99d,
+    drivingThrustPreview: 0xbef264,
     crosscutWeak: 0xffd166,
     crosscutGood: 0xf5f3ff,
     crosscutExcellent: 0xff4d6d,

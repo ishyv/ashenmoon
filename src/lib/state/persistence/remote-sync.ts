@@ -52,3 +52,11 @@ export function syncBuild(
 ): Promise<SyncResult<RpgPlayerState>> {
   return syncLocal(() => localRpgCommands.build(type, x, y));
 }
+
+/** Place an item; deducts the item from inventory and returns the new local state. */
+export function syncPlaceItem(
+  itemId: string,
+  qty = 1,
+): Promise<SyncResult<RpgPlayerState>> {
+  return syncLocal(() => localRpgCommands.placeItem(itemId, qty));
+}

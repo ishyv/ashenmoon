@@ -26,6 +26,8 @@ export type RecipeId =
   | "crosscut"
   | "crosscutExcellent"
   | "crosscutBleed"
+  | "drivingThrust"
+  | "drivingThrustHit"
   | "fellSweepBrace"
   | "fellSweepPulse"
   | "fellSweepFull"
@@ -130,6 +132,17 @@ export const RECIPES: Record<RecipeId, Recipe> = {
   crosscutBleed: (v) => {
     tone(v, { type: "triangle", freq: 90, sweepTo: 45, sweepShape: "lin", gain: 0.13, dur: 0.12 });
     noise(v, { dur: 0.08, cutoff: 900, gain: 0.1 });
+  },
+  drivingThrust: (v) => {
+    const p = 0.92 + v.rng() * 0.16;
+    tone(v, { type: "sawtooth", freq: 260 * p, sweepTo: 70 * p, sweepShape: "lin", cutoff: 900, gain: 0.32, dur: 0.16 });
+    noise(v, { dur: 0.12, cutoff: 3600, gain: 0.24 });
+    tone(v, { type: "sine", freq: 1600 * p, gain: 0.08, dur: 0.18, delay: 0.025 });
+  },
+  drivingThrustHit: (v) => {
+    const p = 0.9 + v.rng() * 0.18;
+    tone(v, { type: "triangle", freq: 160 * p, sweepTo: 48 * p, gain: 0.28, dur: 0.12 });
+    noise(v, { dur: 0.08, cutoff: 1800, gain: 0.22 });
   },
   fellSweepBrace: (v) => {
     tone(v, { type: "triangle", freq: 95, sweepTo: 70, sweepShape: "lin", gain: 0.16, dur: 0.18 });
