@@ -1,14 +1,203 @@
 import type { World } from "miniplex";
-import type { AnimatedSprite, Container } from "pixi.js";
+import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE } from "$lib/core/systems/map/map";
 import type { InputResource } from "$lib/core/input/input";
 import { CombatResource, CombatConfig, applyDamage } from "./combat";
 import type { VFXResource } from "$lib/core/vfx/vfx";
-import { spawnEnvFloatingText, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
+import { spawnEnvFloatingText, spawnEnvParticles, spawnShockwaveRing, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
+import {
+  chargeProgressFromHeldMs,
+  createInitialFellSweepChargeState,
+  DEFAULT_FELL_SWEEP_CONFIG,
+  fellSweepCooldown,
+  fellSweepCost,
+  fellSweepScaling,
+  fellSweepStage,
+  normalizeAimDirection,
+  smoothFellSweepAim,
+  type FellSweepChargeStage,
+} from "$lib/domain/combat/fell-sweep";
+
+function resetFellSweepCharge(combat: CombatResource): void {
+  combat.fellSweepChargeState = createInitialFellSweepChargeState();
+  combat.fellSweepChargePulseTimer = 0;
+  combat.fellSweepVfxPulseTimer = 0;
+  combat.fellSweepDustTimer = 0;
+}
+
+function chargeTint(charge: number): number {
+  if (charge <= 0) return Colors.ui.white;
+  const t = Math.min(1, charge) * 0.45;
+  const r = 0xff;
+  const g = Math.round(0xff - (0xff - 0xaa) * t);
+  const b = Math.round(0xff - (0xff - 0x44) * t);
+  return (r << 16) | (g << 8) | b;
+}
+
+function releaseSoundForStage(stage: FellSweepChargeStage): "player.fellsweep.release.low" | "player.fellsweep.release.mid" | "player.fellsweep.release.high" {
+  if (stage === "full" || stage === "critical") return "player.fellsweep.release.high";
+  if (stage === "building") return "player.fellsweep.release.mid";
+  return "player.fellsweep.release.low";
+}
+
+export function updateFellSweepChargeSystem(
+  inputs: InputResource,
+  combat: CombatResource,
+  vfx: VFXResource,
+  dt: number,
+  player: Entity,
+  entityLayer: Container,
+  isDashing: boolean,
+  isPlacementMode: boolean,
+): void {
+  if (combat.fellSweepCooldownTimer > 0) combat.fellSweepCooldownTimer = Math.max(0, combat.fellSweepCooldownTimer - dt);
+
+  const state = combat.fellSweepChargeState;
+  const playerDead = (player.health?.current ?? 1) <= 0;
+  const knocked = (player.knockback?.timer ?? 0) > 0;
+
+  if (!inputs.isMouseHeld) {
+    if (!inputs.pendingFellSweep && state.isCharging) resetFellSweepCharge(combat);
+    if (!inputs.pendingFellSweep && state.wasDeniedThisHold) resetFellSweepCharge(combat);
+    return;
+  }
+
+  const heldMs = inputs.getMouseHeldMs();
+  const progress = chargeProgressFromHeldMs(heldMs);
+  const stage = fellSweepStage(progress);
+  if (progress <= 0) {
+    combat.fellSweepChargeState = { ...state, heldMs, chargeProgress: 0, chargeStage: "none", lastStage: state.chargeStage };
+    return;
+  }
+
+  const hardCancelled = state.isCharging && (isDashing || isPlacementMode || playerDead || knocked);
+  if (hardCancelled) {
+    spawnEnvFloatingText(vfx, "Fell Sweep broken", Colors.ui.warning, player.position!, entityLayer);
+    playSound("player.fellsweep.cancel");
+    resetFellSweepCharge(combat);
+    combat.fellSweepChargeState.interrupted = true;
+    return;
+  }
+
+  const blocked = isDashing || isPlacementMode || playerDead || combat.fellSweepCooldownTimer > 0;
+  if (blocked) {
+    if (!state.wasDeniedThisHold) {
+      const msg = combat.fellSweepCooldownTimer > 0 ? "Fell Sweep not ready" : "can't brace now";
+      spawnEnvFloatingText(vfx, msg, Colors.ui.warning, player.position!, entityLayer);
+      playSound("player.fellsweep.denied");
+    }
+    combat.fellSweepChargeState = {
+      ...state,
+      isCharging: false,
+      heldMs,
+      chargeProgress: 0,
+      chargeStage: "none",
+      wasDeniedThisHold: true,
+      lastStage: "none",
+    };
+    return;
+  }
+
+  const pos = player.position!;
+  const pcx = pos.x + TILE / 2;
+  const pcy = pos.y + TILE / 2;
+  const targetAim = normalizeAimDirection(inputs.mouseWorld.x - pcx, inputs.mouseWorld.y - pcy, state.aimDirection);
+  const aimDirection = state.isCharging ? smoothFellSweepAim(state.aimDirection, targetAim, progress) : targetAim;
+  const startedAtMs = state.isCharging ? state.startedAtMs : performance.now() - heldMs;
+
+  if (stage !== state.chargeStage && stage !== "none") {
+    if (stage === "bracing") playSound("player.fellsweep.charge.brace");
+    else if (stage === "full") playSound("player.fellsweep.charge.full");
+    else playSound("player.fellsweep.charge.pulse");
+    combat.fellSweepChargePulseTimer = stage === "full" ? 0.35 : 0.55;
+  } else if (stage === "building" || stage === "critical" || stage === "full") {
+    combat.fellSweepChargePulseTimer -= dt;
+    if (combat.fellSweepChargePulseTimer <= 0) {
+      playSound(stage === "full" ? "player.fellsweep.charge.full" : "player.fellsweep.charge.pulse", {
+        gain: stage === "critical" || stage === "full" ? 0.9 : 0.65,
+      });
+      combat.fellSweepChargePulseTimer = stage === "full" ? 0.5 : 0.7 - progress * 0.25;
+    }
+  }
+
+  combat.fellSweepChargeState = {
+    isCharging: true,
+    startedAtMs,
+    heldMs,
+    chargeProgress: progress,
+    chargeStage: stage,
+    wasDeniedThisHold: false,
+    aimDirection,
+    lastStage: state.chargeStage,
+    interrupted: false,
+  };
+}
+
+export function renderFellSweepChargeFeedback(
+  combat: CombatResource,
+  vfx: VFXResource,
+  dt: number,
+  player: Entity,
+  playerSprite: AnimatedSprite,
+  entityLayer: Container,
+): void {
+  const state = combat.fellSweepChargeState;
+  if (!state.isCharging || !player.position) {
+    playerSprite.tint = Colors.ui.white;
+    if (vfx.fellSweepChargeArc) {
+      entityLayer.removeChild(vfx.fellSweepChargeArc);
+      vfx.fellSweepChargeArc.destroy();
+      vfx.fellSweepChargeArc = null;
+    }
+    return;
+  }
+
+  const charge = state.chargeProgress;
+  const stage = state.chargeStage;
+  const pos = player.position;
+  const pcx = pos.x + TILE / 2;
+  const pcy = pos.y + TILE / 2;
+  const amp = stage === "full" ? 10 : stage === "critical" ? 8 : 3 + charge * 5;
+  playerSprite.x += (Math.random() - 0.5) * amp;
+  playerSprite.y += (Math.random() - 0.5) * amp * 0.65;
+  playerSprite.tint = chargeTint(charge);
+
+  combat.fellSweepDustTimer -= dt;
+  const dustInterval = stage === "full" ? 0.09 : stage === "critical" ? 0.12 : stage === "building" ? 0.18 : 0.28;
+  if (combat.fellSweepDustTimer <= 0) {
+    spawnEnvParticles(vfx, stage === "bracing" ? Colors.vfx.footstep : Colors.world.dirt, stage === "full" ? 5 : 2, "smoke", pos, entityLayer);
+    combat.fellSweepDustTimer = dustInterval;
+  }
+
+  combat.fellSweepVfxPulseTimer -= dt;
+  if ((stage === "building" || stage === "critical" || stage === "full") && combat.fellSweepVfxPulseTimer <= 0) {
+    triggerCameraShake(vfx, stage === "full" ? 4.8 : stage === "critical" ? 3.6 : 1.7, 0.08 + charge * 0.04);
+    if (stage === "full") {
+      spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, 0.28);
+    }
+    combat.fellSweepVfxPulseTimer = stage === "full" ? 0.55 : 0.32 - charge * 0.12;
+  }
+
+  const preview = vfx.fellSweepChargeArc ?? new Graphics();
+  if (!vfx.fellSweepChargeArc) {
+    vfx.fellSweepChargeArc = preview;
+    entityLayer.addChild(preview);
+  }
+  const reach = TILE * (1.1 + charge * 0.55);
+  const halfAngle = (Math.PI / 5) * (1 + charge * 0.25);
+  const angle = Math.atan2(state.aimDirection.y, state.aimDirection.x);
+  const alpha = stage === "full" ? 0.44 : 0.16 + charge * 0.22;
+  preview.clear();
+  preview.x = pcx;
+  preview.y = pcy;
+  preview.moveTo(Math.cos(angle - halfAngle) * TILE * 0.3, Math.sin(angle - halfAngle) * TILE * 0.3);
+  preview.arc(0, 0, reach, angle - halfAngle, angle + halfAngle);
+  preview.stroke({ color: Colors.combat.fellSweepArc, width: stage === "full" ? 5 : 2.5 + charge * 2, alpha });
+}
 
 /**
  * Fell Sweep — charged melee attack. Activated by holding LMB for >= 800ms.
@@ -31,50 +220,51 @@ export function fellSweepSystem(
   fellSweepLevel: number,
   onEnemyKilled: (enemy: Entity) => void,
 ): void {
-  if (combat.fellSweepCooldownTimer > 0) combat.fellSweepCooldownTimer -= dt;
-
   if (!inputs.pendingFellSweep) return;
   inputs.pendingFellSweep = false;
 
   if (isPlacementMode || isDashing || combat.fellSweepCooldownTimer > 0) return;
 
-  combat.swingActiveTimer = 0.28;
-
-  const staminaCost = Math.max(10, 20 - (fellSweepLevel - 1));
+  const staminaCost = fellSweepCost(fellSweepLevel);
   if (stamina.current < staminaCost) {
     spawnEnvFloatingText(vfx, "too winded to charge", Colors.ui.error, player.position!, entityLayer);
+    playSound("player.fellsweep.denied");
+    resetFellSweepCharge(combat);
     return;
   }
 
-  const charge = inputs.fellSweepCharge;
-  const scaledArcHalfAngle = config.arcHalfAngle * (1.0 + charge * 0.3);
-  const scaledReach = config.reach * (1.2 + charge * 0.3);
-  const damage = Math.round(config.damage * (1.8 + charge * 1.2));
-  const knock = config.knockback * (1.5 + charge * 1.0);
+  const charge = combat.fellSweepChargeState.chargeProgress || inputs.fellSweepCharge;
+  const stage = fellSweepStage(charge);
+  const scaling = fellSweepScaling(charge, config, DEFAULT_FELL_SWEEP_CONFIG);
 
   const pos = player.position!;
   const pcx = pos.x + TILE / 2;
   const pcy = pos.y + TILE / 2;
-  let ax = inputs.mouseWorld.x - pcx;
-  let ay = inputs.mouseWorld.y - pcy;
-  const len = Math.hypot(ax, ay) || 1;
-  ax /= len;
-  ay /= len;
+  const aimed = combat.fellSweepChargeState.isCharging
+    ? combat.fellSweepChargeState.aimDirection
+    : normalizeAimDirection(inputs.mouseWorld.x - pcx, inputs.mouseWorld.y - pcy);
+  const ax = aimed.x;
+  const ay = aimed.y;
   const angle = Math.atan2(ay, ax);
 
-  const baseCooldown = 8.0;
-  combat.fellSweepCooldownTimer = Math.max(4.0, baseCooldown - (fellSweepLevel - 1) * 0.4);
+  combat.swingActiveTimer = 0.28;
+  combat.fellSweepCooldownTimer = fellSweepCooldown(fellSweepLevel);
   combat.inCombatTimer = config.inCombatTimeout;
   spendStamina(staminaCost, "burst");
 
   playerSprite.scale.x = ax < 0 ? -Math.abs(playerSprite.scale.x) : Math.abs(playerSprite.scale.x);
   setPlayerAnim("attack");
-  spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, scaledReach, scaledArcHalfAngle, Colors.combat.fellSweepArc);
-  playSound("player.fellsweep");
-  triggerCameraShake(vfx, 4 + charge * 4, 0.2 + charge * 0.1);
+  spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, scaling.reach, scaling.arcHalfAngle, Colors.combat.fellSweepArc);
+  playSound(releaseSoundForStage(stage));
+  triggerCameraShake(vfx, 4 + charge * 5, 0.2 + charge * 0.14);
+  spawnEnvParticles(vfx, Colors.world.dirt, stage === "full" || stage === "critical" ? 18 : 9, "smoke", pos, entityLayer);
+  if (stage === "critical" || stage === "full") {
+    spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, stage === "full" ? 0.5 : 0.35);
+  }
 
-  const cosHalf = Math.cos(scaledArcHalfAngle);
+  const cosHalf = Math.cos(scaling.arcHalfAngle);
   const enemyRadius = TILE * 0.4;
+  let hitCount = 0;
   for (const e of world.with("health", "position").entities) {
     const h = e.health!;
     if (h.faction !== "hostile" || h.current <= 0) continue;
@@ -83,9 +273,14 @@ export function fellSweepSystem(
     const dx = ex - pcx;
     const dy = ey - pcy;
     const d = Math.hypot(dx, dy);
-    if (d > scaledReach + enemyRadius) continue;
+    if (d > scaling.reach + enemyRadius) continue;
     if (d > 1 && (ax * dx + ay * dy) / d < cosHalf) continue;
-    const died = applyDamage(e, damage, pcx, pcy, knock, config, vfx, entityLayer);
+    const died = applyDamage(e, scaling.damage, pcx, pcy, scaling.knockback, config, vfx, entityLayer);
+    hitCount++;
     if (died) onEnemyKilled(e);
   }
+  if (hitCount > 0 && (stage === "critical" || stage === "full")) {
+    triggerCameraShake(vfx, 7 + charge * 3, 0.16);
+  }
+  resetFellSweepCharge(combat);
 }

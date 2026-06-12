@@ -45,13 +45,16 @@ import {
   triggerCameraShake,
 } from "$lib/core/vfx/vfx";
 import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
+import { getPlayerStats } from "$lib/domain/stats.svelte";
+import { mitigatePhysical, staminaCost } from "$lib/domain/stats/stat-calculation";
 import { playSound } from "$lib/audio/audio-engine";
 import { Colors } from "$lib/utils/colors";
 import { gameState } from "$lib/state/game-state.svelte";
 import { PLAYER_BODY } from "$lib/domain/collision";
+import { createInitialFellSweepChargeState, type FellSweepChargeState } from "$lib/domain/combat/fell-sweep";
 
 export { trackMovementCombo } from "./kite-combo";
-export { fellSweepSystem } from "./fell-sweep";
+export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
 
 /** Generic body half-extents used for knockback collision (feet-anchored). */
 const BODY_HX = PLAYER_BODY.hx;
@@ -99,6 +102,10 @@ export class CombatResource {
   public attackCooldownTimer = 0;
   public swingActiveTimer = 0;
   public fellSweepCooldownTimer = 0;
+  public fellSweepChargeState: FellSweepChargeState = createInitialFellSweepChargeState();
+  public fellSweepChargePulseTimer = 0;
+  public fellSweepVfxPulseTimer = 0;
+  public fellSweepDustTimer = 0;
   public inCombatTimer = 0;
   /**
    * Recent significant movement direction changes, oldest first (max 3).
@@ -152,6 +159,11 @@ export function applyDamage(
   if (!h || h.invulnTimer > 0 || h.current <= 0) return false;
 
   const isPlayer = h.faction === "player";
+  if (isPlayer) {
+    // Armor mitigation from the stat layer. Enemy armor deferred until
+    // enemies get archetype-level stats.
+    amount = Math.round(mitigatePhysical(amount, getPlayerStats().combat.armor));
+  }
   if (isPlayer && combat && combat.kiteStacks > 0) {
     amount = Math.round(amount * (1 + 0.15 * combat.kiteStacks));
     spawnEnvFloatingText(
@@ -371,11 +383,13 @@ export function playerAttackSystem(
   // Check if Kite Combo is triggered
   const isKiteCombo = checkKiteComboTrigger(combat);
 
+  const playerCombatStats = getPlayerStats().combat;
+
   let effectiveReach = config.reach;
   let effectiveHalfAngle = config.arcHalfAngle;
-  let effectiveDamage = config.damage;
+  let effectiveDamage = playerCombatStats.attackDamage;
   let arcColor: number = Colors.combat.slashArc;
-  let useStaminaCost = config.staminaCost;
+  let useStaminaCost = staminaCost(config.staminaCost, 1, 1);
 
   if (isKiteCombo) {
     const finisher = applyKiteComboFinisher(combat, config, player, vfx, entityLayer, angle, pcx, pcy);
@@ -435,10 +449,11 @@ export function playerAttackSystem(
     arcColor = colors[Math.min(count - 1, colors.length - 1)] ?? 0xa855f7;
   }
 
-  // Set attack cooldown (apply speed penalty if overloaded)
+  // Set attack cooldown: base cooldown shortened by attack speed (1.0 = no
+  // change), then the overload penalty stretches it back out.
   const speedPenaltyPct = combat.directionalMomentumState.overloadAttackSpeedPenaltyPct;
   const speedMult = speedPenaltyPct > 0 ? (1 + speedPenaltyPct / 100) : 1.0;
-  combat.attackCooldownTimer = config.cooldown * speedMult;
+  combat.attackCooldownTimer = (config.cooldown / playerCombatStats.attackSpeed) * speedMult;
   combat.swingActiveTimer = 0.28;
 
   combat.inCombatTimer = config.inCombatTimeout;

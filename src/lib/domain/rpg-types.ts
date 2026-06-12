@@ -37,6 +37,10 @@ export type RpgInventorySlot =
 export interface RpgPlayerState {
   profile: {
     hpCurrent: number;
+    /** character level 1..18; absent on old saves, read with ?? 1. */
+    characterLevel?: number;
+    /** xp toward the next character level; absent on old saves, read with ?? 0. */
+    characterXp?: number;
     stashSize: number;
     loadout: {
       weapon: RpgWeaponSlot;

@@ -22,7 +22,15 @@ export type RecipeId =
   | "momentumActivate"
   | "momentumStack"
   | "momentumBreak"
-  | "momentumOverload";
+  | "momentumOverload"
+  | "fellSweepBrace"
+  | "fellSweepPulse"
+  | "fellSweepFull"
+  | "fellSweepReleaseLow"
+  | "fellSweepReleaseMid"
+  | "fellSweepReleaseHigh"
+  | "fellSweepDenied"
+  | "fellSweepCancel";
 
 export interface RecipeParams {
   stacks?: number;
@@ -101,5 +109,39 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     tone(v, { type: "sawtooth", freq: 120, sweepTo: 50, sweepShape: "lin", gain: 0.13, dur: 0.35 });
     tone(v, { type: "sawtooth", freq: 124, sweepTo: 51, sweepShape: "lin", gain: 0.13, dur: 0.35 });
     noise(v, { dur: 0.3, cutoff: 500, gain: 0.12 });
+  },
+  fellSweepBrace: (v) => {
+    tone(v, { type: "triangle", freq: 95, sweepTo: 70, sweepShape: "lin", gain: 0.16, dur: 0.18 });
+    noise(v, { dur: 0.08, cutoff: 260, gain: 0.05 });
+  },
+  fellSweepPulse: (v) => {
+    tone(v, { type: "sawtooth", freq: 80, sweepTo: 55, sweepShape: "lin", cutoff: 220, gain: 0.14, dur: 0.22 });
+    noise(v, { dur: 0.14, cutoff: 420, gain: 0.08 });
+  },
+  fellSweepFull: (v) => {
+    tone(v, { type: "sawtooth", freq: 110, sweepTo: 42, sweepShape: "lin", cutoff: 240, gain: 0.22, dur: 0.35 });
+    tone(v, { type: "triangle", freq: 55, sweepTo: 42, sweepShape: "lin", gain: 0.16, dur: 0.42 });
+    noise(v, { dur: 0.18, cutoff: 700, gain: 0.08 });
+  },
+  fellSweepReleaseLow: (v) => {
+    tone(v, { type: "triangle", freq: 140, sweepTo: 48, gain: 0.32, dur: 0.18 });
+    noise(v, { dur: 0.12, cutoff: 1500, gain: 0.22 });
+  },
+  fellSweepReleaseMid: (v) => {
+    tone(v, { type: "sawtooth", freq: 130, sweepTo: 38, sweepShape: "lin", cutoff: 360, gain: 0.34, dur: 0.24 });
+    tone(v, { type: "triangle", freq: 62, sweepTo: 45, sweepShape: "lin", gain: 0.18, dur: 0.25 });
+    noise(v, { dur: 0.16, cutoff: 1800, gain: 0.26 });
+  },
+  fellSweepReleaseHigh: (v) => {
+    tone(v, { type: "sawtooth", freq: 125, sweepTo: 30, sweepShape: "lin", cutoff: 300, gain: 0.42, dur: 0.32 });
+    tone(v, { type: "triangle", freq: 48, sweepTo: 35, sweepShape: "lin", gain: 0.24, dur: 0.38 });
+    noise(v, { dur: 0.2, cutoff: 2200, gain: 0.32 });
+  },
+  fellSweepDenied: (v) => {
+    tone(v, { type: "square", freq: 120, sweepTo: 80, sweepShape: "lin", gain: 0.12, dur: 0.09 });
+  },
+  fellSweepCancel: (v) => {
+    tone(v, { type: "sawtooth", freq: 210, sweepTo: 60, sweepShape: "lin", cutoff: 260, gain: 0.16, dur: 0.18 });
+    noise(v, { dur: 0.12, cutoff: 500, gain: 0.08 });
   },
 };

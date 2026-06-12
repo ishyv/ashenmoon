@@ -2,6 +2,7 @@ import type { Application, Container } from "pixi.js";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import { InputAction, StorageKeys } from "$lib/domain/game-events";
 import { unlock } from "$lib/audio/audio-engine";
+import { chargeProgressFromHeldMs } from "$lib/domain/combat/fell-sweep";
 
 export class InputResource {
   public keys: Record<string, boolean> = {};
@@ -21,9 +22,9 @@ export class InputResource {
   public dashTriggered = false;
   public focusedGatherTriggered = false;
   public pendingInteract = false;
-  /** Set on short left-click (< 800ms hold); consumed by the combat system as a melee swing. */
+  /** Set on short left-click (< 200ms hold); consumed by the combat system as a melee swing. */
   public pendingAttack = false;
-  /** Set when mouse is released after a charge hold (>= 800ms). */
+  /** Set when mouse is released after a charge hold (>= 200ms). */
   public pendingFellSweep = false;
   /** 0–1 charge level captured at mouseup. */
   public fellSweepCharge = 0;
@@ -36,8 +37,11 @@ export class InputResource {
   /** Current charge progress (0–1) while holding. Drives VFX ring each frame. */
   public getChargeProgress(): number {
     if (!this.isMouseHeld) return 0;
-    const heldMs = performance.now() - this.mouseDownAt;
-    return Math.min(1.0, Math.max(0, (heldMs - 200) / 2800));
+    return chargeProgressFromHeldMs(this.getMouseHeldMs());
+  }
+
+  public getMouseHeldMs(now = performance.now()): number {
+    return this.isMouseHeld ? Math.max(0, now - this.mouseDownAt) : 0;
   }
 
   constructor() {
@@ -87,15 +91,15 @@ export class InputResource {
 
     const onMouseUp = (e: MouseEvent): void => {
       if (e.button === 0 && this.isMouseHeld) {
+        const heldMs = this.getMouseHeldMs();
         this.isMouseHeld = false;
-        const heldMs = performance.now() - this.mouseDownAt;
         if (heldMs < 200) {
           // Fast click — normal swing.
           this.pendingAttack = true;
         } else {
           // Any hold >= 200ms fires Fell Sweep (weakest at 200ms, max at 3000ms).
           this.pendingFellSweep = true;
-          this.fellSweepCharge = Math.min(1.0, (heldMs - 200) / 2800);
+          this.fellSweepCharge = chargeProgressFromHeldMs(heldMs);
         }
       }
     };

@@ -12,6 +12,9 @@ import { Colors } from "$lib/utils/colors";
 import { findPlayerEntity } from "$lib/core/ecs/entity-queries";
 import { awardSkillXp } from "$lib/domain/skill-xp";
 import { SkillKey, InputAction } from "$lib/domain/game-events";
+import { getPlayerStats } from "$lib/domain/stats.svelte";
+import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
+import { fellSweepMoveMultiplier } from "$lib/domain/combat/fell-sweep";
 
 // Hitbox configuration constants
 const HITBOX_X = TILE * 0.45;
@@ -310,8 +313,12 @@ export function playerMovementSystem(
     return false;
   }
 
-  // 2. Normal movement inputs
-  const speed = playerEntity.playerControlled.speed;
+  // 2. Normal movement inputs. The stat-layer ratio applies status slows
+  // (exhaustion, hypothermia) that were previously computed but dropped;
+  // dash is deliberately untouched (fixed distance).
+  const speed =
+    playerEntity.playerControlled.speed *
+    (getPlayerStats().combat.moveSpeed / BASE_COMBAT_STATS.moveSpeed);
 
   let inputX = 0;
   let inputY = 0;
@@ -355,6 +362,9 @@ export function playerMovementSystem(
     const stacks = combat.directionalMomentumState.currentStacks;
     const speedBonusPct = combat.directionalMomentumConfig?.stackMoveSpeedBonusPct ?? 5;
     currentSpeed *= (1 + (speedBonusPct * stacks) / 100);
+  }
+  if (combat?.fellSweepChargeState.isCharging) {
+    currentSpeed *= fellSweepMoveMultiplier(combat.fellSweepChargeState.chargeProgress);
   }
   const moveX = dirX * currentSpeed * dt;
   const moveY = dirY * currentSpeed * dt;

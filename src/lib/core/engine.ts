@@ -65,13 +65,13 @@ import {
   slashArcUpdateSystem,
   cameraShakeSystem,
   gatherRingUpdateSystem,
-  chargeParticleSystem,
   selectionRingUpdateSystem,
   cloudDriftSystem,
   footstepParticleSystem,
   spawnEnvFloatingText,
   spawnEnvParticles,
   spawnDeathBurst,
+  spawnLevelUpBurst,
   triggerCameraShake,
 } from "$lib/core/vfx/vfx";
 import {
@@ -83,10 +83,12 @@ import {
   CombatConfig,
   CombatResource,
   playerAttackSystem,
+  renderFellSweepChargeFeedback,
   trackMovementCombo,
   fellSweepSystem,
   knockbackSystem,
   despawnEntity,
+  updateFellSweepChargeSystem,
 } from "$lib/core/systems/combat/combat";
 import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
 import {
@@ -109,7 +111,7 @@ import {
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgProfile, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
-import { tickStamina, stamina } from "$lib/domain/stamina.svelte";
+import { tickStamina, stamina, staminaConfig } from "$lib/domain/stamina.svelte";
 import { tickThirst, loadSurvival } from "$lib/domain/survival.svelte";
 import {
   tickStatusEffects,
@@ -130,6 +132,8 @@ import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId, SkillKey, InputAction } from "$lib/domain/game-events";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/domain/skill-xp";
+import { awardCharacterXp, getPlayerStats } from "$lib/domain/stats.svelte";
+import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { getPrefabDefinition } from "$lib/domain/definition-registry";
 import { executeGameCommand } from "$lib/core/command-runtime/command-runtime";
@@ -153,17 +157,6 @@ import {
   resolveCollisionAabb,
   type CollisionFootprint,
 } from "$lib/domain/collision";
-
-/** Lerp player sprite tint from white toward warm amber as charge builds. */
-function chargeTint(charge: number): number {
-  if (charge <= 0) return 0xffffff;
-  // Target: 0xffaa44 (warm amber). Lerp each channel.
-  const t = Math.min(1, charge) * 0.55;
-  const r = 0xff;
-  const g = Math.round(0xff - (0xff - 0xaa) * t); // 255 → 170
-  const b = Math.round(0xff - (0xff - 0x44) * t); // 255 → 68
-  return (r << 16) | (g << 8) | b;
-}
 
 export class GameEngine {
   private app!: Application;
@@ -469,6 +462,17 @@ export class GameEngine {
       const localMouse = this.worldContainer.toLocal(this.inputResource.mouseScreen);
       this.inputResource.mouseWorld = { x: localMouse.x, y: localMouse.y };
 
+      updateFellSweepChargeSystem(
+        this.inputResource,
+        this.combatResource,
+        this.vfxResource,
+        dt,
+        this.playerEntity,
+        this.entityLayer,
+        this.movementResource.isDashing,
+        this.buildingResource.isPlacementMode
+      );
+
       // Update targeting selections based on mouse coordinates
       updateTargetSystem(
         world,
@@ -667,29 +671,7 @@ export class GameEngine {
       this.playerSprite.x = this.playerEntity.position!.x + TILE / 2;
       this.playerSprite.y = this.playerEntity.position!.y + TILE;
 
-      // Zero out charge VFX when the skill is on cooldown — holding the button
-      // while it can't fire yet must not produce any feedback.
-      const chargeProgress = this.combatResource.fellSweepCooldownTimer > 0
-        ? 0
-        : this.inputResource.getChargeProgress();
-
-      // Charge tremor: body shudder that grows noticeably as charge builds.
-      if (chargeProgress > 0) {
-        const amp = 3 + chargeProgress * 7; // 3px at 0%, 10px at 100%
-        this.playerSprite.x += (Math.random() - 0.5) * amp;
-        this.playerSprite.y += (Math.random() - 0.5) * amp;
-      }
-
-      // Camera rumble: intermittent shake pulses starting at ~40% charge.
-      this.chargeShakeTimer -= dt;
-      if (chargeProgress >= 0.4 && this.chargeShakeTimer <= 0) {
-        triggerCameraShake(this.vfxResource, 1.2 + chargeProgress * 3.5, 0.09);
-        this.chargeShakeTimer = 0.18 - chargeProgress * 0.12; // 180ms → 60ms at full
-      }
-      if (chargeProgress === 0) this.chargeShakeTimer = 0;
-
-      // Warm tint: player "heats up" from neutral to amber as charge builds.
-      this.playerSprite.tint = chargeTint(chargeProgress);
+      const chargeProgress = this.combatResource.fellSweepChargeState.chargeProgress;
 
       // --- Survival ---
       // Thirst drains with activity; statuses tick once per accumulated second
@@ -741,12 +723,19 @@ export class GameEngine {
       this.syncPlayerHp();
 
       // Regenerate stamina when not sprinting (slower while in combat,
-      // slower still while sick/exhausted).
+      // slower still while sick/exhausted). Pool size and the status regen
+      // multiplier both come from the stat layer.
+      const combatStats = getPlayerStats().combat;
+      if (staminaConfig.max !== combatStats.maxStamina) {
+        staminaConfig.max = combatStats.maxStamina;
+      }
       if (!wasSprinting) {
+        // Status mult is already folded into the stat layer; the ratio against
+        // the level-1 base scales the pool's own regen rates by level growth.
         tickStamina(
           dt,
           this.combatResource.inCombatTimer > 0,
-          getStatusModifiers().staminaRegenMult
+          combatStats.staminaRegenPerSecond / BASE_COMBAT_STATS.staminaRegenPerSecond
         );
       }
 
@@ -815,11 +804,12 @@ export class GameEngine {
         this.interactionResource.gatherCooldownTimer
       );
 
-      chargeParticleSystem(
+      renderFellSweepChargeFeedback(
+        this.combatResource,
         this.vfxResource,
         dt,
-        this.playerEntity.position!,
-        chargeProgress,
+        this.playerEntity,
+        this.playerSprite,
         this.entityLayer
       );
 
@@ -888,8 +878,8 @@ export class GameEngine {
       position: { x: startX, y: startY + TILE, targetX: startX, targetY: startY + TILE },
       playerControlled: { speed: TILE * 6 },
       health: {
-        current: gameState.rpg.profile?.hpCurrent ?? 100,
-        max: 100,
+        current: gameState.rpg.profile?.hpCurrent ?? getPlayerStats().combat.maxHealth,
+        max: getPlayerStats().combat.maxHealth,
         faction: "player",
         invulnTimer: 0,
       },
@@ -1246,6 +1236,12 @@ export class GameEngine {
       if (xp > 0) {
         spawnEnvFloatingText(this.vfxResource, `+${xp} xp`, Colors.resource.xp, pos, this.entityLayer);
         awardSkillXp(SkillKey.Combat, xp, this.vfxResource, this.playerEntity.position!, this.entityLayer);
+        const levelsGained = awardCharacterXp(xp);
+        if (levelsGained > 0) {
+          const ppos = this.playerEntity.position!;
+          spawnLevelUpBurst(this.vfxResource, this.entityLayer, ppos.x + TILE / 2, ppos.y + TILE / 2);
+          playSound("player.levelup");
+        }
       }
     }
     playSound("enemy.death", {
@@ -1286,8 +1282,15 @@ export class GameEngine {
 
   /** Mirror the player health component into the HUD-observed rpg state. */
   private syncPlayerHp(): void {
+    const health = this.playerEntity.health;
+    // Level-ups raise max live; current is never reduced by a max change.
+    const statMax = getPlayerStats().combat.maxHealth;
+    if (health && health.max !== statMax) {
+      health.max = statMax;
+      health.current = Math.min(health.current, health.max);
+    }
     const profile = gameState.rpg.profile;
-    const hp = this.playerEntity.health?.current ?? 100;
+    const hp = health?.current ?? 100;
     if (profile && profile.hpCurrent !== hp) {
       setRpgProfile({ ...profile, hpCurrent: hp });
     }
@@ -1375,7 +1378,6 @@ export class GameEngine {
   // Holds the attack pose briefly so a swing reads even while the movement
   // system is requesting "run"/"idle" every frame.
   private attackAnimLockTimer = 0;
-  private chargeShakeTimer = 0;
 
   private getPlayerSpriteConfig(): { isWarrior: boolean; tool: PawnTool } {
     const w = gameState.rpg.profile?.loadout?.weapon;

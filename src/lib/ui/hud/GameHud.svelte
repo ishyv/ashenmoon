@@ -10,6 +10,8 @@
 import { fade } from "svelte/transition";
 import StatBar from "./StatBar.svelte";
 import StatusHud from "./StatusHud.svelte";
+import LevelBadge from "./LevelBadge.svelte";
+import { getPlayerStats } from "$lib/domain/stats.svelte";
 import { stamina, staminaConfig } from "$lib/domain/stamina.svelte";
 import { thirstEvent, thirstConfig } from "$lib/domain/survival.svelte";
 import { statusState } from "$lib/domain/status-effects.svelte";
@@ -19,7 +21,8 @@ import { gameState } from "$lib/state/game-state.svelte";
 let showHud = $state(true);
 let fadeTimeout: ReturnType<typeof setTimeout> | null = null;
 
-const hp = $derived(gameState.rpg.profile?.hpCurrent ?? 100);
+const maxHp = $derived(getPlayerStats().combat.maxHealth);
+const hp = $derived(gameState.rpg.profile?.hpCurrent ?? maxHp);
 const stam = $derived(stamina.current);
 const maxStam = $derived(staminaConfig.max);
 const thirstVal = $derived(gameState.survival.thirst);
@@ -36,7 +39,7 @@ $effect(() => {
   }
 
   // Fade in HUD if resources are spent or damaged. Keep visible for a 3s cooldown after reaching 100%.
-  const isFull = hp >= 100 && stam >= maxStam && thirstVal >= maxThirst && statusState.active.length === 0;
+  const isFull = hp >= maxHp && stam >= maxStam && thirstVal >= maxThirst && statusState.active.length === 0;
   if (!isFull) {
     showHud = true;
     if (fadeTimeout) {
@@ -65,9 +68,10 @@ $effect(() => {
   <div transition:fade={{ duration: 300 }} class="hud-stack">
     <StatusHud />
     <div class="hud-container">
+      <LevelBadge />
       <div class="bar-wrapper">
         <span class="icon">hp</span>
-        <StatBar value={hp} max={100} fill="rgba(240, 90, 90, 0.65)" />
+        <StatBar value={hp} max={maxHp} fill="rgba(240, 90, 90, 0.65)" />
       </div>
 
       <div class="bar-wrapper">

@@ -4,6 +4,8 @@
  * stay unit-testable and tunable as data.
  */
 
+import { BASE_SURVIVAL_STATS } from "$lib/domain/stats/player-stat-growth";
+
 export interface ThirstConfig {
   max: number;
   /** drain per second while idle. */
@@ -15,9 +17,10 @@ export interface ThirstConfig {
 }
 
 export const DEFAULT_THIRST_CONFIG: ThirstConfig = {
-  max: 100,
+  max: BASE_SURVIVAL_STATS.maxThirst,
   // ~11 min from full to parched while idle, ~4 min while working.
-  baseDrainPerSec: 0.15,
+  // Sourced from the stat layer so resistances can modify it later.
+  baseDrainPerSec: BASE_SURVIVAL_STATS.thirstDecayPerMinute / 60,
   movingMult: 2,
   laboringMult: 3,
 };

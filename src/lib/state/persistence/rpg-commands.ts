@@ -154,6 +154,8 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
 
   return {
     hpCurrent: typeof value.hpCurrent === "number" && Number.isFinite(value.hpCurrent) ? value.hpCurrent : defaults.hpCurrent,
+    characterLevel: typeof value.characterLevel === "number" && Number.isFinite(value.characterLevel) ? value.characterLevel : undefined,
+    characterXp: typeof value.characterXp === "number" && Number.isFinite(value.characterXp) ? value.characterXp : undefined,
     stashSize: typeof value.stashSize === "number" && Number.isFinite(value.stashSize) ? value.stashSize : defaults.stashSize,
     loadout: {
       weapon: normalizeWeapon(loadout.weapon),

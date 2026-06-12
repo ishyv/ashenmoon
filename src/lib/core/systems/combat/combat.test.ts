@@ -18,6 +18,8 @@ import { MovementResource, playerMovementSystem } from "$lib/core/systems/moveme
 // Mocking dependencies that aren't available in node/test environment
 vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
+  spawnEnvParticles: vi.fn(),
+  spawnShockwaveRing: vi.fn(),
   spawnSlashArc: vi.fn(),
   triggerCameraShake: vi.fn(),
   flashEntity: vi.fn(),

@@ -29,6 +29,7 @@ export class VFXResource {
   public activeShakes = new Map<string, ActiveShake>();
   public baseScales = new Map<string, BaseScale>();
   public slashArcs: SlashArc[] = [];
+  public fellSweepChargeArc: Graphics | null = null;
   public gatherRing!: Graphics;
   public selectionRing!: Graphics;
   public comboRing!: Graphics;
@@ -546,6 +547,40 @@ export function spawnDeathBurst(
   entityLayer.addChild(ringG);
   vfx.shockwaveRings.push({ graphic: ringG, life: 0, maxLife: 0.35, color });
   triggerCameraShake(vfx, 5, 0.18);
+}
+
+/**
+ * Character level-up moment: staggered gold rings + a rising ember column on
+ * the player. Deliberately NOT a floating text — the HUD readout carries the
+ * number; this carries the feeling.
+ */
+export function spawnLevelUpBurst(
+  vfx: VFXResource,
+  entityLayer: Container,
+  worldX: number,
+  worldY: number
+): void {
+  spawnShockwaveRing(vfx, entityLayer, worldX, worldY, Colors.resource.xp, 0.45);
+  spawnShockwaveRing(vfx, entityLayer, worldX, worldY, Colors.resource.gold, 0.7);
+  const count = 26;
+  for (let i = 0; i < count; i++) {
+    const g = new Graphics();
+    g.rect(-1.5, -1.5, 3, 3).fill(i % 3 === 0 ? Colors.resource.gold : Colors.resource.xp);
+    const angle = (i / count) * Math.PI * 2;
+    const radius = 10 + Math.random() * 14;
+    g.x = worldX + Math.cos(angle) * radius;
+    g.y = worldY + Math.sin(angle) * radius;
+    vfx.particles.push({
+      graphic: g,
+      vx: Math.cos(angle) * 30,
+      vy: -90 - Math.random() * 80,
+      gravity: -40,
+      life: 0,
+      maxLife: 0.7 + Math.random() * 0.5,
+    });
+    entityLayer.addChild(g);
+  }
+  triggerCameraShake(vfx, 3, 0.15);
 }
 
 /** One-shot expanding ring at a world point (e.g. a focused-gather hit pop). */

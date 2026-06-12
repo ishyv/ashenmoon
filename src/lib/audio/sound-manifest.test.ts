@@ -17,6 +17,21 @@ describe("sound manifest", () => {
     expect(gatherSoundId(undefined)).toBe("gather.strike");
   });
 
+  it("declares every Fell Sweep redesign sound", () => {
+    expect(Object.keys(SOUNDS)).toEqual(
+      expect.arrayContaining([
+        "player.fellsweep.charge.brace",
+        "player.fellsweep.charge.pulse",
+        "player.fellsweep.charge.full",
+        "player.fellsweep.release.low",
+        "player.fellsweep.release.mid",
+        "player.fellsweep.release.high",
+        "player.fellsweep.denied",
+        "player.fellsweep.cancel",
+      ]),
+    );
+  });
+
   it("falls back to the recipe (no sample loaded) for every sound", () => {
     for (const id of Object.keys(SOUNDS) as SoundId[]) {
       expect(getSampleBuffer(id)).toBeNull();

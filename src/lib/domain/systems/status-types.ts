@@ -35,7 +35,12 @@ export interface StatusPulse {
   hpDelta?: number;
 }
 
-/** Continuous modifiers applied while the status is active. */
+/**
+ * Continuous modifiers applied while the status is active. These flow into
+ * the general stat pipeline via `statusModifiersToStatModifiers` in
+ * stats/stat-calculation.ts — new modifier fields should name a `StatKey`
+ * from stats/stat-types.ts and get an adapter entry there.
+ */
 export interface StatusModifiers {
   /** multiplier on stamina regeneration (1 = unchanged). */
   staminaRegenMult?: number;

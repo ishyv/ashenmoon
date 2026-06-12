@@ -41,11 +41,20 @@ export type SoundId =
   | "station.boil"
   | "player.swing"
   | "player.fellsweep"
+  | "player.fellsweep.charge.brace"
+  | "player.fellsweep.charge.pulse"
+  | "player.fellsweep.charge.full"
+  | "player.fellsweep.release.low"
+  | "player.fellsweep.release.mid"
+  | "player.fellsweep.release.high"
+  | "player.fellsweep.denied"
+  | "player.fellsweep.cancel"
   | "focused.activate"
   | "build.place"
   | "ambient.bird"
   | "ambient.wind"
   | "ambient.water"
+  | "player.levelup"
   | "combo.kite"
   | "combo.momentum.activate"
   | "combo.momentum.stack"
@@ -66,12 +75,21 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   consume: { bus: "sfx", recipe: "pickup" },
   "station.boil": { bus: "sfx", recipe: "water", throttleMs: 200 },
   "player.swing": { bus: "sfx", recipe: "chop", throttleMs: 60 },
-  "player.fellsweep": { bus: "sfx", recipe: "chop" },
+  "player.fellsweep": { bus: "sfx", recipe: "fellSweepReleaseMid" },
+  "player.fellsweep.charge.brace": { bus: "sfx", recipe: "fellSweepBrace", throttleMs: 120 },
+  "player.fellsweep.charge.pulse": { bus: "sfx", recipe: "fellSweepPulse", throttleMs: 120 },
+  "player.fellsweep.charge.full": { bus: "sfx", recipe: "fellSweepFull", throttleMs: 250 },
+  "player.fellsweep.release.low": { bus: "sfx", recipe: "fellSweepReleaseLow" },
+  "player.fellsweep.release.mid": { bus: "sfx", recipe: "fellSweepReleaseMid" },
+  "player.fellsweep.release.high": { bus: "sfx", recipe: "fellSweepReleaseHigh" },
+  "player.fellsweep.denied": { bus: "ui", recipe: "fellSweepDenied", throttleMs: 160 },
+  "player.fellsweep.cancel": { bus: "sfx", recipe: "fellSweepCancel", throttleMs: 120 },
   "focused.activate": { bus: "sfx", recipe: "clink", spatial: true },
   "build.place": { bus: "ui", recipe: "craft" },
   "ambient.bird": { bus: "ambient", recipe: "bird" },
   "ambient.wind": { bus: "ambient", recipe: "wind" },
   "ambient.water": { bus: "ambient", recipe: "water" },
+  "player.levelup": { bus: "ui", recipe: "momentumActivate", gain: 1.2 },
   "combo.kite": { bus: "sfx", recipe: "kite" },
   "combo.momentum.activate": { bus: "sfx", recipe: "momentumActivate" },
   "combo.momentum.stack": { bus: "sfx", recipe: "momentumStack" },
