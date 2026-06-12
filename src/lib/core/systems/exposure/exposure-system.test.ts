@@ -6,6 +6,7 @@ import { EntityId } from "$lib/domain/game-events";
 import { MapResource, TILE } from "$lib/core/systems/map/map";
 import { tickExposureSystem } from "./exposure-system";
 import { spawnEnvFloatingText, type VFXResource } from "$lib/core/vfx/vfx";
+import { createLitCampfireState } from "$lib/core/systems/camp/campfire-runtime-system";
 
 vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
@@ -27,6 +28,7 @@ describe("tickExposureSystem", () => {
       id: EntityId.Campfire,
       position: { x: 0, y: 0, targetX: 0, targetY: 0 },
       station: { stationId: "campfire" },
+      campfire: createLitCampfireState(60_000),
     });
     const branch = ecsWorld.add({
       id: "branch_pickup",

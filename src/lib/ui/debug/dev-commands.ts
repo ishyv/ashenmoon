@@ -9,6 +9,7 @@ import { commandResultToConsoleText } from "$lib/core/command-runtime/command-ru
 import { parseDevCommand } from "$lib/domain/game-command";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { devConsole } from "$lib/ui/debug/dev-console";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 
 interface DevCommandHelp {
   name: string;
@@ -38,6 +39,7 @@ const COMMANDS: readonly DevCommandHelp[] = [
   { name: "cooldown", help: "cooldown [zero <on|off> | reset] : manage skill cooldown timers" },
   { name: "collision", help: "collision [list | show <on|off> | get <id> | set <id> <minX> <maxX> <minY> <maxY> | reset <id>] : tune collision footprints" },
   { name: "focused", help: "focused [start] : begin a focused-gathering session on the hovered node" },
+  { name: "enablefreebuilding", help: "enablefreebuilding <true|false> : place buildings without material costs" },
 ];
 
 export function registerDevCommands(engine: GameEngine): void {
@@ -52,4 +54,16 @@ export function registerDevCommands(engine: GameEngine): void {
       },
     });
   }
+
+  devConsole.register({
+    name: "enablefreebuilding",
+    help: "enablefreebuilding <true|false> : place buildings without material costs",
+    run: (args) => {
+      const val = args[0]?.toLowerCase();
+      if (val !== "true" && val !== "false") return "usage: enablefreebuilding <true|false>";
+      const enabled = val === "true";
+      devFlags.freeBuildingEnabled = enabled;
+      return `free building ${enabled ? "enabled" : "disabled"}`;
+    },
+  });
 }

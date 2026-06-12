@@ -10,6 +10,7 @@ import { Colors } from "$lib/utils/colors";
 import { playSound } from "$lib/audio/audio-engine";
 import { tickPlacedItemExposure } from "$lib/domain/exposure/placed-exposure";
 import { EntityId } from "$lib/domain/game-events";
+import { getCampfireHeatAt } from "$lib/core/systems/camp/campfire-runtime-system";
 
 export function tickExposureSystem(
   ecsWorld: World<Entity>,
@@ -21,9 +22,6 @@ export function tickExposureSystem(
   // Foundation pass: per-frame ticking is retained for behaviour compatibility.
   // Migration target: drive reactions from exposure intervals/events once item
   // placement, fire radius changes, and climate changes publish clear events.
-  const campfire = ecsWorld
-    .with("position")
-    .entities.find((e) => e.id === EntityId.Campfire || e.station?.stationId === "campfire");
   const pickups = ecsWorld.with("pickup", "position").entities;
 
   for (const entity of pickups) {
@@ -33,25 +31,16 @@ export function tickExposureSystem(
     const def = getItemDef(pickup.itemId);
     if (!def) continue;
 
-    // Get climate environment
     const gx = Math.round(pos.x / TILE);
     const gy = Math.round(pos.y / TILE);
     const env = getAmbientEnvironment(map, gx, gy, 0);
 
-    // Campfire proximity check
-    let nearFire = false;
-    if (campfire?.position) {
-      const dx = (campfire.position.x - pos.x) / TILE;
-      const dy = (campfire.position.y - pos.y) / TILE;
-      if (Math.hypot(dx, dy) <= 3.0) {
-        nearFire = true;
-      }
-    }
+    const radiantHeat = getCampfireHeatAt(ecsWorld, { x: pos.x + TILE / 2, y: pos.y + TILE / 2 });
 
     const ctx = {
       location: "ground" as const,
       ambientTemp: env.temperature,
-      nearFire,
+      radiantHeat,
     };
 
     const state = {

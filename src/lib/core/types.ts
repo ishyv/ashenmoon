@@ -19,12 +19,23 @@ export interface HudState {
   lookAt: string | null;
 }
 
+export interface WorldContextMenuTarget {
+  id: string;
+  name: string;
+  action: string;
+  screenX: number;
+  screenY: number;
+  gx: number;
+  gy: number;
+  buildingId?: string;
+}
+
 export interface GameEngineConfig {
   container: HTMLDivElement;
   onInteract: (target: Entity) => void;
   onHudUpdate: (state: HudState) => void;
-  /** Called when the player right-clicks an interactable entity. Use to show a context menu. */
-  onContextMenu?: (name: string, action: string, screenX: number, screenY: number) => void;
+  /** Called when the player long-presses right-click (≥300ms). Shows context menu with entity/building options. */
+  onContextMenu?: (target: WorldContextMenuTarget) => void;
   /** If set, loads this scenario id instead of the procedural map. */
   scenarioId?: string;
   /** Called when the player interacts with a station or campfire. */

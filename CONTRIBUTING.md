@@ -30,7 +30,7 @@ bun run dev              # dev server on the default vite port
 ```bash
 bun run check    # svelte-kit sync + svelte-check; must be 0 errors, 0 warnings
 bun run build    # must succeed
-bun run test     # vitest; pure system logic must have tests
+bun run test:unit # vitest; pure system logic must have tests
 ```
 
 Any new pure rule logic (`src/lib/domain/**`) ships with a colocated `*.test.ts`.

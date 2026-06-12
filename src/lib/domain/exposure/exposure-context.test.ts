@@ -8,20 +8,20 @@ import {
 
 describe("effectiveTemperature", () => {
   it("adds full radiant heat on the ground near fire", () => {
-    expect(effectiveTemperature({ location: "ground", ambientTemp: 20, nearFire: true })).toBe(20 + OPEN_FLAME_BONUS);
+    expect(effectiveTemperature({ location: "ground", ambientTemp: 20, radiantHeat: OPEN_FLAME_BONUS })).toBe(20 + OPEN_FLAME_BONUS);
   });
 
   it("shields most radiant heat in a pack", () => {
-    expect(effectiveTemperature({ location: "pack", ambientTemp: 20, nearFire: true })).toBe(20 + OPEN_FLAME_BONUS * 0.4);
+    expect(effectiveTemperature({ location: "pack", ambientTemp: 20, radiantHeat: OPEN_FLAME_BONUS })).toBe(20 + OPEN_FLAME_BONUS * 0.4);
   });
 
   it("insulates sealed items from radiant heat", () => {
-    expect(effectiveTemperature({ location: "sealed", ambientTemp: 20, nearFire: true })).toBe(20);
+    expect(effectiveTemperature({ location: "sealed", ambientTemp: 20, radiantHeat: OPEN_FLAME_BONUS })).toBe(20);
   });
 
   it("returns ambient with no fire regardless of location", () => {
     for (const location of ["ground", "pack", "sealed"] as const) {
-      expect(effectiveTemperature({ location, ambientTemp: -5, nearFire: false })).toBe(-5);
+      expect(effectiveTemperature({ location, ambientTemp: -5, radiantHeat: 0 })).toBe(-5);
     }
   });
 });

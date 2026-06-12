@@ -170,7 +170,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   <!-- Right Pane: Alchemical Circle & Workspace -->
   <main class="recipe-detail-pane">
     <!-- Section 1: The Alchemical Resonance Circle -->
-    <div class="alchemy-workspace" style="display: flex; justify-content: center; align-items: center; width: 100%; min-height: 180px; position: relative;">
+    <div class="alchemy-workspace">
       <div class="circle-wrapper" style="width: {centerCoord * 2}px; height: {centerCoord * 2}px; margin: 0 auto; position: relative; display: block;">
         
         <!-- Rotating runic boundaries -->
@@ -431,6 +431,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   /* Base Container Split */
   .crafting-dual-pane {
     display: flex;
+    width: 100%;
     height: 22rem;
     background: rgba(8, 6, 5, 0.4);
     border-radius: 4px;
@@ -672,6 +673,8 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   /* Right Pane: Alchemical Circle workspace */
   .recipe-detail-pane {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     background: rgba(0, 0, 0, 0.15);
@@ -681,7 +684,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
 
   .alchemy-workspace {
     width: 100%;
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -973,10 +976,12 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
 
   /* Workspace details area (bottom half) */
   .workspace-details {
-    margin-top: auto;
+    flex: 1;
+    min-height: 0;
     padding-top: 0.6rem;
     border-top: 1px solid var(--inv-border-muted);
-    min-height: 5.5rem;
+    min-width: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
   }
@@ -1004,6 +1009,10 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
     margin: 0;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .campfire-tag {
@@ -1039,7 +1048,6 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   .experiment-workspace {
     display: flex;
     flex-direction: column;
-    height: 100%;
     gap: 0.5rem;
   }
 
@@ -1149,8 +1157,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   }
 
   .reagents-grid-scroll {
-    overflow-x: auto;
-    white-space: nowrap;
+    overflow-y: auto;
     padding: 0.15rem 0;
   }
 
@@ -1165,7 +1172,9 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   }
 
   .reagents-grid {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 38px);
+    justify-content: start;
     gap: 0.35rem;
   }
 
@@ -1173,7 +1182,6 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
     position: relative;
     width: 38px;
     height: 38px;
-    flex-shrink: 0;
     border-radius: 4px;
     border: 1px solid var(--inv-border-muted);
     background: rgba(18, 14, 12, 0.5);

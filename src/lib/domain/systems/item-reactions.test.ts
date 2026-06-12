@@ -31,7 +31,7 @@ describe("processFlammableReactions", () => {
     const { inventory, reactions } = processFlammableReactions(inv, {
       location: "ground",
       ambientTemp: 20,
-      nearFire: true, // +600 radiant -> well past ignitionTemp 120
+      radiantHeat: 600,
     });
     expect(inventory.slots.charcoal).toBeDefined();
     expect(reactions).toEqual([{ itemId: "oak_wood", kind: "flammable" }]);
@@ -42,7 +42,7 @@ describe("processFlammableReactions", () => {
     const { inventory, reactions } = processFlammableReactions(inv, {
       location: "sealed",
       ambientTemp: 9000,
-      nearFire: true,
+      radiantHeat: 600,
     });
     expect(inventory).toBe(inv);
     expect(reactions).toHaveLength(0);
@@ -53,7 +53,7 @@ describe("processFlammableReactions", () => {
     const { reactions } = processFlammableReactions(inv, {
       location: "pack",
       ambientTemp: 20,
-      nearFire: false,
+      radiantHeat: 0,
     });
     expect(reactions).toHaveLength(0);
   });

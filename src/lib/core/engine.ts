@@ -40,6 +40,7 @@ import {
   type HudState,
   type GameEngineConfig,
   type AnimState,
+  type WorldContextMenuTarget,
 } from "$lib/core/types";
 export type { HudState };
 import { playSound, setListener, setMuted, tickAmbient, unlock as unlockAudio } from "$lib/audio/audio-engine";
@@ -104,6 +105,7 @@ import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
 import {
   createLitCampfireState,
   findLitCampfires,
+  getCampfireHeatAt,
   getCampfireHeatRadiusTiles,
   isPointNearLitCampfire,
   refuelCampfireEntity,
@@ -144,8 +146,10 @@ import {
 import { syncRefuel } from "$lib/state/persistence/remote-sync";
 import { getItemQty } from "$lib/domain/inventory-api";
 import { getItemDef } from "$lib/domain/items";
+import { OPEN_FLAME_BONUS } from "$lib/domain/exposure/exposure-context";
 import { gameState } from "$lib/state/game-state.svelte";
-import { setRpgProfile, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
+import { setRpgProfile, equipLocalWeapon, applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 import { tickStamina, stamina, staminaConfig } from "$lib/domain/stamina.svelte";
 import { tickThirst, loadSurvival } from "$lib/domain/survival.svelte";
@@ -347,7 +351,7 @@ export class GameEngine {
         this.worldContainer,
         () => this.buildingResource.isPlacementMode || this.itemPlacementResource.isPlacementMode,
         () => { this.cancelBuildingPlacement(); this.cancelItemPlacement(); },
-        this.onContextMenu,
+        (screenX, screenY) => this.handleRightClickHold(screenX, screenY),
         () => this.interactionResource.currentTarget
       );
 
@@ -576,19 +580,16 @@ export class GameEngine {
       renderFocusedGatherSystem(this.focusedGatherResource, this.entityLayer);
       const focusedGatherActive = this.focusedGatherResource.session !== null;
 
-      // Arbitrate the left-click between interacting and attacking. A click on a
-      // hovered interactable in range (tree, ore, pickup, campfire, NPC) routes
-      // to the interaction system; a click on anything else is a melee swing.
-      // This preserves click-to-gather/talk while still allowing click-to-attack.
+      // Right-click (short press < 300ms) directly triggers interaction on the hovered target.
       if (
-        !focusedGatherActive &&
-        this.inputResource.pendingAttack &&
+        this.inputResource.pendingRightInteract &&
         !this.buildingResource.isPlacementMode &&
-        !this.itemPlacementResource.isPlacementMode &&
-        this.interactionResource.currentTarget !== null
+        !this.itemPlacementResource.isPlacementMode
       ) {
-        this.inputResource.pendingAttack = false;
-        this.inputResource.pendingInteract = true;
+        this.inputResource.pendingRightInteract = false;
+        if (this.interactionResource.currentTarget !== null) {
+          this.inputResource.pendingInteract = true;
+        }
       }
 
       // Update building placements preview position
@@ -1883,8 +1884,76 @@ export class GameEngine {
     };
   }
 
+  public isInPlacementMode(): boolean {
+    return this.itemPlacementResource.isPlacementMode || this.buildingResource.isPlacementMode;
+  }
+
+  private getBuildingAtCursor(): { entityId: string; type: string; gx: number; gy: number } | null {
+    const mx = Math.floor(this.inputResource.mouseWorld.x / TILE);
+    const my = Math.floor(this.inputResource.mouseWorld.y / TILE);
+    for (const b of gameState.rpg.profile?.buildings ?? []) {
+      const spec = getBuildingSpec(b.type);
+      const { w, h } = spec.footprint;
+      if (mx >= b.x && mx < b.x + w && my >= b.y && my < b.y + h) {
+        return { entityId: b.id, type: b.type, gx: b.x, gy: b.y };
+      }
+    }
+    return null;
+  }
+
+  private handleRightClickHold(screenX: number, screenY: number): void {
+    const target = this.interactionResource.currentTarget;
+    const building = this.getBuildingAtCursor();
+    const name = target?.interactable?.name ?? building?.type ?? "";
+    const action = target?.interactable?.action ?? (building ? "destroy" : "");
+    if (!name && !building) return;
+    const targetPos = target?.position;
+    const menuTarget: WorldContextMenuTarget = {
+      id: target?.id ?? building?.entityId ?? "",
+      name,
+      action,
+      screenX,
+      screenY,
+      gx: targetPos ? Math.floor(targetPos.x / TILE) : (building?.gx ?? Math.floor(this.inputResource.mouseWorld.x / TILE)),
+      gy: targetPos ? Math.floor(targetPos.y / TILE) : (building?.gy ?? Math.floor(this.inputResource.mouseWorld.y / TILE)),
+      buildingId: building?.entityId,
+    };
+    this.onContextMenu?.(menuTarget);
+  }
+
+  public destroyBuilding(entityId: string): void {
+    const building = gameState.rpg.profile?.buildings?.find((b) => b.id === entityId);
+    if (!building) return;
+
+    const spec = getBuildingSpec(building.type);
+    const { w, h } = spec.footprint;
+
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        this.mapResource.solidCoords.delete(coordKey(building.x + dx, building.y + dy));
+        this.mapResource.customSolids.delete(coordKey(building.x + dx, building.y + dy));
+      }
+    }
+
+    const entity = world.entities.find((e) => e.id === entityId);
+    if (entity) world.remove(entity);
+
+    const sprite = this.entitySprites.get(entityId);
+    if (sprite) {
+      this.entityLayer.removeChild(sprite);
+      sprite.destroy();
+      this.entitySprites.delete(entityId);
+    }
+
+    applyRpgState(localRpgCommands.destroyBuilding(entityId));
+    playSound("build.place");
+  }
+
   public isNearCampfire(): boolean {
-    return this.isNearStation("campfire");
+    const pos = this.playerEntity?.position;
+    if (!pos) return false;
+    const heat = getCampfireHeatAt(world, { x: pos.x + TILE / 2, y: pos.y + TILE / 2 });
+    return heat >= OPEN_FLAME_BONUS * 0.3;
   }
 
   public isNearStation(stationId: StationId, maxDistanceTiles = 4.5): boolean {
@@ -1944,17 +2013,33 @@ export class GameEngine {
       this.buildingResource.previewSprite.destroy();
     }
 
-    const tex = getBuildingTexture("yellow", getBuildingSpec(type).textureType);
+    const spec = getBuildingSpec(type);
+    const tex = getBuildingTexture("yellow", spec.textureType);
+
+    const { w, h } = spec.footprint;
+    const indicator = new Graphics();
+    indicator.rect(0, 0, w * TILE, h * TILE);
+    indicator.stroke({ width: 2, color: 0xffffff });
+    indicator.fill({ color: 0xffffff, alpha: 0.08 });
+    this.buildingResource.previewIndicator = indicator;
+    this.entityLayer.addChild(indicator);
 
     this.buildingResource.previewSprite = new Sprite(tex);
     this.buildingResource.previewSprite.anchor.set(0.5, 1);
     this.buildingResource.previewSprite.alpha = 0.6;
+    this.buildingResource.previewSprite.width = spec.sprite.w * TILE;
+    this.buildingResource.previewSprite.height = spec.sprite.h * TILE;
     this.entityLayer.addChild(this.buildingResource.previewSprite);
   }
 
   public cancelBuildingPlacement(): void {
     this.buildingResource.isPlacementMode = false;
     this.buildingResource.currentPlacementType = null;
+    if (this.buildingResource.previewIndicator) {
+      this.entityLayer.removeChild(this.buildingResource.previewIndicator);
+      this.buildingResource.previewIndicator.destroy();
+      this.buildingResource.previewIndicator = null;
+    }
     if (this.buildingResource.previewSprite) {
       this.entityLayer.removeChild(this.buildingResource.previewSprite);
       this.buildingResource.previewSprite.destroy();

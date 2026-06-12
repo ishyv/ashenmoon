@@ -1,4 +1,4 @@
-import { Container, Sprite } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -28,6 +28,7 @@ export class BuildingResource {
   public isPlacementMode = false;
   public currentPlacementType: string | null = null;
   public previewSprite: Sprite | null = null;
+  public previewIndicator: Graphics | null = null;
   public onPlacementCancelCb?: () => void;
   public onPlacementCompleteCb?: () => void;
 }
@@ -188,6 +189,11 @@ export function updatePlacementPreviewSystem(
 
   building.previewSprite.x = (mx + w / 2) * TILE;
   building.previewSprite.y = (my + h) * TILE;
+
+  if (building.previewIndicator) {
+    building.previewIndicator.x = mx * TILE;
+    building.previewIndicator.y = my * TILE;
+  }
 
   const valid = isValidPlacement(mx, my, type, map, playerPos);
   building.previewSprite.tint = valid ? Colors.building.validPlace : Colors.building.invalidPlace;

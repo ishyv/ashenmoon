@@ -12,8 +12,8 @@ export interface ExposureContext {
   readonly location: ExposureLocation;
   /** Ambient temperature of the surrounding tile (°C). */
   readonly ambientTemp: number;
-  /** Whether an open flame (campfire, brazier) is within radiant range. */
-  readonly nearFire: boolean;
+  /** Total radiant heat (°C) from nearby open flames; 0 when none. Falls off with distance. */
+  readonly radiantHeat: number;
 }
 
 export type ItemLocation =
@@ -42,12 +42,11 @@ export const OPEN_FLAME_BONUS = 600;
  * heat entirely (ambient still conducts through).
  */
 export function effectiveTemperature(ctx: ExposureContext): number {
-  const radiant = ctx.nearFire ? OPEN_FLAME_BONUS : 0;
   switch (ctx.location) {
     case "ground":
-      return ctx.ambientTemp + radiant;
+      return ctx.ambientTemp + ctx.radiantHeat;
     case "pack":
-      return ctx.ambientTemp + radiant * 0.4;
+      return ctx.ambientTemp + ctx.radiantHeat * 0.4;
     case "sealed":
       return ctx.ambientTemp;
   }

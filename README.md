@@ -19,6 +19,7 @@ bun install
 bun run dev              # dev server
 bun run build            # production build
 bun run check            # type checking (keep it honest)
+bun run test:unit        # run unit tests
 ```
 
 ## license

@@ -4,6 +4,7 @@ import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
 import { triggerQuestEvent } from "$lib/domain/quests.svelte";
 import { playSound } from "$lib/audio/audio-engine";
@@ -172,7 +173,7 @@ function canCraft(recipe: CraftRecipe): boolean {
 }
 
 function canBuild(recipe: BuildRecipeView): boolean {
-  return recipe.costs.every((cost) => getMaterialQty(cost.itemId) >= cost.required);
+  return devFlags.freeBuildingEnabled || recipe.costs.every((cost) => getMaterialQty(cost.itemId) >= cost.required);
 }
 
 async function craftItem(recipe: CraftRecipe): Promise<void> {
@@ -236,7 +237,7 @@ async function runExperiment() {
         onEquip={equipTool}
         onPlace={(itemId) => {
           selectedItem = null;
-          engine?.startItemPlacement(itemId, () => {}, onClose);
+          engine?.startItemPlacement(itemId, () => {}, () => {});
         }}
       />
     </GamePanel>

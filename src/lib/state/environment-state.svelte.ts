@@ -1,3 +1,4 @@
+import { untrack } from "svelte";
 import { emitEnvironmentChanged, type EnvironmentState } from "$lib/domain/systems/environment-system";
 
 export const activeEnvironment = $state<EnvironmentState>({
@@ -7,11 +8,11 @@ export const activeEnvironment = $state<EnvironmentState>({
 });
 
 export function setEnvironment(next: Partial<EnvironmentState>): void {
-  const previous: EnvironmentState = {
+  const previous = untrack<EnvironmentState>(() => ({
     temperature: activeEnvironment.temperature,
     humidity: activeEnvironment.humidity,
     toxins: activeEnvironment.toxins,
-  };
+  }));
 
   if (typeof next.temperature === "number") {
     activeEnvironment.temperature = next.temperature;
@@ -39,4 +40,3 @@ export function setEnvironment(next: Partial<EnvironmentState>): void {
     emitEnvironmentChanged({ previous, current });
   }
 }
-

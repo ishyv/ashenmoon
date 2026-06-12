@@ -20,7 +20,7 @@ export function onEnvironmentChangedEvent(event: EnvironmentChangedEvent): void 
   const { inventory: next } = evaluateEnvironmentalExposure(inventory, {
     location: "pack",
     ambientTemp: event.current.temperature,
-    nearFire: false,
+    radiantHeat: 0,
   });
 
   if (next !== inventory) {

@@ -65,7 +65,7 @@ export function tickPlacedItemExposure(
   }
 
   if (shouldReact) {
-    const rate = reactionKind === "decay" ? (ctx.nearFire ? 2 : 1) : 1;
+    const rate = reactionKind === "decay" ? (ctx.radiantHeat > 0 ? 2 : 1) : 1;
     const nextExposureTime = state.exposureTimeSec + dt * rate;
     const limit = reactionKind === "decay" ? (decayable?.lifespanSec ?? 120) : 2.5;
 

@@ -2,6 +2,8 @@
 import { onMount, onDestroy } from "svelte";
 import { GameEngine, type HudState } from "$lib/core/engine";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import type { WorldContextMenuTarget } from "$lib/core/types";
+import { isWorldContextMenuOutOfRange } from "$lib/core/input/world-context-menu";
 import { registerDevCommands } from "$lib/ui/debug/dev-commands";
 import DevConsole from "$lib/ui/debug/DevConsole.svelte";
 import { devConsole } from "$lib/ui/debug/dev-console";
@@ -15,7 +17,7 @@ import SkillTreePanel from "$lib/ui/panels/SkillTreePanel.svelte";
 import DialogueBox from "$lib/ui/elements/DialogueBox.svelte";
 import QuestTracker from "$lib/ui/panels/QuestTracker.svelte";
 import IntroOverlay from "$lib/ui/elements/IntroOverlay.svelte";
-import { activeEnvironment, setEnvironment } from "$lib/state/environment-state.svelte";
+import { activeEnvironment } from "$lib/state/environment-state.svelte";
 import { uiPreferences, loadUiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { loadGameState } from "$lib/state/game-state.svelte";
@@ -40,7 +42,7 @@ const showScenario  = $derived(overlayStack.has(OverlayId.Scenario));
 const showStation   = $derived(overlayStack.has(OverlayId.Station));
 let activeScenarioId = $state<string | null>(null);
 let activeStationEntity = $state<Entity | null>(null);
-let contextMenu   = $state<{ name: string; action: string; x: number; y: number } | null>(null);
+let contextMenu   = $state<WorldContextMenuTarget | null>(null);
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 let envInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -59,8 +61,8 @@ function handleInteract(target: Entity) {
   if (target.interactable) showNotify(target.interactable.name);
 }
 
-function handleContextMenu(name: string, action: string, screenX: number, screenY: number) {
-  contextMenu = { name, action, x: screenX, y: screenY };
+function handleContextMenu(target: WorldContextMenuTarget) {
+  contextMenu = target;
 }
 
 function closeContextMenu() {
@@ -100,9 +102,36 @@ function toggleScenario() {
 }
 
 function handleGlobalKeyDown(e: KeyboardEvent) {
-  if (e.key === "Escape" && !devConsole.open && !overlayStack.isEmpty) {
-    overlayStack.popTop();
+  if (devConsole.open) return;
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+  if (e.key === "Escape") {
+    if (engine?.isInPlacementMode()) return;
+    if (contextMenu) {
+      closeContextMenu();
+      e.preventDefault();
+      return;
+    }
+    if (!overlayStack.isEmpty) {
+      overlayStack.popTop();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (e.key === "Tab") {
     e.preventDefault();
+    toggleInventory();
+    return;
+  }
+  if (e.key === "g" || e.key === "G") {
+    toggleCrafting();
+    return;
+  }
+  if (e.key === "c" || e.key === "C") {
+    toggleSkills();
+    return;
   }
 }
 
@@ -145,24 +174,16 @@ $effect(() => {
   }
 });
 
+$effect(() => {
+  if (!contextMenu || !coords) return;
+  if (isWorldContextMenuOutOfRange(coords, contextMenu)) {
+    closeContextMenu();
+  }
+});
+
 function handleBindingsUpdate(newBindings: Bindings) {
   engine?.updateBindings(newBindings);
 }
-
-/** Computes ambient environment factors based on player coordinates and biome. */
-function getAmbientEnvironment(gx: number, gy: number) {
-  if (engine) {
-    return engine.getAmbientEnvironment(gx, gy);
-  }
-  return { temperature: 22, humidity: 45, toxins: 0 };
-}
-
-$effect(() => {
-  if (coords) {
-    const env = getAmbientEnvironment(coords.gx, coords.gy);
-    setEnvironment(env);
-  }
-});
 
 onMount(async () => {
   loadUiPreferences();
@@ -357,14 +378,20 @@ onDestroy(() => {
   {#if contextMenu}
     <div
       class="ctx-menu"
-      style="left:{contextMenu.x}px; top:{contextMenu.y}px"
+      style="left:{contextMenu.screenX}px; top:{contextMenu.screenY}px"
       role="menu"
     >
       <div class="ctx-header">{contextMenu.name}</div>
-      <button class="ctx-item" role="menuitem" onclick={() => { engine?.triggerInteract(); closeContextMenu(); }}>
-        {contextMenu.action === "gather" ? "harvest" : contextMenu.action}
-      </button>
-      <button class="ctx-item" role="menuitem" onclick={closeContextMenu}>inspect</button>
+      {#if contextMenu.action && contextMenu.action !== "destroy"}
+        <button class="ctx-item" role="menuitem" onclick={() => { engine?.triggerInteract(); closeContextMenu(); }}>
+          {contextMenu.action === "gather" ? "harvest" : contextMenu.action}
+        </button>
+      {/if}
+      {#if contextMenu.buildingId}
+        <button class="ctx-item ctx-danger" role="menuitem" onclick={() => { engine?.destroyBuilding(contextMenu!.buildingId!); closeContextMenu(); }}>
+          destroy
+        </button>
+      {/if}
       <button class="ctx-item ctx-close" role="menuitem" onclick={closeContextMenu}>close</button>
     </div>
   {/if}
@@ -581,6 +608,15 @@ onDestroy(() => {
     border-top: 1px solid rgba(255, 255, 255, 0.07);
     margin-top: 0.15rem;
     color: rgba(255, 255, 255, 0.35);
+  }
+
+  .ctx-danger {
+    color: var(--color-danger, tomato);
+  }
+
+  .ctx-danger:hover {
+    background: rgba(220, 80, 60, 0.12);
+    color: var(--color-danger, tomato);
   }
 
   .settings-trigger-btn.active-scenario {

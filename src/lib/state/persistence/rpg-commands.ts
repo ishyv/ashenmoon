@@ -12,6 +12,7 @@ import type {
   RpgReactionTriggered,
 } from "$lib/domain/rpg-types";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 
 export type MaterialGain = { id: string; quantity: number };
 
@@ -305,16 +306,18 @@ function build(type: string, x: number, y: number): RpgPlayerState {
   }
 
   return mutateAndSave((state) => {
-    const slots = { ...state.inventory.slots };
-    for (const [itemId, reqQty] of Object.entries(spec.cost ?? {})) {
-      if (getQty(slots[itemId]) < reqQty) {
-        throw new Error(`Insufficient ${itemId}`);
+    if (!devFlags.freeBuildingEnabled) {
+      const slots = { ...state.inventory.slots };
+      for (const [itemId, reqQty] of Object.entries(spec.cost ?? {})) {
+        if (getQty(slots[itemId]) < reqQty) {
+          throw new Error(`Insufficient ${itemId}`);
+        }
       }
+      for (const [itemId, reqQty] of Object.entries(spec.cost ?? {})) {
+        removeQty(slots, itemId, reqQty);
+      }
+      state.inventory = { slots };
     }
-    for (const [itemId, reqQty] of Object.entries(spec.cost ?? {})) {
-      removeQty(slots, itemId, reqQty);
-    }
-    state.inventory = { slots };
     if (type === "storage_pile") {
       state.profile.stashSize += 20;
     }
@@ -322,6 +325,20 @@ function build(type: string, x: number, y: number): RpgPlayerState {
       ...(state.profile.buildings ?? []),
       { id: `building_${type}_${Date.now()}`, type, x, y },
     ];
+  });
+}
+
+function destroyBuilding(buildingId: string): RpgPlayerState {
+  return mutateAndSave((state) => {
+    const building = state.profile.buildings?.find((b) => b.id === buildingId);
+    if (!building) return;
+    const spec = getBuildingSpec(building.type);
+    const slots = { ...state.inventory.slots };
+    for (const [itemId, qty] of Object.entries(spec.cost ?? {})) {
+      addQty(slots, itemId, Math.ceil(qty * 0.5));
+    }
+    state.profile.buildings = state.profile.buildings?.filter((b) => b.id !== buildingId) ?? [];
+    state.inventory = { slots };
   });
 }
 
@@ -403,6 +420,7 @@ export const localRpgCommands = {
   gather,
   equipTool,
   build,
+  destroyBuilding,
   craft,
   environmentTick,
   placeItem,

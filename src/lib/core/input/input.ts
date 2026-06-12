@@ -55,6 +55,11 @@ export class InputResource {
   /** True while the left mouse button is held down. */
   public isMouseHeld = false;
   private mouseDownAt = 0;
+  /** Set on short right-click (< 300ms); consumed by the engine to trigger direct interaction. */
+  public pendingRightInteract = false;
+  private rightDownAt = 0;
+  private rightClientX = 0;
+  private rightClientY = 0;
 
   private lastSprintPressTime = 0;
 
@@ -169,7 +174,7 @@ export class InputResource {
     worldContainer: Container,
     isPlacementMode: () => boolean,
     cancelPlacement: () => void,
-    onContextMenu: ((name: string, action: string, x: number, y: number) => void) | undefined,
+    onRightClickHold: ((screenX: number, screenY: number) => void) | undefined,
     getCurrentTarget: () => { id: string; interactable?: { name: string; action: string } } | null
   ): () => void {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -209,6 +214,11 @@ export class InputResource {
           world: this.mouseWorld,
         });
       }
+      if (e.button === 2) {
+        this.rightDownAt = performance.now();
+        this.rightClientX = e.clientX;
+        this.rightClientY = e.clientY;
+      }
     };
 
     const onMouseUp = (e: MouseEvent): void => {
@@ -219,18 +229,20 @@ export class InputResource {
           world: this.mouseWorld,
         });
       }
+      if (e.button === 2) {
+        const elapsed = performance.now() - this.rightDownAt;
+        if (!devConsole.open && !isPlacementMode()) {
+          if (elapsed < 300) {
+            this.pendingRightInteract = true;
+          } else {
+            onRightClickHold?.(this.rightClientX, this.rightClientY);
+          }
+        }
+      }
     };
 
     const onContextMenuEvent = (e: MouseEvent): void => {
       e.preventDefault();
-      const target = getCurrentTarget();
-      if (devConsole.open || !target?.interactable || !onContextMenu) return;
-      onContextMenu(
-        target.interactable.name,
-        target.interactable.action,
-        e.clientX,
-        e.clientY
-      );
     };
 
     window.addEventListener("keydown", onKeyDown);
