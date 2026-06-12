@@ -8,6 +8,28 @@ export function applyRpgState(state: RpgPlayerState | null): void {
   gameState.rpg.skills = state.skills ?? createDefaultSkills();
 }
 
+export function applyRpgStatePreservingLocalWeapon(
+  state: RpgPlayerState | null,
+  options: { toolBroken?: boolean } = {},
+): void {
+  if (!state) return;
+  const localWeapon = gameState.rpg.profile?.loadout.weapon ?? null;
+  const remoteWeapon = state.profile.loadout.weapon;
+  const shouldPreserveLocalWeapon = !options.toolBroken && !!localWeapon && !remoteWeapon;
+  applyRpgState({
+    ...state,
+    profile: shouldPreserveLocalWeapon
+      ? {
+          ...state.profile,
+          loadout: {
+            ...state.profile.loadout,
+            weapon: localWeapon,
+          },
+        }
+      : state.profile,
+  });
+}
+
 export function setRpgInventory(inventory: RpgPlayerState["inventory"] | null): void {
   gameState.rpg.inventory = inventory;
 }
@@ -72,4 +94,3 @@ export function setLocalHp(hp: number): void {
     gameState.rpg.profile = createDefaultProfile({ hpCurrent: hp });
   }
 }
-

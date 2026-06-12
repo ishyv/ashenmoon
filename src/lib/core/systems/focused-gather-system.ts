@@ -11,7 +11,7 @@
 import type { Container, Graphics, Text } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import { TILE } from "$lib/core/systems/map";
+import { TILE, type MapResource } from "$lib/core/systems/map";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import type { InputResource } from "$lib/core/input";
 import { spawnEnvFloatingText, spawnShockwaveRing, type VFXResource } from "$lib/core/vfx";
@@ -21,15 +21,14 @@ import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { getEquippedWeaponId } from "$lib/domain/inventory-api";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
-import { checkGatherTool } from "$lib/domain/gathering/gather-system";
 import { SkillKey } from "$lib/domain/game-events";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { awardSkillXp } from "$lib/domain/skill-xp";
 import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
 import { syncPickup } from "$lib/state/persistence/remote-sync";
-import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { applyRpgStatePreservingLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import type { FocusedGatherSession } from "$lib/domain/gathering/focused-gather/focused-gather-types";
-import { focusedGatherProfileFor } from "$lib/domain/gathering/focused-gather/focused-gather-profiles";
+import { resolveFocusedGatherActivation } from "$lib/domain/gathering/focused-gather/focused-gather-activation";
 import { generateTargets } from "$lib/domain/gathering/focused-gather/focused-gather-patterns";
 import {
   createSession,
@@ -94,6 +93,7 @@ export interface FocusedGatherDeps {
   /** Strong-hit feedback (squash, particles, floating text); quantity drives intensity. */
   onHit: (node: Entity, yieldName: string, quantity: number) => void;
   zeroCooldowns: boolean;
+  map?: MapResource;
 }
 
 export function runFocusedGatherSystem(
@@ -113,7 +113,7 @@ export function runFocusedGatherSystem(
   const player = getPlayerEntity();
   const playerDead = (player.health?.current ?? 1) <= 0;
 
-  // --- Activation (double-tap E while gathering) ---
+  // --- Activation (dedicated focused-gather action on a large source) ---
   const triggered = inputs.focusedGatherTriggered;
   inputs.focusedGatherTriggered = false;
   if (triggered && focused.session === null && !playerDead) {
@@ -201,29 +201,37 @@ function tryActivate(
   now: number,
   zeroCooldowns: boolean,
 ): void {
-  const node = interaction.gatheringTarget ?? interaction.currentTarget;
-  if (!node?.resource || (node.resource.hp ?? 0) <= 0 || !node.position) return;
+  const node = interaction.currentTarget ?? interaction.gatheringTarget;
+  const hasUsableSource = !!node?.resource && (node.resource.hp ?? 0) > 0 && !!node.position;
+  const def = hasUsableSource && node?.resource?.gatherableId ? getGatherableDefinition(node.resource.gatherableId) : undefined;
+  const activation = resolveFocusedGatherActivation({
+    cooldownSec: focused.cooldownSec,
+    def,
+    equippedToolId: getEquippedWeaponId(),
+    hasUsableSource,
+    playerDead: false,
+    stamina: stamina.current,
+    zeroCooldowns,
+  });
 
-  const def = node.resource.gatherableId ? getGatherableDefinition(node.resource.gatherableId) : undefined;
-  if (!def) return;
-
-  // Must be able to harvest it (tool-gated nodes require the right tool).
-  if (def.requiredToolKind && !checkGatherTool(getEquippedWeaponId(), def.requiredToolKind).ok) return;
-
-  if (!zeroCooldowns && focused.cooldownSec > 0) {
-    spawnEnvFloatingText(vfx, "not ready", Colors.ui.muted, player.position!, entityLayer);
+  if (!activation.ok) {
+    spawnEnvFloatingText(
+      vfx,
+      activation.message,
+      activation.tone === "error" ? Colors.ui.error : Colors.ui.muted,
+      player.position!,
+      entityLayer,
+    );
     return;
   }
 
-  const profile = focusedGatherProfileFor(def);
-  if (stamina.current < profile.staminaCost) {
-    spawnEnvFloatingText(vfx, "not enough stamina", Colors.ui.error, player.position!, entityLayer);
-    return;
-  }
+  const profile = activation.profile;
 
   spendStamina(profile.staminaCost, "burst");
   interaction.gatheringTarget = null;
   interaction.gatherCooldownTimer = 0;
+
+  if (!node?.position) return;
 
   const center = nodeCenter(node);
   const targets = generateTargets(profile, center);
@@ -276,12 +284,12 @@ function finalizeAndReward(
     const items = resolveYieldItems(def, result, session.profile.baseYield);
     for (const item of items) {
       void syncPickup(item.itemId, "", item.quantity).then((r) => {
-        if (r.ok) applyRpgState(r.data.playerState);
+        if (r.ok) applyRpgStatePreservingLocalWeapon(r.data.playerState);
       });
     }
 
     // XP into the node's gathering skill, scaled by grade.
-    const skill = def.solidKind === "tree" ? SkillKey.Lumberjacking : SkillKey.Mining;
+    const skill = def.skillKey ?? (def.solidKind === "tree" ? SkillKey.Lumberjacking : SkillKey.Mining);
     const xp = Math.round(session.profile.baseYield * 3 * result.xpMultiplier);
     awardSkillXp(skill, xp, vfx, player.position!, entityLayer);
 
@@ -314,6 +322,7 @@ function finalizeAndReward(
     deps.triggerQuestEvent,
     deps.getTreeFrames,
     deps.getStumpTexture,
+    deps.map,
   );
   playSound("node.deplete", { position: nodeCenter(node) });
 

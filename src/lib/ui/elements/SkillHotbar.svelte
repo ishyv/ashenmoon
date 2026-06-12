@@ -68,10 +68,10 @@ const hasFsStam = $derived(stamina.current >= 20);
     {/if}
 
     <div class="skill-icon fg-bg">fg</div>
-    <div class="skill-key">EE</div>
+    <div class="skill-key">F</div>
     <div class="tooltip">
       <div class="title">focused gathering</div>
-      <div class="desc">double-tap e on a node to commit it and break it open by hand. click the targets in order and on time. read it well and you profit, botch it and you waste the source.</div>
+      <div class="desc">press f on a large source to commit it and break it open by hand. click the targets in order and on time. read it well and you profit, botch it and you waste the source.</div>
       <div class="cost">cost / cooldown scale with node difficulty</div>
     </div>
   </div>

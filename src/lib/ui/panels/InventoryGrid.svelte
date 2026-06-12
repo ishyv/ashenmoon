@@ -2,6 +2,7 @@
 import { onDestroy, onMount } from "svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { getItemDef, traitOf } from "$lib/domain/items";
 import { triggerQuestEvent } from "$lib/domain/quests.svelte";
 import { playSound } from "$lib/audio/audio-engine";
@@ -78,18 +79,13 @@ function canBuild(recipe: BuildRecipeView): boolean {
 
 async function craftItem(recipe: CraftRecipe): Promise<void> {
   if (!canCraft(recipe)) return;
-  const res = await fetch("/api/rpg/craft", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ itemId: recipe.id, isNearCampfire: engine?.isNearCampfire() ?? false }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "craft failed" }));
-    console.error("crafting error:", err.error);
+  try {
+    applyRpgState(localRpgCommands.craft(recipe.id, { isNearCampfire: engine?.isNearCampfire() ?? false }));
+  } catch (err) {
+    console.error("crafting error:", err instanceof Error ? err.message : String(err));
     return;
   }
 
-  applyRpgState(await res.json());
   playSound("craft");
   learnRecipe(recipe.id);
   triggerQuestEvent("craft", recipe.id);
@@ -149,13 +145,10 @@ async function runExperiment(): Promise<void> {
 
 async function equipTool(itemId: string): Promise<void> {
   if (getItemDef(itemId)?.category !== "tool") return;
-  const res = await fetch("/api/rpg/equip", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ itemId }),
-  });
-  if (res.ok) {
-    applyRpgState(await res.json());
+  try {
+    applyRpgState(localRpgCommands.equipTool(itemId));
+  } catch (err) {
+    console.error("equip error:", err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -399,4 +392,3 @@ onDestroy(() => {
     }
   }
 </style>
-

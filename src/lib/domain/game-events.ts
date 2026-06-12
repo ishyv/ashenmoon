@@ -52,6 +52,7 @@ export enum InputAction {
   MoveLeft = "MOVE_LEFT",
   MoveRight = "MOVE_RIGHT",
   Harvest = "HARVEST",
+  FocusedGather = "FOCUSED_GATHER",
   Console = "CONSOLE",
   Sprint = "SPRINT",
 }
@@ -61,6 +62,7 @@ export const StorageKeys = {
   inputBindings: "ashenmoor_input_bindings",
   uiPreferences: "ashenmoor_ui_preferences",
   survival: "ashenmoor_survival",
+  rpg: "ashenmoor_rpg",
   statuses: "ashenmoor_statuses",
   knowledge: "ashenmoor_knowledge",
   recipes: "ashenmoor_recipes",

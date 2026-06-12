@@ -44,4 +44,25 @@ describe("architecture seams", () => {
     expect(registry.interactions.has("pickup")).toBe(true);
     expect(registry.prefabs.has("stick_pickup")).toBe(true);
   });
+
+  it("does not require HTTP routes for game persistence", () => {
+    const self = fileURLToPath(import.meta.url);
+    const haystack = files(srcRoot)
+      .filter((path) => path !== self)
+      .filter((path) => /\.(ts|svelte)$/.test(path))
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+
+    for (const token of [
+      'fetch("/api/state"',
+      "fetch('/api/state'",
+      'fetch("/api/rpg',
+      "fetch('/api/rpg",
+      "/api/state",
+      "/api/rpg/",
+      "rpgService",
+    ]) {
+      expect(haystack).not.toContain(token);
+    }
+  });
 });

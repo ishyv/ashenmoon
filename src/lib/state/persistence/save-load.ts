@@ -5,9 +5,7 @@
  * versioning live in one place.
  *
  * Each slice is stored under its own key (see `StorageKeys`) wrapped in a
- * `Versioned<T>` envelope. Server-backed core state (profile/inventory/skills)
- * is NOT handled here, that flows through `src/lib/state/persistence/remote-sync.ts` to the
- * `/api/rpg/*` endpoints.
+ * `Versioned<T>` envelope.
  */
 import { migrateSlice, SAVE_VERSION, type Versioned } from "$lib/state/persistence/migrations";
 

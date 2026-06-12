@@ -1,5 +1,5 @@
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
-import { StorageKeys } from "$lib/domain/game-events";
+import { getLocalRpgState, saveLocalRpgState } from "$lib/state/persistence/rpg-commands";
 
 /**
  * Unified, reactive root for all persistent game data.
@@ -74,50 +74,32 @@ export function markGameStateHydrated(): void {
   persistenceHydrated = true;
 }
 
-/**
- * Loads the full game state from the server.
- */
-export async function loadGameState(): Promise<void> {
-  try {
-    const res = await fetch("/api/state");
-    if (res.ok) {
-      const data = await res.json();
-      if (data) {
-        // Deep merge/assignment to maintain reactivity
-        Object.assign(gameState, data);
-        markGameStateHydrated();
-      }
-    }
-  } catch (e) {
-    console.error("GameState: Failed to load state from server:", e);
-  }
+/** Loads persistent RPG state from local browser storage. */
+export function loadGameState(): void {
+  const rpg = getLocalRpgState();
+  gameState.rpg.profile = rpg.profile;
+  gameState.rpg.inventory = rpg.inventory;
+  gameState.rpg.skills = rpg.skills;
+  markGameStateHydrated();
 }
 
 /**
  * Automated Persistence Layer.
- * Watches the `gameState` for any deep changes and syncs them to the server
- * using a debounced write to prevent performance issues.
+ * Watches RPG state for deep changes and writes a debounced local save.
  */
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 $effect.root(() => {
   $effect(() => {
-    // Svelte 5 automatically tracks every reactive property accessed here.
-    // By taking a full snapshot, we track everything in gameState.
-    const snapshot = $state.snapshot(gameState);
+    const snapshot = $state.snapshot(gameState.rpg);
     if (!persistenceHydrated) return;
 
-    // Debounce the save operation (500ms)
     if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
+    saveTimeout = setTimeout(() => {
       try {
-        await fetch("/api/state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(snapshot),
-        });
+        saveLocalRpgState(snapshot);
       } catch (e) {
-        console.error("GameState: Auto-save failed:", e);
+        console.error("GameState: Local RPG auto-save failed:", e);
       }
     }, 500);
   });

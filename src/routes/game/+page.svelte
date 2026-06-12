@@ -18,12 +18,11 @@ import IntroOverlay from "$lib/ui/elements/IntroOverlay.svelte";
 import { activeEnvironment, setEnvironment } from "$lib/state/environment-state.svelte";
 import { uiPreferences, loadUiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
-import { markGameStateHydrated } from "$lib/state/game-state.svelte";
+import { loadGameState } from "$lib/state/game-state.svelte";
+import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
 import { dialogueState } from "$lib/domain/quests.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
-
-let { data } = $props();
 
 let containerEl = $state<HTMLDivElement | null>(null);
 let engine     = $state<GameEngine | null>(null);
@@ -126,10 +125,7 @@ $effect(() => {
 
 onMount(async () => {
   loadUiPreferences();
-  if (data.playerState) {
-    applyRpgState(data.playerState);
-  }
-  markGameStateHydrated();
+  loadGameState();
   if (!containerEl) return;
   const scenarioParam = new URLSearchParams(window.location.search).get("scenario") ?? undefined;
   activeScenarioId = scenarioParam ?? null;
@@ -147,51 +143,44 @@ onMount(async () => {
   envInterval = setInterval(async () => {
     if (!coords) return;
     try {
-      const res = await fetch("/api/rpg/environment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          temperature: activeEnvironment.temperature,
-          humidity: activeEnvironment.humidity,
-          toxins: activeEnvironment.toxins,
-        }),
+      const payload = localRpgCommands.environmentTick({
+        temperature: activeEnvironment.temperature,
+        humidity: activeEnvironment.humidity,
+        toxins: activeEnvironment.toxins,
       });
-      if (res.ok) {
-        const payload = await res.json();
-        if (payload.mutated) {
-          applyRpgState(payload.playerState);
+      if (payload.mutated) {
+        applyRpgState(payload.playerState);
           
-          for (const rx of payload.reactions) {
-            let msg = "";
-            let color = 0xffe0a0;
-            let pColor = 0xffa500;
-            let pType: "smoke" | "bubble" | "sizzle" = "smoke";
+        for (const rx of payload.reactions) {
+          let msg = "";
+          let color = 0xffe0a0;
+          let pColor = 0xffa500;
+          let pType: "smoke" | "bubble" | "sizzle" = "smoke";
 
-            if (rx.event === "ignited") {
-              msg = `${rx.itemId} burned into ${rx.resultItemId}.`;
-              color = 0xff5555;
-              pColor = 0xff3300;
-              pType = "smoke";
-            } else if (rx.event === "melted") {
-              msg = `${rx.itemId} melted into ${rx.resultItemId}.`;
-              color = 0x55aaff;
-              pColor = 0x3388ff;
-              pType = "bubble";
-            } else if (rx.event === "rotted") {
-              msg = `${rx.itemId} decayed into ${rx.resultItemId}.`;
-              color = 0xaaaaaa;
-              pColor = 0x777777;
-              pType = "sizzle";
-            }
-
-            if (rx.equippedSlot) {
-              msg = `equipped ${rx.equippedSlot} (${rx.itemId}) ${rx.event}; added ${rx.resultItemId} to stash.`;
-            }
-
-            engine?.spawnEnvFloatingText(msg, color);
-            engine?.spawnEnvParticles(pColor, 15, pType);
-            showNotify(msg);
+          if (rx.event === "ignited") {
+            msg = `${rx.itemId} burned into ${rx.resultItemId}.`;
+            color = 0xff5555;
+            pColor = 0xff3300;
+            pType = "smoke";
+          } else if (rx.event === "melted") {
+            msg = `${rx.itemId} melted into ${rx.resultItemId}.`;
+            color = 0x55aaff;
+            pColor = 0x3388ff;
+            pType = "bubble";
+          } else if (rx.event === "rotted") {
+            msg = `${rx.itemId} decayed into ${rx.resultItemId}.`;
+            color = 0xaaaaaa;
+            pColor = 0x777777;
+            pType = "sizzle";
           }
+
+          if (rx.equippedSlot) {
+            msg = `equipped ${rx.equippedSlot} (${rx.itemId}) ${rx.event}; added ${rx.resultItemId} to stash.`;
+          }
+
+          engine?.spawnEnvFloatingText(msg, color);
+          engine?.spawnEnvParticles(pColor, 15, pType);
+          showNotify(msg);
         }
       }
     } catch (err) {

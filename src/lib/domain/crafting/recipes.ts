@@ -1,7 +1,7 @@
 /**
  * Crafting recipe definitions, the single source of truth for what can be
  * crafted, what it costs, and what it yields. Both the crafting UI (preview) and
- * the /api/rpg/craft handler (execution) read from here via crafting-system.ts.
+ * the local RPG command layer (execution) reads from here via crafting-system.ts.
  *
  * Pure data + validation. No Svelte, no Pixi, no network.
  */

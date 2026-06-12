@@ -1,6 +1,7 @@
 <script lang="ts">
 import { gameState } from "$lib/state/game-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { getItemDef } from "$lib/domain/items";
 
 let hoveredSlot = $state<string | null>(null);
@@ -22,15 +23,7 @@ function getDurabilityColor(percent: number): string {
 
 async function unequipTool() {
   try {
-    const res = await fetch("/api/rpg/equip", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: null }),
-    });
-    if (res.ok) {
-      const newState = await res.json();
-      applyRpgState(newState);
-    }
+    applyRpgState(localRpgCommands.equipTool(null));
   } catch (err) {
     console.error("Failed to unequip:", err);
   }

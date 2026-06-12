@@ -496,6 +496,7 @@ export class GameEngine {
           setPlayerAnim: (state) => this.setPlayerAnim(state),
           onHit: (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
           zeroCooldowns: gameState.rpg.profile === null,
+          map: this.mapResource,
         }
       );
       renderFocusedGatherSystem(this.focusedGatherResource, this.entityLayer);
@@ -586,7 +587,8 @@ export class GameEngine {
           getStumpTexture,
           this.buildingResource.isPlacementMode,
           this.movementResource.isDashing,
-          (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity)
+          (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
+          this.mapResource
         );
       }
 

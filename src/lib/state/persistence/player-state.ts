@@ -33,9 +33,9 @@ export interface StatusSnapshot {
 export type KnowledgeSnapshot = Readonly<Record<string, readonly string[]>>;
 
 /**
- * The full player save. The server-backed `rpg` core is synced separately via
- * the `/api/rpg/*` endpoints; the remaining slices persist locally. Composed
- * here so a future unified save/load can address them as one snapshot.
+ * The full player save. RPG core data and the remaining slices all persist
+ * locally; composed here so a future unified save/load can address them as one
+ * snapshot.
  */
 export interface PlayerStateSnapshot {
   readonly version: number;

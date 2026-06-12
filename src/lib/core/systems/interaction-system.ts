@@ -13,7 +13,7 @@ import { Cell } from "$lib/core/types";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { gameState } from "$lib/state/game-state.svelte";
-import { applyRpgState, setRpgInventory } from "$lib/state/rpg-actions.svelte";
+import { applyRpgStatePreservingLocalWeapon, setRpgInventory } from "$lib/state/rpg-actions.svelte";
 import { getItemDef } from "$lib/domain/items";
 import { Colors } from "$lib/utils/colors";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
@@ -52,6 +52,7 @@ interface ImmediateInteractionDeps {
   dialogueState: any;
   getTreeFrames: () => any[];
   getStumpTexture: () => any;
+  map?: MapResource;
 }
 
 interface ImmediateInteractionResources extends RuntimeResourceMap {
@@ -62,7 +63,7 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
   {
     id: "pickup",
     handle: ({ world, target, resources }) => {
-      const { interaction, vfx, entityLayer, entitySprites, playerSprite, triggerQuestEvent, getTreeFrames, getStumpTexture } = resources.deps;
+      const { map, interaction, vfx, entityLayer, entitySprites, playerSprite, triggerQuestEvent, getTreeFrames, getStumpTexture } = resources.deps;
       const baseScale = (TILE * 1.1) / 192;
       playerSprite.scale.y = baseScale * 0.75;
       setTimeout(() => {
@@ -71,18 +72,40 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
 
       playSound("pickup");
 
-      if (target.pickup) {
-        const item = target.pickup.itemId;
-        const qty = target.pickup.qty;
+      const item = target.pickup?.itemId ?? target.resource?.drop;
+      const qty = target.pickup ? target.pickup.qty : 1;
 
+      if (item) {
         void syncPickup(item, target.id, qty).then((r) => {
-          if (r.ok) applyRpgState(r.data.playerState);
+          if (r.ok) applyRpgStatePreservingLocalWeapon(r.data.playerState);
         });
 
         const itemName = getItemDef(item)?.name ?? item;
         const playerEntity = getPlayerEntity();
         spawnEnvFloatingText(vfx, `+${qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
         triggerQuestEvent(GameEvent.Pickup, item, qty);
+
+        const gatherableId = target.pickup?.gatherableId ?? target.resource?.gatherableId;
+        const gatherable = gatherableId ? getGatherableDefinition(gatherableId) : undefined;
+        const gatherRisk = gatherable
+          ? rollGatherRisk(
+              gatherable,
+              {
+                hasTool: !!getEquippedWeaponId(),
+              },
+              Math.random,
+            )
+          : null;
+        if (gatherRisk) {
+          applyStatusEffect(gatherRisk.status, gatherRisk.durationSec, "hazard:gather");
+          spawnEnvFloatingText(
+            vfx,
+            gatherRisk.status === StatusId.Cut ? "cut" : gatherRisk.status === StatusId.Poison ? "poison" : "bleeding",
+            Colors.ui.error,
+            getPlayerEntity().position!,
+            entityLayer,
+          );
+        }
       }
 
       depleteNodeSystem(
@@ -94,7 +117,8 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         entitySprites,
         triggerQuestEvent,
         getTreeFrames,
-        getStumpTexture
+        getStumpTexture,
+        map
       );
     },
   },
@@ -150,7 +174,7 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         interaction.refuelConfirmTimer = 0;
 
         void syncRefuel().then((r) => {
-          if (r.ok) applyRpgState(r.data.playerState);
+          if (r.ok) applyRpgStatePreservingLocalWeapon(r.data.playerState);
         });
 
         playSound("craft");
@@ -464,11 +488,17 @@ export function depleteNodeSystem(
   entitySprites: Map<string, Container>,
   triggerQuestEvent: (evt: string, val?: any) => void,
   getTreeFrames: () => any[],
-  getStumpTexture: () => any
+  getStumpTexture: () => any,
+  map?: MapResource
 ): void {
   const pos = entity.position!;
   const gx = Math.round(pos.x / TILE);
   const gy = Math.round(pos.y / TILE);
+  if (map) {
+    const key = `${gx},${gy}`;
+    map.solidCoords.delete(key);
+    map.customSolids.delete(key);
+  }
   const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
   const wasTree = gatherable?.solidKind === "tree";
   if (wasTree) {
@@ -600,7 +630,8 @@ export function triggerImmediateInteraction(
   triggerQuestEvent: (evt: string, arg?: any, arg2?: any) => void,
   dialogueState: any,
   getTreeFrames: () => any[],
-  getStumpTexture: () => any
+  getStumpTexture: () => any,
+  map?: MapResource
 ): void {
   immediateInteractionDispatcher.dispatch({
     world,
@@ -616,6 +647,7 @@ export function triggerImmediateInteraction(
         dialogueState,
         getTreeFrames,
         getStumpTexture,
+        map,
       },
     },
     events: [],
@@ -632,6 +664,7 @@ export function triggerImmediateInteraction(
         dialogueState,
         getTreeFrames,
         getStumpTexture,
+        map,
       } as T;
     },
   });
@@ -660,7 +693,8 @@ export function runInteractionSystem(
   getStumpTexture: () => any,
   isPlacementMode: boolean,
   isDashing: boolean,
-  onHit: (entity: Entity, yieldName: string, quantity: number) => void
+  onHit: (entity: Entity, yieldName: string, quantity: number) => void,
+  map?: MapResource
 ): void {
   if (interaction.campfireRefuelTimer > 0) {
     interaction.campfireRefuelTimer -= dt;
@@ -814,9 +848,11 @@ export function runInteractionSystem(
   if (wantsInteract && interaction.gatheringTarget === null) {
     const target = interaction.currentTarget;
     if (target) {
-      if (target.resource) {
-        const res = target.resource;
-        const gatherable = res.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
+      const res = target.resource;
+      const gatherable = res?.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
+      const isBareHanded = gatherable && !gatherable.requiredToolKind;
+
+      if (res && !isBareHanded) {
         const expectedKind = gatherable?.requiredToolKind ?? (res.rpgAction ? requiredToolKind(res.rpgAction) : null);
         if (expectedKind) {
           const weaponId = getEquippedWeaponId();
@@ -877,7 +913,8 @@ export function runInteractionSystem(
           triggerQuestEvent,
           dialogueState,
           getTreeFrames,
-          getStumpTexture
+          getStumpTexture,
+          map
         );
       }
     }
@@ -959,7 +996,8 @@ export function runInteractionSystem(
             entitySprites,
             triggerQuestEvent,
             getTreeFrames,
-            getStumpTexture
+            getStumpTexture,
+            map
           );
           interaction.gatheringTarget = null;
         }
@@ -969,7 +1007,7 @@ export function runInteractionSystem(
       if (res && res.rpgLocationId && res.rpgAction) {
         void syncGather(res.rpgAction, res.rpgLocationId).then((r) => {
           if (r.ok) {
-            applyRpgState(r.data.playerState);
+            applyRpgStatePreservingLocalWeapon(r.data.playerState, { toolBroken: r.data.toolBroken });
             for (const mat of r.data.materialsGained) {
               devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
             }

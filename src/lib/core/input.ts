@@ -10,6 +10,7 @@ export class InputResource {
     [InputAction.MoveLeft]: ["a", "arrowleft"],
     [InputAction.MoveRight]: ["d", "arrowright"],
     [InputAction.Harvest]: ["e"],
+    [InputAction.FocusedGather]: ["f"],
     [InputAction.Console]: ["/"],
     [InputAction.Sprint]: ["shift"],
   };
@@ -30,7 +31,6 @@ export class InputResource {
   private mouseDownAt = 0;
 
   private lastSprintPressTime = 0;
-  private lastHarvestPressTime = 0;
 
   /** Current charge progress (0–1) while holding. Drives VFX ring each frame. */
   public getChargeProgress(): number {
@@ -52,38 +52,17 @@ export class InputResource {
     getCurrentTarget: () => { id: string; interactable?: { name: string; action: string } } | null
   ): () => void {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (devConsole.open) return;
       if (e.key === "Escape" && isPlacementMode()) {
         cancelPlacement();
         e.preventDefault();
         return;
       }
-      const keyName = e.key.toLowerCase();
-      this.keys[keyName] = true;
-
-      // Double-tap SPRINT detection (Dash)
-      const sprintKeys = this.bindings[InputAction.Sprint] ?? [];
-      if (sprintKeys.includes(keyName)) {
-        const now = performance.now();
-        if (now - this.lastSprintPressTime < 250) {
-          this.dashTriggered = true;
-        }
-        this.lastSprintPressTime = now;
-      }
-
-      // Double-tap HARVEST detection (Focused Gathering)
-      const harvestKeys = this.bindings[InputAction.Harvest] ?? [];
-      if (harvestKeys.includes(keyName)) {
-        const now = performance.now();
-        if (now - this.lastHarvestPressTime < 250) {
-          this.focusedGatherTriggered = true;
-        }
-        this.lastHarvestPressTime = now;
-      }
+      if (devConsole.open) return;
+      this.handleKeyDown(e.key, e.repeat);
     };
 
     const onKeyUp = (e: KeyboardEvent): void => {
-      this.keys[e.key.toLowerCase()] = false;
+      this.handleKeyUp(e.key);
     };
 
     const onMouseMove = (e: MouseEvent): void => {
@@ -155,6 +134,29 @@ export class InputResource {
 
   public updateBindings(newBindings: Record<string, string[]>): void {
     this.bindings = newBindings;
+  }
+
+  public handleKeyDown(key: string, repeat = false, now = performance.now()): void {
+    const keyName = key.toLowerCase();
+    this.keys[keyName] = true;
+    if (repeat) return;
+
+    const sprintKeys = this.bindings[InputAction.Sprint] ?? [];
+    if (sprintKeys.includes(keyName)) {
+      if (now - this.lastSprintPressTime < 250) {
+        this.dashTriggered = true;
+      }
+      this.lastSprintPressTime = now;
+    }
+
+    const focusedKeys = this.bindings[InputAction.FocusedGather] ?? [];
+    if (focusedKeys.includes(keyName)) {
+      this.focusedGatherTriggered = true;
+    }
+  }
+
+  public handleKeyUp(key: string): void {
+    this.keys[key.toLowerCase()] = false;
   }
 
   public clearKeyboardState(): void {

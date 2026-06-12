@@ -90,6 +90,11 @@ export const FOCUSED_GATHER_PROFILES: Record<FocusedGatherDifficulty, FocusedGat
   },
 };
 
+/** Large material sources can be cracked open through the focused-gather minigame. */
+export function isFocusedGatherEligible(def: GatherableDefinition): boolean {
+  return def.interactionKind === "repeated_action" && def.solidKind !== "none";
+}
+
 /**
  * Difficulty for a node: an explicit `focusedGatherDifficulty` wins, otherwise
  * we derive one from the render/solid kind so every node is eligible without
