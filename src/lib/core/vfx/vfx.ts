@@ -515,15 +515,37 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
       continue;
     }
     if (arc.variant === "crosscut") {
-      const length = arc.reach * (arc.grade === "excellent" ? 1.1 : arc.grade === "good" ? 1.0 : 0.88);
+      const stacks = arc.stacks ?? 1;
+      const stackPower = Math.min(5, Math.max(1, stacks));
+      const intro = Math.max(0, 1 - arc.life / 0.12);
+      const length = arc.reach * (arc.grade === "excellent" ? 1.25 : arc.grade === "good" ? 1.12 : 0.98) * (1 + stackPower * 0.045);
       const half = length * 0.5;
-      const width = arc.grade === "excellent" ? 5 : arc.grade === "good" ? 4 : 3;
-      const alpha = (1 - t) * (arc.grade === "excellent" ? 0.92 : arc.grade === "good" ? 0.76 : 0.58);
-      for (const lineAngle of [arc.angle, arc.angle + Math.PI / 2]) {
-        arc.graphic.moveTo(Math.cos(lineAngle) * -half, Math.sin(lineAngle) * -half);
-        arc.graphic.lineTo(Math.cos(lineAngle) * half, Math.sin(lineAngle) * half);
-      }
+      const width = (arc.grade === "excellent" ? 6 : arc.grade === "good" ? 5 : 4) + stackPower * 0.8 + intro * 4;
+      const alpha = (1 - t) * (arc.grade === "excellent" ? 0.95 : arc.grade === "good" ? 0.82 : 0.66);
+
+      arc.graphic.moveTo(Math.cos(arc.angle) * -half, Math.sin(arc.angle) * -half);
+      arc.graphic.lineTo(Math.cos(arc.angle) * half, Math.sin(arc.angle) * half);
       arc.graphic.stroke({ color: arc.color, width, alpha });
+
+      arc.graphic.moveTo(Math.cos(arc.angle) * -half, Math.sin(arc.angle) * -half);
+      arc.graphic.lineTo(Math.cos(arc.angle) * half, Math.sin(arc.angle) * half);
+      arc.graphic.stroke({ color: Colors.ui.white, width: Math.max(2, width * 0.28), alpha: alpha * 0.78 });
+
+      if (stackPower >= 2) {
+        const forkCount = Math.min(4, stackPower);
+        for (let fork = 0; fork < forkCount; fork++) {
+          const forkT = (fork + 1) / (forkCount + 1);
+          const base = -half + length * forkT;
+          const jitter = (fork % 2 === 0 ? 1 : -1) * (8 + stackPower * 3);
+          const bx = Math.cos(arc.angle) * base;
+          const by = Math.sin(arc.angle) * base;
+          const sideX = Math.cos(arc.angle + Math.PI / 2) * jitter;
+          const sideY = Math.sin(arc.angle + Math.PI / 2) * jitter;
+          arc.graphic.moveTo(bx, by);
+          arc.graphic.lineTo(bx + sideX, by + sideY);
+        }
+        arc.graphic.stroke({ color: Colors.ui.white, width: 1.5 + stackPower * 0.35, alpha: alpha * 0.65 });
+      }
       if (arc.life >= arc.maxLife) {
         entityLayer.removeChild(arc.graphic);
         arc.graphic.destroy();
@@ -598,20 +620,19 @@ export function spawnCrosscutSlash(
   reach: number,
   color: number,
   grade: "excellent" | "good" | "weak",
+  stacks = 1,
 ): void {
   const g = new Graphics();
   g.x = cx;
   g.y = cy;
-  const length = reach * (grade === "excellent" ? 1.1 : grade === "good" ? 1.0 : 0.88);
-  const width = grade === "excellent" ? 5 : grade === "good" ? 4 : 3;
+  const stackPower = Math.min(5, Math.max(1, stacks));
+  const length = reach * (grade === "excellent" ? 1.25 : grade === "good" ? 1.12 : 0.98) * (1 + stackPower * 0.045);
+  const width = (grade === "excellent" ? 7 : grade === "good" ? 6 : 5) + stackPower;
   const alpha = grade === "excellent" ? 0.92 : grade === "good" ? 0.76 : 0.58;
   const half = length * 0.5;
-  const cross = Math.PI / 2;
 
   g.moveTo(Math.cos(angle) * -half, Math.sin(angle) * -half);
   g.lineTo(Math.cos(angle) * half, Math.sin(angle) * half);
-  g.moveTo(Math.cos(angle + cross) * -half, Math.sin(angle + cross) * -half);
-  g.lineTo(Math.cos(angle + cross) * half, Math.sin(angle + cross) * half);
   g.stroke({ color, width, alpha });
   g.moveTo(Math.cos(angle) * -half, Math.sin(angle) * -half);
   g.lineTo(Math.cos(angle) * half, Math.sin(angle) * half);
@@ -621,30 +642,36 @@ export function spawnCrosscutSlash(
   vfx.slashArcs.push({
     graphic: g,
     life: 0,
-    maxLife: grade === "excellent" ? 0.28 : 0.22,
+    maxLife: grade === "excellent" ? 1.6 : grade === "good" ? 1.35 : 1.15,
     angle,
     reach,
     halfAngle: Math.PI / 2,
     color,
     variant: "crosscut",
     grade,
+    stacks,
   });
 
-  const particleCount = grade === "excellent" ? 16 : grade === "good" ? 10 : 6;
+  const particleCount = (grade === "excellent" ? 16 : grade === "good" ? 10 : 6) + stackPower * 5;
   for (let i = 0; i < particleCount; i++) {
     const p = new Graphics();
-    p.rect(-1.5, -1.5, 3, 3).fill({ color, alpha: 0.9 });
+    const isLightning = stackPower >= 2 && i % 3 === 0;
+    if (isLightning) {
+      p.rect(-1, -5, 2, 10).fill({ color: Colors.ui.white, alpha: 0.95 });
+    } else {
+      p.rect(-1.5, -1.5, 3, 3).fill({ color, alpha: 0.9 });
+    }
     p.x = cx + (Math.random() - 0.5) * 18;
     p.y = cy + (Math.random() - 0.5) * 18;
-    const burstAngle = angle + (Math.random() < 0.5 ? cross : -cross) + (Math.random() - 0.5) * 0.8;
-    const speed = 80 + Math.random() * (grade === "excellent" ? 130 : 80);
+    const burstAngle = angle + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2) + (Math.random() - 0.5) * 0.8;
+    const speed = 80 + stackPower * 22 + Math.random() * (grade === "excellent" ? 150 : 95);
     vfx.particles.push({
       graphic: p,
       vx: Math.cos(burstAngle) * speed,
       vy: Math.sin(burstAngle) * speed,
-      gravity: 40,
+      gravity: isLightning ? 0 : 40,
       life: 0,
-      maxLife: 0.25 + Math.random() * 0.22,
+      maxLife: (isLightning ? 0.16 : 0.25) + Math.random() * 0.22,
     });
     entityLayer.addChild(p);
   }

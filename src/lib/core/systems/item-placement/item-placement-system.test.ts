@@ -85,9 +85,26 @@ describe("item placement system", () => {
     it("checks player range and boundaries", () => {
       const playerPos = { x: 5 * TILE, y: 5 * TILE };
       // Within range (Chebyshev distance of 1 tile)
-      expect(isValidItemPlacementGrid(4, 4, map, playerPos)).toBe(true);
+      expect(isValidItemPlacementGrid(4, 4, map, playerPos, ecsWorld)).toBe(true);
       // Out of range (Chebyshev distance of 5 tiles)
-      expect(isValidItemPlacementGrid(0, 0, map, playerPos)).toBe(false);
+      expect(isValidItemPlacementGrid(0, 0, map, playerPos, ecsWorld)).toBe(false);
+    });
+
+    it("prevents placement on top of existing pickups", () => {
+      const playerPos = { x: 5 * TILE, y: 5 * TILE };
+      
+      // Initially valid
+      expect(isValidItemPlacementGrid(4, 4, map, playerPos, ecsWorld)).toBe(true);
+
+      // Spawn a pickup at (4,4)
+      ecsWorld.add({
+        id: "existing_pickup",
+        position: { x: 4 * TILE, y: 4 * TILE, targetX: 4 * TILE, targetY: 4 * TILE },
+        pickup: { itemId: "stick", qty: 1 },
+      });
+
+      // Now invalid
+      expect(isValidItemPlacementGrid(4, 4, map, playerPos, ecsWorld)).toBe(false);
     });
   });
 

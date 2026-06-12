@@ -596,7 +596,24 @@ export function playerAttackSystem(
   const len = Math.hypot(ax, ay) || 1;
   ax /= len;
   ay /= len;
-  const angle = Math.atan2(ay, ax);
+  let angle = Math.atan2(ay, ax);
+  let crosscutSlashX = pcx;
+  let crosscutSlashY = pcy;
+  let crosscutSlashReach = config.reach;
+  if (isCrosscut && combat.crosscutState.firstClickWorldPosition) {
+    const previousClick = combat.crosscutState.firstClickWorldPosition;
+    const segmentX = inputs.mouseWorld.x - previousClick.x;
+    const segmentY = inputs.mouseWorld.y - previousClick.y;
+    const segmentLength = Math.hypot(segmentX, segmentY);
+    if (segmentLength > 0.0001) {
+      ax = segmentX / segmentLength;
+      ay = segmentY / segmentLength;
+      angle = Math.atan2(ay, ax);
+      crosscutSlashX = (previousClick.x + inputs.mouseWorld.x) / 2;
+      crosscutSlashY = (previousClick.y + inputs.mouseWorld.y) / 2;
+      crosscutSlashReach = segmentLength;
+    }
+  }
 
   // Check if Kite Combo is triggered (this resets the movePhases/lastMoveVec if true)
   const isKiteCombo = checkKiteComboTrigger(combat);
@@ -726,6 +743,7 @@ export function playerAttackSystem(
 
   combat.inCombatTimer = config.inCombatTimeout;
   spendStamina(useStaminaCost, "burst");
+  const crosscutStacks = isCrosscut ? combat.crosscutState.stacks + 1 : 0;
   if (isCrosscut) {
     advanceCrosscutChain(combat.crosscutState, {
       clickWorldPosition: inputs.mouseWorld,
@@ -747,13 +765,18 @@ export function playerAttackSystem(
     playSound("combo.crosscut.excellent");
     triggerCameraShake(vfx, 6.0, 0.22);
   } else if (isCrosscut) {
-    spawnCrosscutSlash(vfx, entityLayer, pcx, pcy, angle, effectiveReach, arcColor, crosscutResult.grade!);
+    spawnCrosscutSlash(vfx, entityLayer, crosscutSlashX, crosscutSlashY, angle, crosscutSlashReach, arcColor, crosscutResult.grade!, crosscutStacks);
     spawnEnvFloatingText(vfx, crosscutText(crosscutResult.grade!), arcColor, player.position!, entityLayer);
     playSound(crosscutResult.grade === "excellent" ? "combo.crosscut.excellent" : "combo.crosscut", {
       position: { x: pcx, y: pcy },
-      params: { grade: crosscutResult.grade },
+      gain: 1 + Math.min(4, crosscutStacks - 1) * 0.08,
+      params: { grade: crosscutResult.grade, stacks: crosscutStacks },
     });
-    triggerCameraShake(vfx, crosscutResult.grade === "excellent" ? 5.5 : crosscutResult.grade === "good" ? 3.8 : 2.4, 0.13);
+    triggerCameraShake(
+      vfx,
+      (crosscutResult.grade === "excellent" ? 5.5 : crosscutResult.grade === "good" ? 3.8 : 2.4) + Math.min(4, crosscutStacks - 1) * 0.65,
+      0.13 + Math.min(4, crosscutStacks - 1) * 0.02
+    );
   } else if (!isKiteCombo) {
     spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, effectiveReach, effectiveHalfAngle, arcColor);
     playSound("player.swing");

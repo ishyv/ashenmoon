@@ -114,14 +114,10 @@ import {
   spawnBuildingSystem,
   isValidPlacement,
 } from "$lib/core/systems/building/building-system";
-import {
-  CraftingResource,
-  openCraftingOverlay,
-  closeCraftingOverlay,
-  updateCraftingOverlaySystem,
-  handleCraftingClick,
-} from "$lib/core/systems/crafting/crafting-overlay-system";
-import { trayReading } from "$lib/state/crafting-session.svelte";
+import { STATION_PROCESSES } from "$lib/domain/systems/station-process";
+import { syncRefuel } from "$lib/state/persistence/remote-sync";
+import { getItemQty } from "$lib/domain/inventory-api";
+import { getItemDef } from "$lib/domain/items";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgProfile, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
@@ -184,6 +180,7 @@ export class GameEngine {
   private onInteract: (target: Entity) => void;
   private onHudUpdate: (state: HudState) => void;
   private onContextMenu: GameEngineConfig["onContextMenu"];
+  private onStationInteract?: GameEngineConfig["onStationInteract"];
   private containerEl: HTMLDivElement;
 
   // Bevy-aligned Resources / Singletons
@@ -196,7 +193,6 @@ export class GameEngine {
   public focusedGatherResource = new FocusedGatherResource();
   public buildingResource = new BuildingResource();
   public itemPlacementResource = new ItemPlacementResource();
-  public craftingResource = new CraftingResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
 
@@ -277,6 +273,7 @@ export class GameEngine {
     this.onInteract = config.onInteract;
     this.onHudUpdate = config.onHudUpdate;
     this.onContextMenu = config.onContextMenu;
+    this.onStationInteract = config.onStationInteract;
     this.scenarioId = config.scenarioId ?? null;
   }
 
@@ -644,41 +641,7 @@ export class GameEngine {
             );
           }
         }
-      } else if (this.craftingResource.isOpen) {
-        // Crafting overlay is open — swallow all action inputs, run overlay update
-        const reading = trayReading();
-        if (this.inputResource.pendingAttack) {
-          handleCraftingClick(
-            this.craftingResource,
-            this.inputResource.mouseWorld.x,
-            this.inputResource.mouseWorld.y,
-          );
-          this.inputResource.pendingAttack = false;
-        }
-        this.inputResource.pendingInteract = false;
-        this.inputResource.pendingFellSweep = false;
-        updateCraftingOverlaySystem(
-          this.craftingResource,
-          this.vfxResource,
-          this.entityLayer,
-          dt,
-          reading,
-          this.playerEntity.position!,
-        );
-        // Walk-away auto-close
-        const dx = this.playerEntity.position!.x - this.craftingResource.campfireWorldPos.x;
-        const dy = this.playerEntity.position!.y - this.craftingResource.campfireWorldPos.y;
-        const distTiles = Math.hypot(dx, dy) / TILE;
-        if (distTiles > this.interactionResource.campfireHeatRadius) {
-          this.cancelCrafting();
-        }
       } else if (!focusedGatherActive) {
-        // Consume requestCrafting from campfire handler
-        if (this.interactionResource.requestCrafting) {
-          this.interactionResource.requestCrafting = false;
-          openCraftingOverlay(this.craftingResource, this.entityLayer);
-        }
-
         // Run interactions updates
         runInteractionSystem(
           world,
@@ -701,7 +664,8 @@ export class GameEngine {
           this.buildingResource.isPlacementMode,
           this.movementResource.isDashing,
           (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
-          this.mapResource
+          this.mapResource,
+          this.onStationInteract
         );
       }
 
@@ -1342,7 +1306,6 @@ export class GameEngine {
     this.entityLayer.addChild(campfireContainer);
     this.interactionResource.campfireSprite = campfire;
     this.entitySprites.set(EntityId.Campfire, campfireContainer);
-    this.craftingResource.campfireWorldPos = { x: startX + TILE / 2, y: startY + TILE / 2 };
 
     world.add({
       id: EntityId.Campfire,
@@ -1767,6 +1730,9 @@ export class GameEngine {
     if (this.itemPlacementResource.previewSprite) {
       this.itemPlacementResource.previewSprite.destroy();
     }
+    if (this.itemPlacementResource.previewIndicator) {
+      this.itemPlacementResource.previewIndicator.destroy();
+    }
 
     const tex = getItemTexture(itemId);
 
@@ -1774,6 +1740,13 @@ export class GameEngine {
     this.itemPlacementResource.previewSprite.anchor.set(0.5, 1);
     this.itemPlacementResource.previewSprite.alpha = 0.6;
     this.itemPlacementResource.previewSprite.scale.set((TILE * 0.4) / 64);
+
+    this.itemPlacementResource.previewIndicator = new Graphics();
+    this.itemPlacementResource.previewIndicator.rect(0, 0, TILE, TILE);
+    this.itemPlacementResource.previewIndicator.stroke({ width: 2, color: 0xffffff });
+    this.itemPlacementResource.previewIndicator.fill({ color: 0xffffff, alpha: 0.15 });
+
+    this.entityLayer.addChild(this.itemPlacementResource.previewIndicator);
     this.entityLayer.addChild(this.itemPlacementResource.previewSprite);
   }
 
@@ -1785,17 +1758,107 @@ export class GameEngine {
       this.itemPlacementResource.previewSprite.destroy();
       this.itemPlacementResource.previewSprite = null;
     }
+    if (this.itemPlacementResource.previewIndicator) {
+      this.entityLayer.removeChild(this.itemPlacementResource.previewIndicator);
+      this.itemPlacementResource.previewIndicator.destroy();
+      this.itemPlacementResource.previewIndicator = null;
+    }
     this.itemPlacementResource.onPlacementCancelCb?.();
     this.itemPlacementResource.onPlacementCancelCb = undefined;
     this.itemPlacementResource.onPlacementCompleteCb = undefined;
   }
 
-  public startCrafting(): void {
-    this.craftingResource.requestOpen = true;
+  public startStationProcess(entityId: string, processId: string): void {
+    const target = world.entities.find((e) => e.id === entityId);
+    if (!target) return;
+    const proc = STATION_PROCESSES.find((p) => p.id === processId);
+    if (!proc) return;
+
+    // Check ingredients
+    const inv = gameState.rpg.inventory;
+    if (!inv) return;
+    let hasIngredients = true;
+    for (const [inId, reqQty] of Object.entries(proc.inputs)) {
+      const slot = inv.slots[inId];
+      const qty = slot && "qty" in slot ? slot.qty : 0;
+      if (qty < reqQty) {
+        hasIngredients = false;
+        break;
+      }
+    }
+    if (!hasIngredients) return;
+
+    // Start process
+    this.interactionResource.activeProcess = {
+      stationId: proc.stationId,
+      targetEntityId: target.id,
+      itemId: Object.keys(proc.inputs)[0],
+      remainingSec: proc.durationSec,
+      bubbleTimer: 0,
+      inputs: proc.inputs,
+      outputItemId: proc.outputItemId,
+      outputQty: proc.outputQty,
+    };
+
+    playSound("station.boil");
+    const procName = proc.processType === "dry" ? "drying" : proc.processType === "assemble" ? "assembling" : proc.processType === "burn" ? "burning" : "processing";
+    const resultName = getItemDef(proc.outputItemId)?.name ?? proc.outputItemId;
+    
+    spawnEnvFloatingText(
+      this.vfxResource,
+      `${procName} ${resultName.toLowerCase()}...`,
+      Colors.vfx.campfireMsg,
+      this.playerEntity.position!,
+      this.entityLayer
+    );
   }
 
-  public cancelCrafting(): void {
-    closeCraftingOverlay(this.craftingResource, this.entityLayer);
+  public async refuelCampfire(entityId: string): Promise<boolean> {
+    const woodQty = getItemQty("oak_wood");
+    if (woodQty < 5) return false;
+
+    try {
+      const { applyRpgState, applyRpgStatePreservingLocalWeapon } = await import("$lib/state/rpg-actions.svelte");
+      const { localRpgCommands } = await import("$lib/state/persistence/rpg-commands");
+      // Consume 5 oak wood
+      applyRpgState(localRpgCommands.placeItem("oak_wood", 5));
+      // Sync refuel with backend
+      const r = await syncRefuel();
+      if (r.ok) {
+        applyRpgStatePreservingLocalWeapon(r.data.playerState);
+      }
+      
+      playSound("station.boil");
+      spawnEnvFloatingText(
+        this.vfxResource,
+        "campfire refueled (+5 wood)",
+        Colors.vfx.campfireMsg,
+        this.playerEntity.position!,
+        this.entityLayer
+      );
+      
+      // Update campfire visual sprite (reset frames / alpha)
+      if (this.campfireGlow) {
+        this.campfireGlow.alpha = 0.5;
+      }
+      return true;
+    } catch (err) {
+      console.error("Refuel error:", err);
+      return false;
+    }
+  }
+
+  public cancelStationProcess(): void {
+    if (this.interactionResource.activeProcess) {
+      this.interactionResource.activeProcess = null;
+      spawnEnvFloatingText(
+        this.vfxResource,
+        "process cancelled",
+        Colors.ui.muted,
+        this.playerEntity.position!,
+        this.entityLayer
+      );
+    }
   }
 
   public spawnEnvFloatingText(text: string, color: number = Colors.ui.info): void {

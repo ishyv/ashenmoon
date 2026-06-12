@@ -27,6 +27,8 @@ export interface GameEngineConfig {
   onContextMenu?: (name: string, action: string, screenX: number, screenY: number) => void;
   /** If set, loads this scenario id instead of the procedural map. */
   scenarioId?: string;
+  /** Called when the player interacts with a station or campfire. */
+  onStationInteract?: (target: Entity) => void;
 }
 
 /**
@@ -82,6 +84,7 @@ export interface SlashArc {
   halfAngle: number;
   variant?: "arc" | "crosscut" | "driving_thrust" | "wheel_slash" | "falling_wheel" | "rising_wheel" | "crosswind_cut";
   grade?: "excellent" | "good" | "weak";
+  stacks?: number;
   color?: number;
 }
 

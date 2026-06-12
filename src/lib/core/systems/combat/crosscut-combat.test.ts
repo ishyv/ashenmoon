@@ -4,6 +4,8 @@ import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { InputResource } from "$lib/core/input/input";
 import { MovementResource } from "$lib/core/systems/movement/movement";
 import { setStamina, stamina } from "$lib/domain/stamina.svelte";
+import { spawnCrosscutSlash } from "$lib/core/vfx/vfx";
+import { playSound } from "$lib/audio/audio-engine";
 import {
   CombatConfig,
   CombatResource,
@@ -108,7 +110,7 @@ describe("Combat System - Crosscut Combo", () => {
 
     expect(ctx.combat.crosscutState.firstClickWorldPosition).toEqual({ x: 132, y: 32 });
     expect(ctx.combat.crosscutState.firstPlayerPosition).toEqual({ x: 32, y: 32 });
-    expect(ctx.combat.crosscutState.firstDirection).toEqual({ x: 1, y: 0 });
+    expect(ctx.combat.crosscutState.firstDirection).toBeNull();
     expect(ctx.combat.crosscutState.firstAttackAtMs).toBeGreaterThan(0);
   });
 
@@ -125,7 +127,7 @@ describe("Combat System - Crosscut Combo", () => {
 
     swing(ctx, { x: 132, y: 32 });
     const afterFirstSwing = stamina.current;
-    swing(ctx, { x: 32, y: -100 });
+    swing(ctx, { x: 132, y: -68 });
 
     expect(ctx.combat.crosscutState.cooldownUntilMs).toBe(0);
     expect(ctx.combat.crosscutState.firstDirection).toEqual({ x: 0, y: -1 });
@@ -138,7 +140,8 @@ describe("Combat System - Crosscut Combo", () => {
     const ctx = setupTest();
 
     swing(ctx, { x: 132, y: 32 });
-    swing(ctx, { x: 232, y: 32 });
+    swing(ctx, { x: 132, y: -68 });
+    swing(ctx, { x: 132, y: -168 });
 
     expect(ctx.combat.crosscutState.firstClickWorldPosition).toBeNull();
     expect(ctx.combat.crosscutState.firstDirection).toBeNull();
@@ -177,7 +180,7 @@ describe("Combat System - Crosscut Combo", () => {
     ctx.combat.crosscutConfig.effects.excellent.bleedChancePct = 100;
 
     swing(ctx, { x: 132, y: 32 });
-    swing(ctx, { x: 32, y: -100 });
+    swing(ctx, { x: 132, y: -68 });
 
     expect(enemy.bleed).toMatchObject({
       remainingSec: 6,
@@ -225,22 +228,59 @@ describe("Combat System - Crosscut Combo", () => {
     swing(ctx, { x: 132, y: 32 });
     expect(ctx.combat.crosscutState.stacks).toBe(0);
 
-    // Click 2: up (excellent crosscut 1)
-    swing(ctx, { x: 32, y: -100 });
+    // Click 2: vertical segment up (excellent crosscut 1)
+    swing(ctx, { x: 132, y: -68 });
     expect(ctx.combat.crosscutState.stacks).toBe(1);
     expect(ctx.combat.crosscutState.firstDirection).toEqual({ x: 0, y: -1 });
 
-    // Click 3: right (excellent crosscut 2)
-    // Relative to player (32, 32): x=32+100=132, y=32. Direction (1, 0) is perpendicular to (0, -1)
-    swing(ctx, { x: 132, y: 32 });
+    // Click 3: horizontal segment right (excellent crosscut 2)
+    swing(ctx, { x: 232, y: -68 });
     expect(ctx.combat.crosscutState.stacks).toBe(2);
     expect(ctx.combat.crosscutState.firstDirection).toEqual({ x: 1, y: 0 });
 
-    // Click 4: up (excellent crosscut 3)
-    // Relative to player (32, 32): x=32, y=32-132=-100. Direction (0, -1) is perpendicular to (1, 0)
-    swing(ctx, { x: 32, y: -100 });
+    // Click 4: vertical segment up (excellent crosscut 3)
+    swing(ctx, { x: 232, y: -168 });
     expect(ctx.combat.crosscutState.stacks).toBe(3);
     expect(ctx.combat.crosscutState.firstDirection).toEqual({ x: 0, y: -1 });
+  });
+
+  it("passes Crosscut stack count into slash VFX and sound feedback", () => {
+    const ctx = setupTest();
+    vi.mocked(spawnCrosscutSlash).mockClear();
+    vi.mocked(playSound).mockClear();
+
+    swing(ctx, { x: 132, y: 32 });
+    swing(ctx, { x: 132, y: -68 });
+    swing(ctx, { x: 232, y: -68 });
+
+    expect(spawnCrosscutSlash).toHaveBeenNthCalledWith(
+      1,
+      ctx.vfx,
+      ctx.entityLayer,
+      132,
+      -18,
+      -Math.PI / 2,
+      100,
+      expect.any(Number),
+      "excellent",
+      1,
+    );
+    expect(spawnCrosscutSlash).toHaveBeenNthCalledWith(
+      2,
+      ctx.vfx,
+      ctx.entityLayer,
+      182,
+      -68,
+      0,
+      100,
+      expect.any(Number),
+      "excellent",
+      2,
+    );
+    expect(playSound).toHaveBeenCalledWith(
+      "combo.crosscut.excellent",
+      expect.objectContaining({ params: { grade: "excellent", stacks: 2 } }),
+    );
   });
 
   it("applies cooldown if an active chain times out", () => {
@@ -248,15 +288,15 @@ describe("Combat System - Crosscut Combo", () => {
 
     // Click 1: right (primes)
     swing(ctx, { x: 132, y: 32 });
-    // Click 2: up (excellent crosscut 1)
-    swing(ctx, { x: 32, y: -100 });
+    // Click 2: vertical segment up (excellent crosscut 1)
+    swing(ctx, { x: 132, y: -68 });
     expect(ctx.combat.crosscutState.stacks).toBe(1);
 
     // Advance time by 1 second (longer than decayed window 650 * 0.85 = 552.5ms)
     ctx.combat.currentTimeMs += 1000;
 
-    // Click 3: left (should fail because of timeout)
-    swing(ctx, { x: -68, y: 32 });
+    // Click 3: horizontal segment left (should fail because of timeout)
+    swing(ctx, { x: 32, y: -68 });
 
     expect(ctx.combat.crosscutState.stacks).toBe(0);
     expect(ctx.combat.crosscutState.firstDirection).toBeNull();

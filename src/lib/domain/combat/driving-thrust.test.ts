@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DRIVING_THRUST_CONFIG,
+  DEFAULT_POINTER_ATTACK_INTENT_CONFIG,
   canStartDrivingThrust,
+  classifyPointerAttackIntent,
   computeCollisionClippedTravelDistance,
   getDrivingThrustDistancePx,
+  getPointerAttackArmedIntent,
   isPointInsideDrivingThrustCapsule,
   resolveDrivingThrustSwipe,
 } from "./driving-thrust";
@@ -99,5 +102,118 @@ describe("Driving Thrust domain rules", () => {
     });
 
     expect(distance).toBe(60);
+  });
+});
+
+describe("Pointer attack intent classifier", () => {
+  const clickDirection = { x: 1, y: 0 };
+  const config = DEFAULT_POINTER_ATTACK_INTENT_CONFIG;
+
+  it("classifies fast clicks with tiny movement as basic attacks", () => {
+    const result = classifyPointerAttackIntent({
+      input: {
+        start: { x: 100, y: 100 },
+        end: { x: 110, y: 104 },
+        downAtMs: 1000,
+        upAtMs: 1080,
+      },
+      clickDirection,
+      config,
+    });
+
+    expect(result).toEqual({ kind: "basic_attack", direction: clickDirection });
+  });
+
+  it("classifies fast clicks with moderate jitter as basic attacks", () => {
+    const result = classifyPointerAttackIntent({
+      input: {
+        start: { x: 100, y: 100 },
+        end: { x: 145, y: 100 },
+        downAtMs: 1000,
+        upAtMs: 1070,
+      },
+      clickDirection,
+      config,
+    });
+
+    expect(result).toEqual({ kind: "basic_attack", direction: clickDirection });
+  });
+
+  it("classifies short movement below thrust distance as a basic attack fallback", () => {
+    const result = classifyPointerAttackIntent({
+      input: {
+        start: { x: 100, y: 100 },
+        end: { x: 145, y: 100 },
+        downAtMs: 1000,
+        upAtMs: 1160,
+      },
+      clickDirection,
+      config,
+    });
+
+    expect(result).toEqual({ kind: "basic_attack", direction: clickDirection });
+  });
+
+  it("classifies a quick deliberate drag as Driving Thrust", () => {
+    const result = classifyPointerAttackIntent({
+      input: {
+        start: { x: 100, y: 100 },
+        end: { x: 160, y: 100 },
+        downAtMs: 1000,
+        upAtMs: 1180,
+      },
+      clickDirection,
+      config,
+    });
+
+    expect(result).toEqual({ kind: "driving_thrust", direction: { x: 1, y: 0 } });
+  });
+
+  it("does not classify slow long drags as Driving Thrust", () => {
+    const result = classifyPointerAttackIntent({
+      input: {
+        start: { x: 100, y: 100 },
+        end: { x: 170, y: 100 },
+        downAtMs: 1000,
+        upAtMs: 1700,
+      },
+      clickDirection,
+      config,
+    });
+
+    expect(result.kind).not.toBe("driving_thrust");
+  });
+
+  it("classifies long held drags as full swipe before thrust", () => {
+    const result = classifyPointerAttackIntent({
+      input: {
+        start: { x: 100, y: 100 },
+        end: { x: 160, y: 100 },
+        downAtMs: 1000,
+        upAtMs: 1600,
+      },
+      clickDirection,
+      config,
+    });
+
+    expect(result).toEqual({ kind: "full_swipe", direction: { x: 1, y: 0 }, holdDurationMs: 600 });
+  });
+
+  it("only arms Driving Thrust after hold, distance, and speed thresholds are met", () => {
+    expect(getPointerAttackArmedIntent({
+      start: { x: 100, y: 100 },
+      current: { x: 160, y: 100 },
+      downAtMs: 1000,
+      nowMs: 1080,
+      config,
+    })).toBe("none");
+
+    expect(getPointerAttackArmedIntent({
+      start: { x: 100, y: 100 },
+      current: { x: 160, y: 100 },
+      downAtMs: 1000,
+      nowMs: 1180,
+      config,
+    })).toBe("driving_thrust");
   });
 });

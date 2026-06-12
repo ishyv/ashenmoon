@@ -54,6 +54,33 @@ export interface DrivingThrustHitbox {
   widthPx: number;
 }
 
+export interface PointerAttackIntentConfig {
+  tapMaxDurationMs: number;
+  tapMaxDistancePx: number;
+  thrustMinHoldMs: number;
+  thrustMaxHoldMs: number;
+  thrustMinDistancePx: number;
+  thrustMinSpeedPxPerMs: number;
+  fullSwipeMinHoldMs: number;
+  fullSwipeMinDistancePx: number;
+  deadzonePx: number;
+}
+
+export interface PointerAttackInput {
+  start: Vec2;
+  end: Vec2;
+  downAtMs: number;
+  upAtMs: number;
+}
+
+export type PointerAttackArmedIntent = "none" | "driving_thrust" | "full_swipe";
+
+export type PointerAttackIntent =
+  | { kind: "basic_attack"; direction: Vec2 }
+  | { kind: "driving_thrust"; direction: Vec2 }
+  | { kind: "full_swipe"; direction: Vec2; holdDurationMs: number }
+  | { kind: "none"; reason: "too_short" | "too_small" | "ambiguous" };
+
 export type DrivingThrustSwipeResult =
   | ({ triggered: true; direction: Vec2; swipeDistancePx: number } & DrivingThrustPendingInput)
   | { triggered: false; reason: "too_short" | "zero_world_delta"; swipeDistancePx: number };
@@ -63,7 +90,7 @@ export type DrivingThrustStartResult =
   | { ok: false; reason: "cooldown" | "insufficient_stamina" };
 
 export const DEFAULT_DRIVING_THRUST_CONFIG: DrivingThrustConfig = {
-  minSwipeDistancePx: 32,
+  minSwipeDistancePx: 52,
   maxSwipeDistancePx: 500,
   baseThrustDistancePx: 140,
   maxThrustDistancePx: 220,
@@ -85,10 +112,102 @@ export const DEFAULT_DRIVING_THRUST_CONFIG: DrivingThrustConfig = {
   bleedDamagePerTick: 2,
 };
 
+export const DEFAULT_POINTER_ATTACK_INTENT_CONFIG: PointerAttackIntentConfig = {
+  tapMaxDurationMs: 180,
+  tapMaxDistancePx: 14,
+  thrustMinHoldMs: 120,
+  thrustMaxHoldMs: 450,
+  thrustMinDistancePx: 52,
+  thrustMinSpeedPxPerMs: 0.16,
+  fullSwipeMinHoldMs: 500,
+  fullSwipeMinDistancePx: 36,
+  deadzonePx: 8,
+};
+
 export function normalizeVec2(v: Vec2): Vec2 | null {
   const len = Math.hypot(v.x, v.y);
   if (len <= 0.0001) return null;
   return { x: v.x / len, y: v.y / len };
+}
+
+export function distanceBetween(a: Vec2, b: Vec2): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+export function classifyPointerAttackIntent(args: {
+  input: PointerAttackInput;
+  clickDirection: Vec2;
+  config: PointerAttackIntentConfig;
+}): PointerAttackIntent {
+  const heldMs = Math.max(0, args.input.upAtMs - args.input.downAtMs);
+  const dragDistancePx = distanceBetween(args.input.start, args.input.end);
+  const dragDirection = normalizeVec2({
+    x: args.input.end.x - args.input.start.x,
+    y: args.input.end.y - args.input.start.y,
+  });
+
+  if (
+    heldMs <= args.config.tapMaxDurationMs &&
+    dragDistancePx <= args.config.tapMaxDistancePx
+  ) {
+    return { kind: "basic_attack", direction: args.clickDirection };
+  }
+
+  if (
+    heldMs >= args.config.fullSwipeMinHoldMs &&
+    dragDistancePx >= args.config.fullSwipeMinDistancePx &&
+    dragDirection
+  ) {
+    return { kind: "full_swipe", direction: dragDirection, holdDurationMs: heldMs };
+  }
+
+  const swipeSpeedPxPerMs = dragDistancePx / Math.max(1, heldMs);
+  if (
+    heldMs >= args.config.thrustMinHoldMs &&
+    heldMs <= args.config.thrustMaxHoldMs &&
+    dragDistancePx >= args.config.thrustMinDistancePx &&
+    swipeSpeedPxPerMs >= args.config.thrustMinSpeedPxPerMs &&
+    dragDirection
+  ) {
+    return { kind: "driving_thrust", direction: dragDirection };
+  }
+
+  return { kind: "basic_attack", direction: args.clickDirection };
+}
+
+export function getPointerAttackArmedIntent(args: {
+  start: Vec2;
+  current: Vec2;
+  downAtMs: number;
+  nowMs: number;
+  config: PointerAttackIntentConfig;
+}): PointerAttackArmedIntent {
+  const heldMs = Math.max(0, args.nowMs - args.downAtMs);
+  const dragDistancePx = distanceBetween(args.start, args.current);
+  const hasDirection = normalizeVec2({
+    x: args.current.x - args.start.x,
+    y: args.current.y - args.start.y,
+  }) !== null;
+  if (
+    heldMs >= args.config.fullSwipeMinHoldMs &&
+    dragDistancePx >= args.config.fullSwipeMinDistancePx &&
+    hasDirection
+  ) {
+    return "full_swipe";
+  }
+
+  const swipeSpeedPxPerMs = dragDistancePx / Math.max(1, heldMs);
+  if (
+    heldMs >= args.config.thrustMinHoldMs &&
+    heldMs <= args.config.thrustMaxHoldMs &&
+    dragDistancePx >= args.config.thrustMinDistancePx &&
+    swipeSpeedPxPerMs >= args.config.thrustMinSpeedPxPerMs &&
+    hasDirection
+  ) {
+    return "driving_thrust";
+  }
+
+  return "none";
 }
 
 export function resolveDrivingThrustSwipe(args: {

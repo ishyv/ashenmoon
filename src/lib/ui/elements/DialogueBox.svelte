@@ -267,11 +267,10 @@ function closeDialog() {
           <button class="action-btn reward" onclick={handleAction}>
             ✓ Claim Reward (1x Copper Pickaxe)
           </button>
-        {:else}
-          <button class="action-btn close" onclick={closeDialog}>
-            Dismiss
-          </button>
         {/if}
+        <button class="action-btn close" onclick={closeDialog}>
+          Leave
+        </button>
       </div>
     </div>
   </div>

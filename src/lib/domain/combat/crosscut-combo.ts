@@ -93,7 +93,7 @@ export const DEFAULT_CROSSCUT_COMBO_CONFIG: CrosscutComboConfig = {
   comboWindowMs: 650,
   minFirstClickDistancePx: 32,
   minSecondClickDistancePx: 32,
-  minDistanceBetweenClicksPx: 48,
+  minDistanceBetweenClicksPx: 8,
   perfectAngleDegrees: 90,
   excellentToleranceDegrees: 12,
   goodToleranceDegrees: 24,
@@ -212,21 +212,9 @@ export function storeFirstCrosscutClick(
   state: CrosscutComboState,
   input: StoreFirstCrosscutClickInput,
 ): boolean {
-  const firstDistance = distance(input.clickWorldPosition, input.playerPosition);
-  if (firstDistance < input.config.minFirstClickDistancePx) {
-    clearCrosscutState(state);
-    return false;
-  }
-
-  const firstDirection = normalize(subtract(input.clickWorldPosition, input.playerPosition));
-  if (!firstDirection) {
-    clearCrosscutState(state);
-    return false;
-  }
-
   state.firstClickWorldPosition = { ...input.clickWorldPosition };
   state.firstPlayerPosition = { ...input.playerPosition };
-  state.firstDirection = firstDirection;
+  state.firstDirection = null;
   state.firstAttackAtMs = input.nowMs;
   return true;
 }
@@ -237,8 +225,6 @@ export function tryResolveCrosscutCombo(
   const { state, config } = input;
   if (
     !state.firstClickWorldPosition ||
-    !state.firstPlayerPosition ||
-    !state.firstDirection ||
     state.firstAttackAtMs === null
   ) {
     return { triggered: false, reason: "no_starter" };
@@ -257,29 +243,23 @@ export function tryResolveCrosscutCombo(
     return { triggered: false, reason: "cooldown" };
   }
 
-  const firstDistance = distance(state.firstClickWorldPosition, state.firstPlayerPosition);
-  if (firstDistance < config.minFirstClickDistancePx) {
-    return { triggered: false, reason: "first_click_too_close" };
-  }
-
-  const secondDistance = distance(input.clickWorldPosition, input.playerPosition);
-  if (secondDistance < config.minSecondClickDistancePx) {
-    return { triggered: false, reason: "second_click_too_close" };
-  }
-
   const clickDistance = distance(state.firstClickWorldPosition, input.clickWorldPosition);
   if (clickDistance < config.minDistanceBetweenClicksPx) {
     return { triggered: false, reason: "clicks_too_close" };
   }
 
-  const secondDirection = normalize(subtract(input.clickWorldPosition, input.playerPosition));
-  if (!secondDirection) {
+  const currentDirection = normalize(subtract(input.clickWorldPosition, state.firstClickWorldPosition));
+  if (!currentDirection) {
     return { triggered: false, reason: "second_click_too_close" };
   }
 
-  const angleDegrees = getAngleBetweenDegrees(state.firstDirection, secondDirection);
-  const angleErrorDegrees = Math.abs(config.perfectAngleDegrees - angleDegrees);
-  const grade = getCrosscutGrade(angleErrorDegrees, config);
+  const angleDegrees = state.firstDirection
+    ? getAngleBetweenDegrees(state.firstDirection, currentDirection)
+    : config.perfectAngleDegrees;
+  const angleErrorDegrees = state.firstDirection
+    ? Math.abs(config.perfectAngleDegrees - angleDegrees)
+    : 0;
+  const grade = state.firstDirection ? getCrosscutGrade(angleErrorDegrees, config) : "excellent";
   if (!grade) {
     return { triggered: false, reason: "bad_angle", angleDegrees, angleErrorDegrees };
   }
@@ -323,14 +303,19 @@ export function advanceCrosscutChain(
   state: CrosscutComboState,
   input: AdvanceCrosscutChainInput,
 ): void {
-  const secondDirection = normalize(subtract(input.clickWorldPosition, input.playerPosition));
-  if (!secondDirection) {
+  if (!state.firstClickWorldPosition) {
+    clearCrosscutState(state);
+    return;
+  }
+
+  const currentDirection = normalize(subtract(input.clickWorldPosition, state.firstClickWorldPosition));
+  if (!currentDirection) {
     clearCrosscutState(state);
     return;
   }
   state.firstClickWorldPosition = { ...input.clickWorldPosition };
   state.firstPlayerPosition = { ...input.playerPosition };
-  state.firstDirection = secondDirection;
+  state.firstDirection = currentDirection;
   state.firstAttackAtMs = input.nowMs;
   state.stacks += 1;
 }

@@ -117,17 +117,27 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     noise(v, { dur: 0.3, cutoff: 500, gain: 0.12 });
   },
   crosscut: (v, params) => {
+    const stacks = Math.min(5, Math.max(0, params?.stacks ?? 0));
     const gradeLift = params?.grade === "good" ? 1.08 : params?.grade === "weak" ? 0.92 : 1;
-    const p = (0.9 + v.rng() * 0.18) * gradeLift;
-    tone(v, { type: "triangle", freq: 180 * p, sweepTo: 54 * p, gain: 0.3, dur: 0.12 });
-    noise(v, { dur: 0.1, cutoff: 2600, gain: 0.24 });
-    tone(v, { type: "sine", freq: 1200 * p, gain: 0.08, dur: 0.16, delay: 0.03 });
+    const stackLift = 1 + stacks * 0.08;
+    const p = (0.9 + v.rng() * 0.18) * gradeLift * stackLift;
+    tone(v, { type: "triangle", freq: 180 * p, sweepTo: 54 * p, gain: 0.3 + stacks * 0.025, dur: 0.12 + stacks * 0.006 });
+    noise(v, { dur: 0.1 + stacks * 0.01, cutoff: 2600 + stacks * 420, gain: 0.24 + stacks * 0.025 });
+    tone(v, { type: "sine", freq: 1200 * p, gain: 0.08 + stacks * 0.015, dur: 0.16 + stacks * 0.025, delay: 0.03 });
+    if (stacks >= 2) {
+      tone(v, { type: "square", freq: 1900 * p, sweepTo: 850 * p, sweepShape: "lin", gain: 0.035 + stacks * 0.01, dur: 0.055, delay: 0.015 });
+    }
   },
-  crosscutExcellent: (v) => {
-    const p = 0.95 + v.rng() * 0.14;
-    tone(v, { type: "sawtooth", freq: 220 * p, sweepTo: 42 * p, sweepShape: "lin", cutoff: 520, gain: 0.38, dur: 0.18 });
-    noise(v, { dur: 0.14, cutoff: 3600, gain: 0.32 });
-    tone(v, { type: "sine", freq: 1800 * p, gain: 0.11, dur: 0.24, delay: 0.025 });
+  crosscutExcellent: (v, params) => {
+    const stacks = Math.min(5, Math.max(0, params?.stacks ?? 0));
+    const p = (0.95 + v.rng() * 0.14) * (1 + stacks * 0.09);
+    tone(v, { type: "sawtooth", freq: 220 * p, sweepTo: 42 * p, sweepShape: "lin", cutoff: 520 + stacks * 90, gain: 0.38 + stacks * 0.035, dur: 0.18 + stacks * 0.008 });
+    noise(v, { dur: 0.14 + stacks * 0.012, cutoff: 3600 + stacks * 520, gain: 0.32 + stacks * 0.03 });
+    tone(v, { type: "sine", freq: 1800 * p, gain: 0.11 + stacks * 0.018, dur: 0.24 + stacks * 0.025, delay: 0.025 });
+    if (stacks >= 2) {
+      tone(v, { type: "square", freq: 2600 * p, sweepTo: 1000 * p, sweepShape: "lin", gain: 0.045 + stacks * 0.012, dur: 0.065, delay: 0.018 });
+      tone(v, { type: "sine", freq: 3200 * p, gain: 0.025 + stacks * 0.006, dur: 0.16, delay: 0.055 });
+    }
   },
   crosscutBleed: (v) => {
     tone(v, { type: "triangle", freq: 90, sweepTo: 45, sweepShape: "lin", gain: 0.13, dur: 0.12 });

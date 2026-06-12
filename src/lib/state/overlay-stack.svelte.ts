@@ -61,7 +61,7 @@ export const OverlayId = {
   Skills:    "skills",
   Settings:  "settings",
   Scenario:  "scenario",
-  Crafting:  "crafting",
+  Station:   "station",
 } as const;
 
 export type OverlayId = (typeof OverlayId)[keyof typeof OverlayId];

@@ -55,6 +55,7 @@ interface ImmediateInteractionDeps {
   getTreeFrames: () => any[];
   getStumpTexture: () => any;
   map?: MapResource;
+  onStationInteract?: (target: Entity) => void;
 }
 
 interface ImmediateInteractionResources extends RuntimeResourceMap {
@@ -130,149 +131,18 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
   {
     id: "refuel",
     handle: ({ target, resources }) => {
-      const { interaction, vfx, entityLayer, triggerQuestEvent } = resources.deps;
-      const playerEntity = getPlayerEntity();
-
-      // Processing takes the first interaction when the player carries processable
-      // items: it costs nothing, can't fail, and is the core loop's reason to
-      // visit the station. A second interaction (while processing) reaches refuel.
-      const proc =
-        !interaction.activeProcess && !interaction.refuelPendingConfirm && gameState.rpg.inventory
-          ? findProcessForStation(gameState.rpg.inventory, "campfire")
-          : null;
-
-      if (proc) {
-        interaction.activeProcess = {
-          stationId: "campfire",
-          targetEntityId: target.id,
-          itemId: Object.keys(proc.inputs)[0],
-          remainingSec: proc.durationSec,
-          bubbleTimer: 0,
-          inputs: proc.inputs,
-          outputItemId: proc.outputItemId,
-          outputQty: proc.outputQty,
-        };
-        playSound("station.boil");
-        const procName = proc.processType === "dry" ? "drying" : proc.processType === "assemble" ? "assembling" : proc.processType === "burn" ? "burning" : "processing";
-        const resultName = getItemDef(proc.outputItemId)?.name ?? proc.outputItemId;
-        spawnEnvFloatingText(
-          vfx,
-          `${procName} ${resultName.toLowerCase()}...`,
-          Colors.vfx.campfireMsg,
-          playerEntity.position!,
-          entityLayer
-        );
-        return;
-      }
-
-      // No processable item and not mid-confirm: open the crafting crucible.
-      if (!interaction.refuelPendingConfirm) {
-        interaction.requestCrafting = true;
-        return;
-      }
-
-      const woodQty = getItemQty("oak_wood");
-      if (woodQty >= 5) {
-        if (!interaction.refuelPendingConfirm) {
-          interaction.refuelPendingConfirm = true;
-          interaction.refuelConfirmTimer = 2.5;
-          spawnEnvFloatingText(
-            vfx,
-            "interact again to refuel (5x wood)",
-            Colors.vfx.campfireMsg,
-            playerEntity.position!,
-            entityLayer
-          );
-          return;
-        }
-
-        interaction.refuelPendingConfirm = false;
-        interaction.refuelConfirmTimer = 0;
-
-        void syncRefuel().then((r) => {
-          if (r.ok) applyRpgStatePreservingLocalWeapon(r.data.playerState);
-        });
-
-        playSound("craft");
-
-        interaction.campfireHeatRadius = 7.0;
-        interaction.campfireRefuelTimer = 60.0;
-        if (interaction.campfireSprite) {
-          interaction.campfireSprite.scale.set((TILE * 1.3) / 48);
-        }
-        spawnEnvParticles(vfx, Colors.vfx.campfire, 25, "smoke", playerEntity.position!, entityLayer);
-        spawnEnvFloatingText(
-          vfx,
-          "🔥 Campfire refueled! Heat radius extended.",
-          Colors.resource.gold,
-          playerEntity.position!,
-          entityLayer
-        );
-
-        triggerQuestEvent(GameEvent.Refuel);
-      } else {
-        spawnEnvFloatingText(
-          vfx,
-          "❌ Needs 5x Oak Wood to refuel",
-          Colors.ui.error,
-          playerEntity.position!,
-          entityLayer
-        );
+      const { onStationInteract } = resources.deps;
+      if (onStationInteract) {
+        onStationInteract(target);
       }
     },
   },
   {
     id: "process",
     handle: ({ target, resources }) => {
-      const { interaction, vfx, entityLayer } = resources.deps;
-      const playerEntity = getPlayerEntity();
-
-      const stationId = target.station?.stationId;
-      if (!stationId || !gameState.rpg.inventory) return;
-
-      if (interaction.activeProcess) {
-        spawnEnvFloatingText(
-          vfx,
-          "already processing...",
-          Colors.ui.warning,
-          playerEntity.position!,
-          entityLayer
-        );
-        return;
-      }
-
-      const proc = findProcessForStation(gameState.rpg.inventory, stationId);
-      if (proc) {
-        interaction.activeProcess = {
-          stationId: proc.stationId,
-          targetEntityId: target.id,
-          itemId: Object.keys(proc.inputs)[0],
-          remainingSec: proc.durationSec,
-          bubbleTimer: 0,
-          inputs: proc.inputs,
-          outputItemId: proc.outputItemId,
-          outputQty: proc.outputQty,
-        };
-
-        playSound("station.boil");
-        const procName = proc.processType === "dry" ? "drying" : proc.processType === "assemble" ? "assembling" : "processing";
-        const resultName = getItemDef(proc.outputItemId)?.name ?? proc.outputItemId;
-
-        spawnEnvFloatingText(
-          vfx,
-          `${procName} ${resultName.toLowerCase()}...`,
-          Colors.vfx.campfireMsg,
-          playerEntity.position!,
-          entityLayer
-        );
-      } else {
-        spawnEnvFloatingText(
-          vfx,
-          "no valid ingredients for this station.",
-          Colors.ui.warning,
-          playerEntity.position!,
-          entityLayer
-        );
+      const { onStationInteract } = resources.deps;
+      if (onStationInteract) {
+        onStationInteract(target);
       }
     },
   },
@@ -717,7 +587,8 @@ export function triggerImmediateInteraction(
   dialogueState: any,
   getTreeFrames: () => any[],
   getStumpTexture: () => any,
-  map?: MapResource
+  map?: MapResource,
+  onStationInteract?: (target: Entity) => void
 ): void {
   immediateInteractionDispatcher.dispatch({
     world,
@@ -734,6 +605,7 @@ export function triggerImmediateInteraction(
         getTreeFrames,
         getStumpTexture,
         map,
+        onStationInteract,
       },
     },
     events: [],
@@ -751,6 +623,7 @@ export function triggerImmediateInteraction(
         getTreeFrames,
         getStumpTexture,
         map,
+        onStationInteract,
       } as T;
     },
   });
@@ -780,7 +653,8 @@ export function runInteractionSystem(
   isPlacementMode: boolean,
   isDashing: boolean,
   onHit: (entity: Entity, yieldName: string, quantity: number) => void,
-  map?: MapResource
+  map?: MapResource,
+  onStationInteract?: (target: Entity) => void
 ): void {
   if (interaction.campfireRefuelTimer > 0) {
     interaction.campfireRefuelTimer -= dt;
@@ -1037,7 +911,8 @@ export function runInteractionSystem(
           dialogueState,
           getTreeFrames,
           getStumpTexture,
-          map
+          map,
+          onStationInteract
         );
       }
     }

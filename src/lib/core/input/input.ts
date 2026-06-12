@@ -4,11 +4,21 @@ import { InputAction, StorageKeys } from "$lib/domain/game-events";
 import { unlock } from "$lib/audio/audio-engine";
 import { chargeProgressFromHeldMs } from "$lib/domain/combat/fell-sweep";
 import {
-  DEFAULT_DRIVING_THRUST_CONFIG,
-  resolveDrivingThrustSwipe,
+  DEFAULT_POINTER_ATTACK_INTENT_CONFIG,
+  classifyPointerAttackIntent,
+  getPointerAttackArmedIntent,
   type DrivingThrustPendingInput,
+  type PointerAttackArmedIntent,
+  type PointerAttackIntentConfig,
   type Vec2,
 } from "$lib/domain/combat/driving-thrust";
+
+function directionBetween(start: Vec2, end: Vec2): Vec2 | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len = Math.hypot(dx, dy);
+  return len > 0.0001 ? { x: dx / len, y: dy / len } : null;
+}
 
 export class InputResource {
   public keys: Record<string, boolean> = {};
@@ -38,6 +48,8 @@ export class InputResource {
   public primarySwipeStartWorld: Vec2 | null = null;
   public primarySwipeCurrentScreen: Vec2 | null = null;
   public primarySwipeCurrentWorld: Vec2 | null = null;
+  public pointerAttackIntentConfig: PointerAttackIntentConfig = { ...DEFAULT_POINTER_ATTACK_INTENT_CONFIG };
+  public armedPointerAttackIntent: PointerAttackArmedIntent = "none";
   /** 0–1 charge level captured at mouseup. */
   public fellSweepCharge = 0;
   /** True while the left mouse button is held down. */
@@ -65,48 +77,78 @@ export class InputResource {
     this.primarySwipeStartWorld = { ...args.world };
     this.primarySwipeCurrentScreen = { ...args.screen };
     this.primarySwipeCurrentWorld = { ...args.world };
+    this.armedPointerAttackIntent = "none";
   }
 
-  public handlePrimaryMouseMove(args: { screen: Vec2; world: Vec2 }): void {
+  public handlePrimaryMouseMove(args: { screen: Vec2; world: Vec2; nowMs?: number }): void {
     this.mouseScreen = { ...args.screen };
     this.mouseWorld = { ...args.world };
     if (!this.isMouseHeld) return;
     this.primarySwipeCurrentScreen = { ...args.screen };
     this.primarySwipeCurrentWorld = { ...args.world };
+    this.updatePointerAttackTracking(args.nowMs ?? performance.now());
+  }
+
+  public updatePointerAttackTracking(nowMs = performance.now()): void {
+    if (!this.isMouseHeld || !this.primarySwipeStartScreen || !this.primarySwipeCurrentScreen) {
+      this.armedPointerAttackIntent = "none";
+      return;
+    }
+
+    this.armedPointerAttackIntent = getPointerAttackArmedIntent({
+      start: this.primarySwipeStartScreen,
+      current: this.primarySwipeCurrentScreen,
+      downAtMs: this.mouseDownAt,
+      nowMs,
+      config: this.pointerAttackIntentConfig,
+    });
   }
 
   public handlePrimaryMouseUp(args: { nowMs: number; screen: Vec2; world: Vec2 }): void {
     if (!this.isMouseHeld) return;
 
-    this.handlePrimaryMouseMove({ screen: args.screen, world: args.world });
+    this.mouseScreen = { ...args.screen };
+    this.mouseWorld = { ...args.world };
+    this.primarySwipeCurrentScreen = { ...args.screen };
+    this.primarySwipeCurrentWorld = { ...args.world };
     const heldMs = this.getMouseHeldMs(args.nowMs);
     this.isMouseHeld = false;
 
-    if (heldMs < 200) {
-      const screenStart = this.primarySwipeStartScreen ?? args.screen;
-      const worldStart = this.primarySwipeStartWorld ?? args.world;
-      const result = resolveDrivingThrustSwipe({
+    const screenStart = this.primarySwipeStartScreen ?? args.screen;
+    const worldStart = this.primarySwipeStartWorld ?? args.world;
+    const worldDirection = directionBetween(worldStart, args.world);
+    const screenDirection = directionBetween(screenStart, args.screen);
+    const clickDirection = worldDirection ?? screenDirection ?? { x: 1, y: 0 };
+    const intent = classifyPointerAttackIntent({
+      input: {
+        start: screenStart,
+        end: args.screen,
+        downAtMs: this.mouseDownAt,
+        upAtMs: args.nowMs,
+      },
+      clickDirection,
+      config: this.pointerAttackIntentConfig,
+    });
+
+    if (this.armedPointerAttackIntent === "full_swipe" || intent.kind === "full_swipe") {
+      this.pendingFellSweep = true;
+      this.fellSweepCharge = chargeProgressFromHeldMs(heldMs);
+    } else if (intent.kind === "driving_thrust" && this.armedPointerAttackIntent === "driving_thrust") {
+      this.pendingDrivingThrust = {
+        direction: worldDirection ?? intent.direction,
         screenStart,
         screenEnd: args.screen,
         worldStart,
         worldEnd: args.world,
-        config: DEFAULT_DRIVING_THRUST_CONFIG,
-      });
-      if (result.triggered) {
-        this.pendingDrivingThrust = {
-          direction: result.direction,
-          screenStart: result.screenStart,
-          screenEnd: result.screenEnd,
-          worldStart: result.worldStart,
-          worldEnd: result.worldEnd,
-        };
-      } else {
-        this.pendingAttack = true;
-      }
-    } else {
+      };
+    } else if (heldMs >= 200) {
       this.pendingFellSweep = true;
       this.fellSweepCharge = chargeProgressFromHeldMs(heldMs);
+    } else {
+      this.pendingAttack = true;
     }
+
+    this.armedPointerAttackIntent = "none";
   }
 
   public clearPrimarySwipeState(): void {
@@ -115,6 +157,7 @@ export class InputResource {
     this.primarySwipeCurrentScreen = null;
     this.primarySwipeCurrentWorld = null;
     this.pendingDrivingThrust = null;
+    this.armedPointerAttackIntent = "none";
   }
 
   constructor() {
@@ -152,6 +195,7 @@ export class InputResource {
       this.handlePrimaryMouseMove({
         screen: { x: clientX, y: clientY },
         world: { x: local.x, y: local.y },
+        nowMs: performance.now(),
       });
     };
 

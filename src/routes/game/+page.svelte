@@ -22,7 +22,7 @@ import { loadGameState } from "$lib/state/game-state.svelte";
 import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
 import { dialogueState } from "$lib/domain/quests.svelte";
-import { craftSession } from "$lib/state/crafting-session.svelte";
+import StationPanel from "$lib/ui/panels/StationPanel.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 
@@ -37,7 +37,9 @@ const showSettings  = $derived(overlayStack.has(OverlayId.Settings));
 const showInventory = $derived(overlayStack.has(OverlayId.Inventory));
 const showSkills    = $derived(overlayStack.has(OverlayId.Skills));
 const showScenario  = $derived(overlayStack.has(OverlayId.Scenario));
+const showStation   = $derived(overlayStack.has(OverlayId.Station));
 let activeScenarioId = $state<string | null>(null);
+let activeStationEntity = $state<Entity | null>(null);
 let contextMenu   = $state<{ name: string; action: string; x: number; y: number } | null>(null);
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 let envInterval: ReturnType<typeof setInterval> | null = null;
@@ -122,18 +124,24 @@ $effect(() => {
   }
 });
 
-// --- Crafting ↔ stack sync -----------------------------------------------
-// craftSession.open is owned by the engine via openCraft/closeCraft.
-// These effects bridge it into the overlay stack so Escape closes the crucible.
-
+// --- Station Panel ↔ stack sync ------------------------------------------
 $effect(() => {
-  if (craftSession.open) overlayStack.push(OverlayId.Crafting);
-  else                   overlayStack.close(OverlayId.Crafting);
+  if (!overlayStack.has(OverlayId.Station) && activeStationEntity) {
+    activeStationEntity = null;
+  }
 });
 
+// Auto-close station panel if player walks too far
 $effect(() => {
-  if (!overlayStack.has(OverlayId.Crafting) && craftSession.open) {
-    engine?.cancelCrafting();
+  if (activeStationEntity && coords) {
+    const px = Math.floor((activeStationEntity.position!.x + 32) / 64);
+    const py = Math.floor((activeStationEntity.position!.y + 32) / 64);
+    const dx = coords.gx - px;
+    const dy = coords.gy - py;
+    if (Math.hypot(dx, dy) > 4.5) {
+      overlayStack.close(OverlayId.Station);
+      activeStationEntity = null;
+    }
   }
 });
 
@@ -169,6 +177,10 @@ onMount(async () => {
     onHudUpdate,
     onContextMenu: handleContextMenu,
     scenarioId: scenarioParam,
+    onStationInteract: (target) => {
+      activeStationEntity = target;
+      overlayStack.push(OverlayId.Station);
+    },
   });
   await engine.init();
   registerDevCommands(engine);
@@ -298,6 +310,25 @@ onDestroy(() => {
 
   {#if showInventory}
     <InventoryGrid engine={engine} initialTab={inventoryTab} onClose={() => overlayStack.close(OverlayId.Inventory)} />
+  {/if}
+
+  {#if showStation && activeStationEntity}
+    <StationPanel
+      entity={activeStationEntity}
+      {engine}
+      onClose={() => {
+        overlayStack.close(OverlayId.Station);
+        activeStationEntity = null;
+      }}
+      onOpenCrafting={() => {
+        overlayStack.close(OverlayId.Station);
+        activeStationEntity = null;
+        inventoryTab = "crafting";
+        if (!overlayStack.has(OverlayId.Inventory)) {
+          overlayStack.push(OverlayId.Inventory);
+        }
+      }}
+    />
   {/if}
 
   <EnvironmentGauge />

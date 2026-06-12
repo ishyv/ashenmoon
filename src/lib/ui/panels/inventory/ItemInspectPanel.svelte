@@ -21,6 +21,7 @@ let {
   isEquipped,
   onClose,
   onEquip,
+  onPlace,
 }: {
   itemId: string;
   inspectNotes: { known: KnowledgeProperty[]; unknown: KnowledgeProperty[] } | null;
@@ -28,6 +29,7 @@ let {
   isEquipped: (itemId: string) => boolean;
   onClose: () => void;
   onEquip: (itemId: string) => void;
+  onPlace: (itemId: string) => void;
 } = $props();
 
 const meta = $derived(getItemDef(itemId));
@@ -100,6 +102,11 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
       {#if getConsumeVerb(itemId)}
         <button class="action-btn" disabled={!canConsume(itemId)} onclick={() => consumeItem(itemId)}>
           {getConsumeVerb(itemId)}
+        </button>
+      {/if}
+      {#if !isEquipped(itemId)}
+        <button class="action-btn" onclick={() => onPlace(itemId)}>
+          place
         </button>
       {/if}
     </div>

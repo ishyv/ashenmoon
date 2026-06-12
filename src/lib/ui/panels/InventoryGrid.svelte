@@ -227,6 +227,10 @@ async function runExperiment() {
         {isEquipped}
         onClose={() => (selectedItem = null)}
         onEquip={equipTool}
+        onPlace={(itemId) => {
+          selectedItem = null;
+          engine?.startItemPlacement(itemId, () => {}, onClose);
+        }}
       />
     </GamePanel>
   {/if}

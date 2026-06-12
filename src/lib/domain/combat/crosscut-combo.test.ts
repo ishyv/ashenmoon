@@ -25,6 +25,13 @@ describe("Crosscut combo rules", () => {
     return state;
   }
 
+  function chainedState(nowMs = 1000) {
+    const state = primedState(nowMs);
+    state.firstDirection = { x: 1, y: 0 };
+    state.stacks = 1;
+    return state;
+  }
+
   it("calculates the smaller angle between normalized vectors in degrees", () => {
     expect(getAngleBetweenDegrees({ x: 1, y: 0 }, { x: 0, y: 1 })).toBeCloseTo(90);
     expect(getAngleBetweenDegrees({ x: 1, y: 0 }, { x: -1, y: 0 })).toBeCloseTo(180);
@@ -38,15 +45,15 @@ describe("Crosscut combo rules", () => {
     expect(getCrosscutGrade(36.1, config)).toBeNull();
   });
 
-  it("triggers excellent on an exact perpendicular second click", () => {
+  it("triggers the first Crosscut from the segment between two mouse clicks", () => {
     const state = primedState();
 
     const result = tryResolveCrosscutCombo({
       state,
       config,
       nowMs: 1300,
-      playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 100 },
+      playerPosition: { x: 999, y: 999 },
+      clickWorldPosition: { x: 200, y: 0 },
       currentStamina: 100,
     });
 
@@ -62,15 +69,88 @@ describe("Crosscut combo rules", () => {
     });
   });
 
+  it("triggers excellent on an exact perpendicular chained segment", () => {
+    const state = chainedState();
+
+    const result = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1300,
+      playerPosition: { x: 999, y: 999 },
+      clickWorldPosition: { x: 100, y: 100 },
+      currentStamina: 100,
+    });
+
+    expect(result).toMatchObject({
+      triggered: true,
+      grade: "excellent",
+      angleDegrees: 90,
+      angleErrorDegrees: 0,
+    });
+  });
+
+  it("requires chained segments to alternate horizontal and vertical mouse movement", () => {
+    const state = createInitialCrosscutComboState();
+    storeFirstCrosscutClick(state, {
+      clickWorldPosition: { x: 0, y: 0 },
+      playerPosition: { x: 500, y: 500 },
+      nowMs: 1000,
+      config,
+    });
+
+    const firstSegment = tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1100,
+      playerPosition: { x: 500, y: 500 },
+      clickWorldPosition: { x: 10, y: 0 },
+      currentStamina: 100,
+    });
+    expect(firstSegment).toMatchObject({ triggered: true, grade: "excellent" });
+
+    advanceCrosscutChain(state, {
+      clickWorldPosition: { x: 10, y: 0 },
+      playerPosition: { x: 500, y: 500 },
+      nowMs: 1100,
+    });
+
+    expect(tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1200,
+      playerPosition: { x: 500, y: 500 },
+      clickWorldPosition: { x: 20, y: 0 },
+      currentStamina: 100,
+    })).toMatchObject({ triggered: false, reason: "bad_angle" });
+
+    expect(tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1200,
+      playerPosition: { x: 500, y: 500 },
+      clickWorldPosition: { x: 0, y: 0 },
+      currentStamina: 100,
+    })).toMatchObject({ triggered: false, reason: "bad_angle" });
+
+    expect(tryResolveCrosscutCombo({
+      state,
+      config,
+      nowMs: 1200,
+      playerPosition: { x: 500, y: 500 },
+      clickWorldPosition: { x: 10, y: 10 },
+      currentStamina: 100,
+    })).toMatchObject({ triggered: true, grade: "excellent" });
+  });
+
   it("triggers good on a near perpendicular second click", () => {
-    const state = primedState();
+    const state = chainedState();
 
     const result = tryResolveCrosscutCombo({
       state,
       config,
       nowMs: 1300,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 100, y: 373.205 },
+      clickWorldPosition: { x: 126.795, y: 100 },
       currentStamina: 100,
     });
 
@@ -80,14 +160,14 @@ describe("Crosscut combo rules", () => {
   });
 
   it("triggers weak on a barely valid angle", () => {
-    const state = primedState();
+    const state = chainedState();
 
     const result = tryResolveCrosscutCombo({
       state,
       config,
       nowMs: 1300,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 57.735, y: 100 },
+      clickWorldPosition: { x: 157.735, y: 100 },
       currentStamina: 100,
     });
 
@@ -97,7 +177,7 @@ describe("Crosscut combo rules", () => {
   });
 
   it("does not trigger on a bad angle", () => {
-    const state = primedState();
+    const state = chainedState();
 
     const result = tryResolveCrosscutCombo({
       state,
@@ -111,7 +191,7 @@ describe("Crosscut combo rules", () => {
     expect(result).toMatchObject({ triggered: false, reason: "bad_angle" });
   });
 
-  it("does not store a first click too close to the player", () => {
+  it("stores the first click regardless of player distance", () => {
     const state = createInitialCrosscutComboState();
 
     const stored = storeFirstCrosscutClick(state, {
@@ -121,11 +201,12 @@ describe("Crosscut combo rules", () => {
       config,
     });
 
-    expect(stored).toBe(false);
+    expect(stored).toBe(true);
+    expect(state.firstClickWorldPosition).toEqual({ x: 12, y: 0 });
     expect(state.firstDirection).toBeNull();
   });
 
-  it("does not trigger when the second click is too close to the player", () => {
+  it("does not trigger when the second click repeats the same mouse position", () => {
     const state = primedState();
 
     const result = tryResolveCrosscutCombo({
@@ -133,11 +214,11 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1300,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 12 },
+      clickWorldPosition: { x: 102, y: 0 },
       currentStamina: 100,
     });
 
-    expect(result).toMatchObject({ triggered: false, reason: "second_click_too_close" });
+    expect(result).toMatchObject({ triggered: false, reason: "clicks_too_close" });
   });
 
   it("does not trigger when the two clicks are too close together", () => {
@@ -154,7 +235,7 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1300,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 40, y: 32 },
+      clickWorldPosition: { x: 34, y: 41 },
       currentStamina: 100,
     });
 
@@ -200,7 +281,7 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1300,
       playerPosition: { x: 50, y: 50 },
-      clickWorldPosition: { x: 50, y: 150 },
+      clickWorldPosition: { x: 200, y: 0 },
       currentStamina: 100,
     });
 
@@ -210,19 +291,19 @@ describe("Crosscut combo rules", () => {
 
   it("supports clockwise and counterclockwise perpendicular clicks", () => {
     const clockwise = tryResolveCrosscutCombo({
-      state: primedState(),
+      state: chainedState(),
       config,
       nowMs: 1300,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 100 },
+      clickWorldPosition: { x: 100, y: 100 },
       currentStamina: 100,
     });
     const counterClockwise = tryResolveCrosscutCombo({
-      state: primedState(),
+      state: chainedState(),
       config,
       nowMs: 1300,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: -100 },
+      clickWorldPosition: { x: 100, y: -100 },
       currentStamina: 100,
     });
 
@@ -250,19 +331,19 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1200,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 100 },
+      clickWorldPosition: { x: 200, y: 0 },
       currentStamina: 100,
     });
     expect(res.triggered).toBe(true);
 
     advanceCrosscutChain(state, {
-      clickWorldPosition: { x: 0, y: 100 },
+      clickWorldPosition: { x: 200, y: 0 },
       playerPosition: { x: 0, y: 0 },
       nowMs: 1200,
     });
 
     expect(state.stacks).toBe(1);
-    expect(state.firstDirection).toEqual({ x: 0, y: 1 });
+    expect(state.firstDirection).toEqual({ x: 1, y: 0 });
     expect(state.firstAttackAtMs).toBe(1200);
 
     const res2 = tryResolveCrosscutCombo({
@@ -270,7 +351,7 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1400,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: -100, y: 0 },
+      clickWorldPosition: { x: 200, y: 100 },
       currentStamina: 100,
     });
     expect(res2.triggered).toBe(true);
@@ -279,6 +360,7 @@ describe("Crosscut combo rules", () => {
 
   it("decays the combo window as stacks increase", () => {
     const state = primedState(1000);
+    state.firstDirection = { x: 1, y: 0 };
     state.stacks = 2;
 
     const resValid = tryResolveCrosscutCombo({
@@ -286,7 +368,7 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1400,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 100 },
+      clickWorldPosition: { x: 100, y: 100 },
       currentStamina: 100,
     });
     expect(resValid.triggered).toBe(true);
@@ -296,7 +378,7 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1500,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 100 },
+      clickWorldPosition: { x: 100, y: 100 },
       currentStamina: 100,
     });
     expect(resExpired.triggered).toBe(false);
@@ -305,6 +387,7 @@ describe("Crosscut combo rules", () => {
 
   it("scales damage and bleeding effects based on stacks", () => {
     const state = primedState(1000);
+    state.firstDirection = { x: 1, y: 0 };
     state.stacks = 3;
 
     const res = tryResolveCrosscutCombo({
@@ -312,7 +395,7 @@ describe("Crosscut combo rules", () => {
       config,
       nowMs: 1200,
       playerPosition: { x: 0, y: 0 },
-      clickWorldPosition: { x: 0, y: 100 },
+      clickWorldPosition: { x: 100, y: 100 },
       currentStamina: 100,
     });
 

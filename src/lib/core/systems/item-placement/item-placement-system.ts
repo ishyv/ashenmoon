@@ -1,6 +1,6 @@
-import { Container, Sprite, Texture } from "pixi.js";
+import { Container, Sprite, Texture, Graphics } from "pixi.js";
 import type { World } from "miniplex";
-import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import { world, type Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import {
@@ -30,6 +30,7 @@ export class ItemPlacementResource {
   public isPlacementMode = false;
   public currentItemId: string | null = null;
   public previewSprite: Sprite | null = null;
+  public previewIndicator: Graphics | null = null;
   public onPlacementCancelCb?: () => void;
   public onPlacementCompleteCb?: () => void;
 }
@@ -38,10 +39,16 @@ export function getItemTexture(itemId: string): Texture {
   const def = getItemDef(itemId);
   if (!def) return getWoodItemTexture();
 
-  if (def.iconUrl) {
-    return Texture.from(def.iconUrl);
+  // Try to use a preloaded Tiny Swords asset first for consistency and rendering guarantees
+  if (itemId === "stone" || itemId === "copper_ore" || itemId === "iron_ore" || itemId === "silver_ore") {
+    return getRockVariantTexture(1);
   }
-
+  if (itemId === "flint_shard") {
+    return getRockVariantTexture(2);
+  }
+  if (itemId === "clay" || itemId === "hardened_clay") {
+    return getRockVariantTexture(1);
+  }
   if (itemId.includes("pickaxe")) {
     return getToolTexture(1);
   }
@@ -54,11 +61,16 @@ export function getItemTexture(itemId: string): Texture {
   if (def.category === "timber" || itemId.includes("wood") || itemId.includes("plank") || itemId.includes("stick")) {
     return getWoodItemTexture();
   }
-  if (def.category === "mineral" || itemId.includes("clay") || itemId.includes("stone") || itemId.includes("ore")) {
-    return getRockVariantTexture(1);
+  if (itemId === "moss" || itemId === "grass_fiber" || itemId === "leaves") {
+    return getBushTexture(2);
   }
-  if (def.category === "herb" || itemId.includes("berries") || itemId.includes("mushroom") || itemId.includes("moss")) {
+  if (def.category === "herb" || itemId.includes("berries") || itemId.includes("mushroom")) {
     return getBushTexture(1);
+  }
+
+  // Fallback to iconUrl if nothing else matches
+  if (def.iconUrl) {
+    return Texture.from(def.iconUrl);
   }
 
   return getWoodItemTexture();
@@ -92,8 +104,23 @@ export function isValidItemPlacementGrid(
   my: number,
   map: MapResource,
   playerPos: { x: number; y: number },
+  ecsWorld: World<Entity> = world,
 ): boolean {
-  return isValidItemPlacement(mx, my, itemPlacementContext(map, playerPos));
+  if (!isValidItemPlacement(mx, my, itemPlacementContext(map, playerPos))) {
+    return false;
+  }
+
+  // Prevent stacking on existing pickups
+  const pickups = ecsWorld.with("pickup", "position").entities;
+  for (const p of pickups) {
+    const px = Math.round(p.position.x / TILE);
+    const py = Math.round(p.position.y / TILE);
+    if (px === mx && py === my) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function spawnPlacedItemSystem(
@@ -176,6 +203,7 @@ export function updateItemPlacementPreviewSystem(
   itemPlacement: ItemPlacementResource,
   map: MapResource,
   playerPos: { x: number; y: number },
+  ecsWorld: World<Entity> = world,
 ): void {
   if (!itemPlacement.isPlacementMode || !itemPlacement.currentItemId || !itemPlacement.previewSprite) {
     return;
@@ -187,6 +215,20 @@ export function updateItemPlacementPreviewSystem(
   itemPlacement.previewSprite.x = (mx + 0.5) * TILE;
   itemPlacement.previewSprite.y = (my + 1) * TILE;
 
-  const valid = isValidItemPlacementGrid(mx, my, map, playerPos);
-  itemPlacement.previewSprite.tint = valid ? Colors.building.validPlace : Colors.building.invalidPlace;
+  if (itemPlacement.previewIndicator) {
+    itemPlacement.previewIndicator.x = mx * TILE;
+    itemPlacement.previewIndicator.y = my * TILE;
+  }
+
+  const valid = isValidItemPlacementGrid(mx, my, map, playerPos, ecsWorld);
+  const tintColor = valid ? Colors.building.validPlace : Colors.building.invalidPlace;
+
+  itemPlacement.previewSprite.tint = tintColor;
+
+  if (itemPlacement.previewIndicator) {
+    itemPlacement.previewIndicator.clear();
+    itemPlacement.previewIndicator.rect(0, 0, TILE, TILE);
+    itemPlacement.previewIndicator.stroke({ width: 2, color: tintColor });
+    itemPlacement.previewIndicator.fill({ color: tintColor, alpha: 0.15 });
+  }
 }

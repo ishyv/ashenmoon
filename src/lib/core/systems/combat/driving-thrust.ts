@@ -303,15 +303,14 @@ export function renderDrivingThrustPreview(
   }
 
   const g = vfx.drivingThrustPreview;
-  if (!playerPos || !inputs.isMouseHeld || inputs.getMouseHeldMs() >= 200 || !inputs.primarySwipeStartScreen || !inputs.primarySwipeCurrentScreen || !inputs.primarySwipeStartWorld || !inputs.primarySwipeCurrentWorld) {
-    g.visible = false;
-    g.clear();
-    return;
-  }
-
-  const dx = inputs.primarySwipeCurrentScreen.x - inputs.primarySwipeStartScreen.x;
-  const dy = inputs.primarySwipeCurrentScreen.y - inputs.primarySwipeStartScreen.y;
-  if (Math.hypot(dx, dy) < config.minSwipeDistancePx) {
+  inputs.updatePointerAttackTracking();
+  if (
+    !playerPos ||
+    !inputs.isMouseHeld ||
+    inputs.armedPointerAttackIntent !== "driving_thrust" ||
+    !inputs.primarySwipeStartWorld ||
+    !inputs.primarySwipeCurrentWorld
+  ) {
     g.visible = false;
     g.clear();
     return;

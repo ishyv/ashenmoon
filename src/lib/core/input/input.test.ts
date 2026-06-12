@@ -33,7 +33,7 @@ describe("InputResource focused gathering", () => {
 });
 
 describe("InputResource primary mouse attack arbitration", () => {
-  it("short clicks under the swipe threshold queue a normal attack", () => {
+  it("fast clicks under the tap threshold queue a normal attack", () => {
     const input = new InputResource();
 
     input.handlePrimaryMouseDown({
@@ -52,7 +52,26 @@ describe("InputResource primary mouse attack arbitration", () => {
     expect(input.pendingFellSweep).toBe(false);
   });
 
-  it("short swipes over the threshold queue Driving Thrust", () => {
+  it("fast clicks with moderate jitter still queue a normal attack", () => {
+    const input = new InputResource();
+
+    input.handlePrimaryMouseDown({
+      nowMs: 1000,
+      screen: { x: 100, y: 100 },
+      world: { x: 320, y: 320 },
+    });
+    input.handlePrimaryMouseUp({
+      nowMs: 1070,
+      screen: { x: 148, y: 100 },
+      world: { x: 368, y: 320 },
+    });
+
+    expect(input.pendingAttack).toBe(true);
+    expect(input.pendingDrivingThrust).toBeNull();
+    expect(input.pendingFellSweep).toBe(false);
+  });
+
+  it("short movement below thrust distance falls back to a normal attack", () => {
     const input = new InputResource();
 
     input.handlePrimaryMouseDown({
@@ -61,18 +80,85 @@ describe("InputResource primary mouse attack arbitration", () => {
       world: { x: 320, y: 320 },
     });
     input.handlePrimaryMouseMove({
+      nowMs: 1160,
       screen: { x: 145, y: 100 },
       world: { x: 365, y: 320 },
     });
     input.handlePrimaryMouseUp({
-      nowMs: 1120,
+      nowMs: 1170,
       screen: { x: 145, y: 100 },
       world: { x: 365, y: 320 },
+    });
+
+    expect(input.pendingAttack).toBe(true);
+    expect(input.pendingDrivingThrust).toBeNull();
+    expect(input.pendingFellSweep).toBe(false);
+  });
+
+  it("armed quick swipes queue Driving Thrust", () => {
+    const input = new InputResource();
+
+    input.handlePrimaryMouseDown({
+      nowMs: 1000,
+      screen: { x: 100, y: 100 },
+      world: { x: 320, y: 320 },
+    });
+    input.handlePrimaryMouseMove({
+      nowMs: 1180,
+      screen: { x: 160, y: 100 },
+      world: { x: 380, y: 320 },
+    });
+    input.handlePrimaryMouseUp({
+      nowMs: 1190,
+      screen: { x: 160, y: 100 },
+      world: { x: 380, y: 320 },
     });
 
     expect(input.pendingAttack).toBe(false);
     expect(input.pendingDrivingThrust?.direction).toEqual({ x: 1, y: 0 });
     expect(input.pendingFellSweep).toBe(false);
+  });
+
+  it("does not queue Driving Thrust when release qualifies but no preview was armed", () => {
+    const input = new InputResource();
+
+    input.handlePrimaryMouseDown({
+      nowMs: 1000,
+      screen: { x: 100, y: 100 },
+      world: { x: 320, y: 320 },
+    });
+    input.handlePrimaryMouseUp({
+      nowMs: 1190,
+      screen: { x: 160, y: 100 },
+      world: { x: 380, y: 320 },
+    });
+
+    expect(input.pendingAttack).toBe(true);
+    expect(input.pendingDrivingThrust).toBeNull();
+    expect(input.pendingFellSweep).toBe(false);
+  });
+
+  it("slow long drags do not queue Driving Thrust", () => {
+    const input = new InputResource();
+
+    input.handlePrimaryMouseDown({
+      nowMs: 1000,
+      screen: { x: 100, y: 100 },
+      world: { x: 320, y: 320 },
+    });
+    input.handlePrimaryMouseMove({
+      nowMs: 1700,
+      screen: { x: 170, y: 100 },
+      world: { x: 390, y: 320 },
+    });
+    input.handlePrimaryMouseUp({
+      nowMs: 1710,
+      screen: { x: 170, y: 100 },
+      world: { x: 390, y: 320 },
+    });
+
+    expect(input.pendingDrivingThrust).toBeNull();
+    expect(input.pendingFellSweep).toBe(true);
   });
 
   it("long holds queue Fell Sweep instead of Driving Thrust", () => {
