@@ -641,6 +641,160 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
       effect: TransformInto(itemId("clean_water")),
     }),
   ),
+  // --- Forest raw materials --------------------------------------------------
+  twig: Item({
+    id: itemId("twig"),
+    name: "Twig",
+    description: "A small dry twig snapped from deadwood. Burns fast, helps start flame.",
+    rarity: Rarity.Common,
+    category: Category.Timber,
+    physical: { carryClass: "pocket", weight: 0.05, stackLimit: 20 },
+    iconUrl: "/assets/icons/twigs.png",
+  }).with(
+    Flammable({
+      ignitionTemp: 60,
+      burnDurationSec: 3,
+      effect: TransformInto(itemId("ash")),
+    }),
+  ),
+  flat_stone: Item({
+    id: itemId("flat_stone"),
+    name: "Flat Stone",
+    description: "A broad, smooth stone. Good surface for crushing or as a crude work base.",
+    rarity: Rarity.Common,
+    category: Category.Mineral,
+    physical: { carryClass: "pack", weight: 1.0, stackLimit: 10 },
+    iconUrl: "/assets/icons/rock.png",
+  }),
+  resin: Item({
+    id: itemId("resin"),
+    name: "Resin",
+    description: "Sticky amber sap from a wounded tree. Catches flame well and seals gaps.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.1, stackLimit: 20 },
+  }).with(
+    Flammable({
+      ignitionTemp: 65,
+      burnDurationSec: 8,
+      effect: TransformInto(itemId("ash")),
+    }),
+  ),
+  pine_cone: Item({
+    id: itemId("pine_cone"),
+    name: "Pine Cone",
+    description: "A dry pine cone packed with resinous scales. Lights easily and pops in flame.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.08, stackLimit: 20 },
+  }).with(
+    Flammable({
+      ignitionTemp: 75,
+      burnDurationSec: 5,
+      effect: TransformInto(itemId("ash")),
+    }),
+  ),
+  acorn: Item({
+    id: itemId("acorn"),
+    name: "Acorn",
+    description: "A hard oak seed. Bitter and mildly unpleasant raw, but edible if roasted.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.06, stackLimit: 30 },
+    iconUrl: "/assets/icons/berries.png",
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(1), ChanceOfVitals(0.2, AddStatus(StatusId.Sickness, 30))],
+    }),
+  ),
+  wild_root: Item({
+    id: itemId("wild_root"),
+    name: "Wild Root",
+    description: "A knotted forest root dug from soft earth. Starchy and filling if cooked.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.15, stackLimit: 20 },
+    iconUrl: "/assets/icons/wild_herb.png",
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(2), ChanceOfVitals(0.25, AddStatus(StatusId.Sickness, 30))],
+    }),
+  ),
+  // --- Animal byproducts -----------------------------------------------------
+  bone_shard: Item({
+    id: itemId("bone_shard"),
+    name: "Bone Shard",
+    description: "A sharp splinter of bone. Could be worked into a crude point or needle.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.1, stackLimit: 20 },
+  }),
+  feather: Item({
+    id: itemId("feather"),
+    name: "Feather",
+    description: "A light flight feather. Soft, dry, and useful for fletching or tinder.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.01, stackLimit: 10 },
+  }),
+  // --- Cooked / processed foods ----------------------------------------------
+  roasted_root: Item({
+    id: itemId("roasted_root"),
+    name: "Roasted Root",
+    description: "A charred root pulled from the embers. Dense and filling.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.12, stackLimit: 20 },
+    iconUrl: "/assets/icons/wild_herb.png",
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(10)],
+    }),
+  ),
+  roasted_acorn: Item({
+    id: itemId("roasted_acorn"),
+    name: "Roasted Acorn",
+    description: "An acorn crisped by fire. Nutty, mildly bitter, actually palatable.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
+    iconUrl: "/assets/icons/berries.png",
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(5)],
+    }),
+  ),
+  // --- Crafted medicinals ----------------------------------------------------
+  crude_dressing: Item({
+    id: itemId("crude_dressing"),
+    name: "Crude Dressing",
+    description: "Moss packed against fiber. Absorbs and slows a minor wound.",
+    rarity: Rarity.Common,
+    category: Category.Reagent,
+    physical: { carryClass: "pocket", weight: 0.06, stackLimit: 10 },
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(6)],
+    }),
+  ),
+  crude_poultice: Item({
+    id: itemId("crude_poultice"),
+    name: "Crude Poultice",
+    description: "Ash, herb, and water worked into a dark paste. Risky but sometimes effective.",
+    rarity: Rarity.Common,
+    category: Category.Reagent,
+    physical: { carryClass: "pocket", weight: 0.08, stackLimit: 10 },
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(8), ChanceOfVitals(0.15, AddStatus(StatusId.Sickness, 20))],
+    }),
+  ),
   debug_panacea: Item({
     id: itemId("debug_panacea"),
     name: "Debug Panacea",

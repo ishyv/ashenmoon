@@ -269,6 +269,11 @@ export class GameEngine {
   private campfireGlow!: Sprite;
   private lightTexture!: Texture;
 
+  // Night/weather overlays — screen-space, above worldContainer, below DOM HUD
+  private nightOverlay!: Graphics;
+  private nightOverlayAlpha = 0;
+  private rainOverlayTint = 0xffffff;
+
   // Zoom parameters
   private zoom = 1.0;
   private targetZoom = 1.0;
@@ -372,6 +377,14 @@ export class GameEngine {
       this.worldContainer.addChild(this.entityLayer);
       this.entityLayer.addChild(this.collisionOverlay);
       this.app.stage.addChild(this.worldContainer);
+
+      // Night/weather overlay: covers the full screen in a dark rectangle.
+      // Alpha is driven per-frame by visibilityMultiplier so day = transparent,
+      // night = ~0.58 dark, night-near-fire = ~0.28.
+      this.nightOverlay = new Graphics();
+      this.nightOverlay.rect(0, 0, 4096, 4096).fill({ color: 0x000000 });
+      this.nightOverlay.alpha = 0;
+      this.app.stage.addChild(this.nightOverlay);
 
       // Draw map tiles
       drawTerrainSystem(this.mapResource, this.tileLayer);
@@ -1021,6 +1034,41 @@ export class GameEngine {
         const baseRadius = getCampfireHeatRadiusTiles(world.with("campfire").entities.find((entity) => entity.id === EntityId.Campfire));
         const flicker = 1.0 + Math.sin(performance.now() * 0.007) * 0.04;
         this.campfireGlow.scale.set(((baseRadius * TILE * 1.8) / 384) * flicker);
+      }
+
+      // Night darkness overlay: lerp toward target alpha so the transition is
+      // gradual (roughly 2 seconds to fully darken). visibilityMultiplier 1 = day,
+      // 0.42 = full night, 0.72 = night near campfire.
+      if (this.nightOverlay && this.playerEntity.position) {
+        const pgx = Math.round(this.playerEntity.position.x / TILE);
+        const pgy = Math.round(this.playerEntity.position.y / TILE);
+        const nearCampfire = isPointNearLitCampfire(world, {
+          x: this.playerEntity.position.x + TILE / 2,
+          y: this.playerEntity.position.y + TILE / 2,
+        });
+        const nightMods = nightEnvironmentModifiers({
+          timeOfDay: this.weatherState.timeOfDay,
+          nearLitCampfire: nearCampfire,
+          shelterColdMultiplier: this.shelterColdMultiplierAt(pgx, pgy),
+        });
+        const targetAlpha = 1 - nightMods.visibilityMultiplier;
+        this.nightOverlayAlpha += (targetAlpha - this.nightOverlayAlpha) * Math.min(1, dt * 0.5);
+        this.nightOverlay.alpha = this.nightOverlayAlpha;
+      }
+
+      // Rain world tint: overcast blue-grey while raining, fade back to neutral.
+      const targetTint = this.weatherState.raining ? 0xb0c4d8 : 0xffffff;
+      if (this.rainOverlayTint !== targetTint) {
+        // Blend channel by channel toward target (simple linear per-frame step).
+        const lerp = (a: number, b: number) => Math.round(a + (b - a) * Math.min(1, dt * 0.8));
+        const ra = (this.rainOverlayTint >> 16) & 0xff;
+        const ga = (this.rainOverlayTint >> 8) & 0xff;
+        const ba = this.rainOverlayTint & 0xff;
+        const rb = (targetTint >> 16) & 0xff;
+        const gb = (targetTint >> 8) & 0xff;
+        const bb = targetTint & 0xff;
+        this.rainOverlayTint = (lerp(ra, rb) << 16) | (lerp(ga, gb) << 8) | lerp(ba, bb);
+        this.worldContainer.tint = this.rainOverlayTint;
       }
 
       this.updateRenderOrder();
