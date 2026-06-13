@@ -1,4 +1,4 @@
-import { Container, Sprite, AnimatedSprite, Texture } from "pixi.js";
+import { Container, Graphics, Sprite, AnimatedSprite, Texture } from "pixi.js";
 import { world, type Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import { computeRenderZ } from "$lib/domain/collision";
@@ -13,7 +13,7 @@ import {
   getParticleFXFrames,
   getWarriorFrames,
   getShadowTexture,
-  getShikashiIconTexture,
+  getIconSheetTexture,
   type UnitColor,
 } from "$lib/core/assets/assets";
 import { getItemDef } from "$lib/domain/items/item-definitions";
@@ -27,6 +27,7 @@ import type { RuntimeRegistry } from "$lib/core/runtime/runtime";
 import { makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
 import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
 import { ANIMAL_DEFINITIONS, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import { LANDMARK_DEFS, type LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 
 export function spawnEnemy(
   gx: number,
@@ -91,7 +92,7 @@ export function spawnAnimal(
     mover: { speed: def.moveSpeed },
     knockback: { vx: 0, vy: 0, timer: 0 },
     health: { current: def.maxHealth, max: def.maxHealth, faction: "hostile", invulnTimer: 0 },
-    loot: { xpReward: def.xpReward, ...(def.drops ? { drops: def.drops } : {}) },
+    loot: { xpReward: def.xpReward },
   };
   world.add(entity);
 
@@ -264,7 +265,7 @@ let dropSeq = 0;
 
 /**
  * Spawns a ground pickup entity at the given pixel position.
- * Used for animal loot drops on death.
+ * Spawns a generic ground pickup entity at the given pixel position.
  */
 export function spawnItemDrop(
   itemId: string,
@@ -288,8 +289,10 @@ export function spawnItemDrop(
   const iconSheet = def?.iconSheet;
   const sprite = new Sprite(
     iconSheet
-      ? getShikashiIconTexture(iconSheet.col, iconSheet.row)
-      : getWoodItemTexture(),
+      ? getIconSheetTexture(iconSheet)
+      : (def?.iconUrl
+        ? Texture.from(def.iconUrl)
+        : getWoodItemTexture()),
   );
   sprite.anchor.set(0.5, 1);
   sprite.x = px + TILE / 2;
@@ -298,4 +301,60 @@ export function spawnItemDrop(
   sprite.zIndex = computeRenderZ(sprite.y);
   entityLayer.addChild(sprite);
   entitySprites.set(id, sprite);
+}
+
+const LANDMARK_COLORS: Partial<Record<LandmarkKind, number>> = {
+  huge_dead_tree:    0x5a4a3a,
+  ruined_watch_post: 0x6b5a4a,
+  old_road:          0x7a6a5a,
+  burned_cart:       0x3a3330,
+  wolf_den:          0x4a3a2a,
+  river_crossing:    0x7a7a8a,
+  deer_grazing_area: 0x5a7a4a,
+  fallen_tree:       0x6a5a3a,
+  old_stump:         0x5a4a2a,
+  pond:              0x2a4a6a,
+};
+
+let landmarkSeq = 0;
+
+/**
+ * Spawns a landmark entity at the given tile position.
+ * Uses a colored Graphics rect as placeholder visual.
+ */
+export function spawnLandmark(
+  kind: LandmarkKind,
+  gx: number,
+  gy: number,
+  entityLayer: Container,
+  entitySprites: Map<string, Container>,
+  map: MapResource,
+): void {
+  const def = LANDMARK_DEFS[kind];
+  if (!def) return;
+
+  const ex = gx * TILE;
+  const ey = gy * TILE;
+  const entityId = `landmark_${kind}_${++landmarkSeq}`;
+
+  world.add({
+    id: entityId,
+    position: { x: ex, y: ey, targetX: ex, targetY: ey },
+    ...(def.solid ? { collider: { isSolid: true } } : {}),
+    interactable: { name: def.displayName, action: "examine" },
+    landmark: { kind, depleted: false },
+  });
+
+  if (def.solid) {
+    map.solidCoords.add(coordKey(gx, gy));
+  }
+
+  const color = LANDMARK_COLORS[kind] ?? 0x6a5a4a;
+  const g = new Graphics();
+  g.rect(0, 0, TILE, TILE).fill({ color, alpha: 0.85 });
+  g.x = ex;
+  g.y = ey;
+  g.zIndex = computeRenderZ(ey + TILE);
+  entityLayer.addChild(g);
+  entitySprites.set(entityId, g);
 }

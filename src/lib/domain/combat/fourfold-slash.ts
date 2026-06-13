@@ -9,7 +9,9 @@ export type FourfoldSlashType =
   | "wheel_slash"
   | "falling_wheel"
   | "rising_wheel"
-  | "crosswind_cut";
+  | "crosswind_cut"
+  | "starburst_cross"
+  | "vortex_slice";
 
 export interface FourfoldSlashConfig {
   comboTotalWindowMs: number;
@@ -44,18 +46,24 @@ export const DEFAULT_FOURFOLD_SLASH_CONFIG: FourfoldSlashConfig = {
     falling_wheel: 2.8,
     rising_wheel: 2.5,
     crosswind_cut: 2.4,
+    starburst_cross: 2.6,
+    vortex_slice: 3.0,
   },
   knockbackMultipliers: {
     wheel_slash: 1.5,
     falling_wheel: 2.2,
     rising_wheel: 2.0,
     crosswind_cut: 1.2,
+    starburst_cross: 1.8,
+    vortex_slice: 2.4,
   },
   staminaCosts: {
     wheel_slash: 16,
     falling_wheel: 20,
     rising_wheel: 18,
     crosswind_cut: 15,
+    starburst_cross: 17,
+    vortex_slice: 22,
   },
 };
 
@@ -120,7 +128,18 @@ export function classifyFourfoldSlash(seq: FourfoldDirection[]): FourfoldSlashTy
   if (seq[0] === "bottom" && seq[3] === "top") {
     return "rising_wheel";
   }
-  return "crosswind_cut";
+
+  // Zig-zag/vortex patterns: L-T-B-R, L-B-T-R, R-T-B-L, R-B-T-L
+  const isZigZag =
+    (seq[0] === "left" && seq[3] === "right" && ((seq[1] === "top" && seq[2] === "bottom") || (seq[1] === "bottom" && seq[2] === "top"))) ||
+    (seq[0] === "right" && seq[3] === "left" && ((seq[1] === "top" && seq[2] === "bottom") || (seq[1] === "bottom" && seq[2] === "top")));
+
+  if (isZigZag) {
+    return "vortex_slice";
+  }
+
+  // Consecutive opposite pairs (T-B-L-R, L-R-T-B, etc.)
+  return "starburst_cross";
 }
 
 export function pushFourfoldSlashInput(

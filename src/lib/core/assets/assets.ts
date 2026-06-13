@@ -28,6 +28,8 @@
  */
 
 import { Assets, Rectangle, Texture } from "pixi.js";
+import type { AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import type { IconSheet } from "$lib/domain/items/item-types";
 
 const BASE = "/assets/tiny-swords";
 
@@ -285,6 +287,89 @@ export const ASSET_PATHS = {
   },
 } as const;
 
+const FARM_BASE = "/assets/farm-rpg";
+
+export const FARM_ASSET_PATHS = {
+  character: {
+    idle: `${FARM_BASE}/character/idle.png`,
+    walk: `${FARM_BASE}/character/walk.png`,
+  },
+  objects: {
+    fence: `${FARM_BASE}/objects/fence.png`,
+    house: `${FARM_BASE}/objects/house.png`,
+    interior: `${FARM_BASE}/objects/interior.png`,
+    mapleTree: `${FARM_BASE}/objects/maple-tree.png`,
+    road: `${FARM_BASE}/objects/road.png`,
+    springCrops: `${FARM_BASE}/objects/spring-crops.png`,
+    chest: `${FARM_BASE}/objects/chest.png`,
+  },
+  tilesets: {
+    spring: `${FARM_BASE}/tilesets/spring.png`,
+  },
+  animals: {
+    babyChickenYellow: `${FARM_BASE}/animals/baby-chicken-yellow.png`,
+    chickenBlondeGreen: `${FARM_BASE}/animals/chicken-blonde-green.png`,
+    chickenRed: `${FARM_BASE}/animals/chicken-red.png`,
+    cowBrownFemale: `${FARM_BASE}/animals/cow-brown-female.png`,
+    cowBrownMale: `${FARM_BASE}/animals/cow-brown-male.png`,
+  },
+} as const;
+
+export const BUNDLE_FARM_RPG: string[] = [
+  FARM_ASSET_PATHS.character.idle,
+  FARM_ASSET_PATHS.character.walk,
+  FARM_ASSET_PATHS.objects.fence,
+  FARM_ASSET_PATHS.objects.house,
+  FARM_ASSET_PATHS.objects.interior,
+  FARM_ASSET_PATHS.objects.mapleTree,
+  FARM_ASSET_PATHS.objects.road,
+  FARM_ASSET_PATHS.objects.springCrops,
+  FARM_ASSET_PATHS.objects.chest,
+  FARM_ASSET_PATHS.tilesets.spring,
+  FARM_ASSET_PATHS.animals.babyChickenYellow,
+  FARM_ASSET_PATHS.animals.chickenBlondeGreen,
+  FARM_ASSET_PATHS.animals.chickenRed,
+  FARM_ASSET_PATHS.animals.cowBrownFemale,
+  FARM_ASSET_PATHS.animals.cowBrownMale,
+];
+
+const FORGOTTEN_BASE = "/assets/forgotten-memories";
+
+export const FORGOTTEN_ASSET_PATHS = {
+  props: `${FORGOTTEN_BASE}/props.png`,
+  tileset: `${FORGOTTEN_BASE}/tileset.png`,
+  trees: `${FORGOTTEN_BASE}/trees.png`,
+  treesSeparated: `${FORGOTTEN_BASE}/trees-separated.png`,
+  waterTiles: `${FORGOTTEN_BASE}/water-tiles.png`,
+} as const;
+
+export const BUNDLE_FORGOTTEN_MEMORIES: string[] = Object.values(FORGOTTEN_ASSET_PATHS);
+
+const ANIMAL_BASE = "/assets/animals";
+
+export const NEW_ANIMAL_PATHS = {
+  chicken: `${ANIMAL_BASE}/chicken.png`,
+  crab: `${ANIMAL_BASE}/crab.png`,
+  toad: `${ANIMAL_BASE}/toad.png`,
+  pig: `${ANIMAL_BASE}/pig.png`,
+  goose: `${ANIMAL_BASE}/goose.png`,
+  frog: `${ANIMAL_BASE}/frog.png`,
+  boar: `${ANIMAL_BASE}/boar.png`,
+  cat: `${ANIMAL_BASE}/cat.png`,
+  sheep: `${ANIMAL_BASE}/sheep.png`,
+  turtle: `${ANIMAL_BASE}/turtle.png`,
+  fox: `${ANIMAL_BASE}/fox.png`,
+  porcupine: `${ANIMAL_BASE}/porcupine.png`,
+  skunk: `${ANIMAL_BASE}/skunk.png`,
+  wolf: `${ANIMAL_BASE}/wolf.png`,
+  chick: `${ANIMAL_BASE}/chick.png`,
+} as const;
+
+export const BUNDLE_NEW_ANIMALS: string[] = Object.values(NEW_ANIMAL_PATHS);
+
+const ICONS32_PATH = "/assets/icons-32/icons.png";
+export const BUNDLE_ICONS32 = [ICONS32_PATH];
+
 // ---------------------------------------------------------------------------
 // Named asset bundles — pass to loadAssets() before using the accessors below
 // ---------------------------------------------------------------------------
@@ -307,6 +392,10 @@ export const BUNDLE_CORE = [
   ...ASSET_PATHS.decorations.rocks,
   ASSET_PATHS.particles.fire1,
   ASSET_PATHS.decorations.rubberDuck,
+  ...BUNDLE_FARM_RPG,
+  ...BUNDLE_NEW_ANIMALS,
+  ...BUNDLE_FORGOTTEN_MEMORIES,
+  ...BUNDLE_ICONS32,
 ];
 
 /** All warrior sprites for every color and animation. */
@@ -480,6 +569,32 @@ function sliceSheet(path: string, frameW: number, frameH: number): Texture[] {
   return frames;
 }
 
+/** Slices frames from a specific row of a 2D grid spritesheet. */
+function sliceGridSheet(path: string, frameW: number, frameH: number, row: number, cols?: number): Texture[] {
+  const tex = requireTexture(path);
+  const count = cols ?? Math.floor(tex.source.width / frameW);
+  const frames: Texture[] = [];
+  const y = row * frameH;
+  for (let i = 0; i < count; i++) {
+    frames.push(
+      new Texture({ source: tex.source, frame: new Rectangle(i * frameW, y, frameW, frameH) }),
+    );
+  }
+  return frames;
+}
+
+const gridSheetCache = new Map<string, Texture[]>();
+
+function cachedGridSheet(path: string, frameW: number, frameH: number, row: number, cols?: number): Texture[] {
+  const key = `${path}:${frameW}:${frameH}:${row}:${cols ?? "auto"}`;
+  let f = gridSheetCache.get(key);
+  if (!f) {
+    f = sliceGridSheet(path, frameW, frameH, row, cols);
+    gridSheetCache.set(key, f);
+  }
+  return f;
+}
+
 // ---------------------------------------------------------------------------
 // Frame caches
 // ---------------------------------------------------------------------------
@@ -534,6 +649,27 @@ export function getShikashiIconTexture(col: number, row: number): Texture {
       frame: new Rectangle(col * SHIKASHI_SIZE, row * SHIKASHI_SIZE, SHIKASHI_SIZE, SHIKASHI_SIZE),
     });
     shikashiCache.set(key, tex);
+  }
+  return tex;
+}
+
+const iconSheetCache = new Map<string, Texture>();
+
+/** Slices one icon from an arbitrary grid spritesheet using the specified IconSheet parameters. */
+export function getIconSheetTexture(sheet: IconSheet): Texture {
+  const key = `${sheet.src}:${sheet.col}:${sheet.row}:${sheet.size}`;
+  let tex = iconSheetCache.get(key);
+  if (!tex) {
+    tex = new Texture({
+      source: requireTexture(sheet.src).source,
+      frame: new Rectangle(
+        sheet.col * sheet.size,
+        sheet.row * sheet.size,
+        sheet.size,
+        sheet.size,
+      ),
+    });
+    iconSheetCache.set(key, tex);
   }
   return tex;
 }
@@ -908,6 +1044,104 @@ export function getSheepFrames(anim: "idle" | "move" | "grass"): Texture[] {
     grass: ASSET_PATHS.resources.sheepGrass,
   }[anim];
   return cachedSheet(path, SHEEP_FRAME, SHEEP_FRAME);
+}
+
+/**
+ * Unified getter for all animal frames (new 16x16 anim sheets).
+ */
+export function getAnimalFrames(
+  speciesId: AnimalSpeciesId | "sheep",
+  anim: "idle" | "walk" | "eat",
+): Texture[] | null {
+  if (speciesId === "sheep") {
+    return cachedSheet(NEW_ANIMAL_PATHS.sheep, 16, 16);
+  }
+
+  if (speciesId === "rabbit") {
+    // mapped to Yellow Chick
+    return getFarmAnimalFrames("babyChickenYellow", anim);
+  }
+
+  if (speciesId === "deer") {
+    // mapped to Female Brown Cow
+    return getFarmAnimalFrames("cowBrownFemale", anim);
+  }
+
+  if (speciesId === "boar") {
+    // mapped to Mad Boar (4 frames, 16x16)
+    return cachedSheet(NEW_ANIMAL_PATHS.boar, 16, 16);
+  }
+
+  if (speciesId === "wolf") {
+    // mapped to Timber Wolf (4 frames, 16x16)
+    return cachedSheet(NEW_ANIMAL_PATHS.wolf, 16, 16);
+  }
+
+  return null;
+}
+
+export function getFarmAnimalFrames(
+  key: keyof typeof FARM_ASSET_PATHS.animals,
+  anim: "idle" | "walk" | "eat",
+): Texture[] {
+  const path = FARM_ASSET_PATHS.animals[key];
+  const isCow = key.startsWith("cow");
+  const size = isCow ? 32 : 16;
+  // Row 0 is standard down/facing idle animation
+  return cachedGridSheet(path, size, size, 0, 4);
+}
+
+export function getForgottenTreeTexture(col = 0, row = 0): Texture {
+  return cachedGridSheet(FORGOTTEN_ASSET_PATHS.trees, 256, 256, row, 4)[col]!;
+}
+
+export function getForgottenPropTexture(col = 0, row = 0): Texture {
+  return cachedGridSheet(FORGOTTEN_ASSET_PATHS.props, 64, 64, row, 16)[col]!;
+}
+
+export function getForgottenTileTexture(col = 0, row = 0): Texture {
+  return cachedGridSheet(FORGOTTEN_ASSET_PATHS.tileset, 64, 64, row, 32)[col]!;
+}
+
+export function getForgottenWaterFrames(): Texture[] {
+  const path = FORGOTTEN_ASSET_PATHS.waterTiles;
+  const frames: Texture[] = [];
+  const frameW = 341;
+  const frameH = 341;
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 3; c++) {
+      if (frames.length < 6) {
+        frames.push(cachedGridSheet(path, frameW, frameH, r, 3)[c]!);
+      }
+    }
+  }
+  return frames;
+}
+
+/**
+ * Character animation frames sliced from the 2D grid spritesheets.
+ * Idle sheet is 4x3 (32x32 tiles, columns=4, rows=3).
+ * Walk sheet is 6x3 (32x32 tiles, columns=6, rows=3).
+ * Directions: row 0 = down, row 1 = right, row 2 = up.
+ */
+export function getFarmCharacterFrames(
+  anim: "idle" | "walk",
+  dir: "down" | "right" | "up",
+): Texture[] {
+  const isWalk = anim === "walk";
+  const path = isWalk ? FARM_ASSET_PATHS.character.walk : FARM_ASSET_PATHS.character.idle;
+  const frameSize = 32;
+  const cols = isWalk ? 6 : 4;
+  const row = dir === "right" ? 1 : dir === "up" ? 2 : 0;
+  return cachedGridSheet(path, frameSize, frameSize, row, cols);
+}
+
+export function getFarmObjectTexture(name: keyof typeof FARM_ASSET_PATHS.objects): Texture {
+  return cachedTexture(FARM_ASSET_PATHS.objects[name]);
+}
+
+export function getFarmTilesetTexture(): Texture {
+  return cachedTexture(FARM_ASSET_PATHS.tilesets.spring);
 }
 
 /** Tool icon sprite (icon, not a spritesheet). Tool 1–4. Require BUNDLE_RESOURCES. */

@@ -57,9 +57,9 @@ describe("Driving Thrust domain rules", () => {
   });
 
   it("scales thrust distance by Combat level and clamps at max", () => {
-    expect(getDrivingThrustDistancePx(DEFAULT_DRIVING_THRUST_CONFIG, 1)).toBe(140);
-    expect(getDrivingThrustDistancePx(DEFAULT_DRIVING_THRUST_CONFIG, 5)).toBe(172);
-    expect(getDrivingThrustDistancePx(DEFAULT_DRIVING_THRUST_CONFIG, 99)).toBe(220);
+    expect(getDrivingThrustDistancePx(DEFAULT_DRIVING_THRUST_CONFIG, 1)).toBe(180);
+    expect(getDrivingThrustDistancePx(DEFAULT_DRIVING_THRUST_CONFIG, 5)).toBe(212);
+    expect(getDrivingThrustDistancePx(DEFAULT_DRIVING_THRUST_CONFIG, 99)).toBe(280);
   });
 
   it("checks a capsule hitbox by path length and width", () => {

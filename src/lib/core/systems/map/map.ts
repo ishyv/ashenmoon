@@ -1,6 +1,7 @@
 import { Container, Graphics, Sprite, TilingSprite } from "pixi.js";
 import { Cell, type AABB } from "$lib/core/types";
 import { SeededNoise } from "$lib/utils/noise";
+import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 import {
   getBiomeTileTexture,
   getWaterBackgroundTexture,
@@ -69,7 +70,7 @@ export interface ForestMetadata {
   waterSources: ForestWaterSource[];
   resourceClusters: ForestResourceCluster[];
   animalZones: ForestAnimalZone[];
-  landmarks: (ForestPoint & { kind: string; label: string })[];
+  landmarks: (ForestPoint & { kind: LandmarkKind; label: string })[];
   campCandidates: (ForestPoint & { radiusTiles: number })[];
   eventPoints: ForestEventPoint[];
 }
@@ -103,9 +104,16 @@ const FIRST_CAMP_RELATIVE_LAYOUT = {
     { kind: "wolf_territory", dx: 18, dy: -12, radiusTiles: 9 },
   ] satisfies readonly (Omit<ForestAnimalZone, "x" | "y"> & { dx: number; dy: number })[],
   landmarks: [
-    { kind: "fallen_tree", label: "fallen tree", dx: -6, dy: 8 },
-    { kind: "old_stump", label: "old stump", dx: 7, dy: -5 },
-    { kind: "pond", label: "dark pond", dx: 10, dy: 2 },
+    { kind: "fallen_tree",       label: "fallen tree",    dx: -6,  dy:  8 },
+    { kind: "old_stump",         label: "old stump",      dx:  7,  dy: -5 },
+    { kind: "pond",              label: "dark pond",       dx: 10,  dy:  2 },
+    { kind: "huge_dead_tree",    label: "dead tree",       dx: -14, dy: -10 },
+    { kind: "ruined_watch_post", label: "watch post",      dx:  16, dy:  8  },
+    { kind: "old_road",          label: "old road",        dx: -12, dy:  12 },
+    { kind: "burned_cart",       label: "burned cart",     dx:  12, dy: -14 },
+    { kind: "wolf_den",          label: "wolf den",        dx:  18, dy: -14 },
+    { kind: "river_crossing",    label: "river crossing",  dx:  9,  dy:  0  },
+    { kind: "deer_grazing_area", label: "grazing ground",  dx:  8,  dy:  8  },
   ],
   campCandidates: [
     { dx: 4, dy: 5, radiusTiles: 3 },

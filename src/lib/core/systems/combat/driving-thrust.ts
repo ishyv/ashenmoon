@@ -1,4 +1,4 @@
-﻿import type { World } from "miniplex";
+import type { World } from "miniplex";
 import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -26,6 +26,8 @@ import {
   spawnDrivingThrustSlash,
   spawnEnvFloatingText,
   triggerCameraShake,
+  spawnChargeTrailDust,
+  spawnDrivingThrustHitVFX,
 } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { applyDamage, type CombatConfig, type CombatResource } from "./combat";
@@ -111,19 +113,27 @@ function applyDrivingThrustHits(args: {
     )
     .sort((a, b) => a.projection - b.projection);
 
+  const numHits = candidates.length;
+  if (numHits > 0) {
+    triggerCameraShake(args.vfx, 3.6 + numHits * 1.5, 0.12 + numHits * 0.04);
+    spawnDrivingThrustHitVFX(args.vfx, args.entityLayer, candidates, numHits);
+  }
+
+  const hitScale = 1 + (numHits - 1) * 0.15;
   const baseDamage = getPlayerStats().combat.attackDamage;
   for (const [index, hit] of candidates.entries()) {
     const isFirst = index === 0;
     const damageMultiplier = isFirst ? args.thrustConfig.damageMultiplier : args.thrustConfig.secondaryDamageMultiplier;
-    const damage = Math.round(baseDamage * damageMultiplier);
+    const damage = Math.round(baseDamage * damageMultiplier * hitScale);
     const sourceX = hit.ex - args.direction.x;
     const sourceY = hit.ey - args.direction.y;
+    const knockback = args.config.knockback * args.thrustConfig.knockbackForce * (1 + (numHits - 1) * 0.25);
     const died = applyDamage(
       hit.entity,
       damage,
       sourceX,
       sourceY,
-      args.config.knockback * args.thrustConfig.knockbackForce,
+      knockback,
       args.config,
       args.vfx,
       args.entityLayer,
@@ -191,7 +201,9 @@ function advanceDrivingThrust(args: {
 
   if (state.phase === "active") {
     const activeMs = Math.max(1, args.combat.drivingThrustConfig.activeMs);
-    const targetTravel = Math.min(state.actualDistancePx, state.actualDistancePx * (state.elapsedMs / activeMs));
+    const progress = Math.min(1, state.elapsedMs / activeMs);
+    const t = progress * (2 - progress); // Snappy quadratic ease-out
+    const targetTravel = state.actualDistancePx * t;
     const delta = Math.max(0, targetTravel - state.traveledDistancePx);
     if (delta > 0 && args.player.position) {
       args.player.position.x += state.direction.x * delta;
@@ -201,6 +213,11 @@ function advanceDrivingThrust(args: {
       args.player.position.targetY = args.player.position.y;
       args.playerSprite.x = args.player.position.x + TILE / 2;
       args.playerSprite.y = args.player.position.y + TILE;
+
+      // Spawn trail dust
+      if (Math.random() < 0.4) {
+        spawnChargeTrailDust(args.vfx, args.entityLayer, args.player.position);
+      }
     }
     if (state.elapsedMs >= args.combat.drivingThrustConfig.activeMs) {
       state.phase = "recovery";

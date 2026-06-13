@@ -9,15 +9,16 @@ import {
   fellSweepStage,
   trackFellSweepWhirl,
   smoothFellSweepAim,
+  isPointInsideFissure,
 } from "./fell-sweep";
 
 describe("Fell Sweep charge rules", () => {
   it("maps held time to charge progress using the configured charge window", () => {
     expect(chargeProgressFromHeldMs(199)).toBe(0);
     expect(chargeProgressFromHeldMs(200)).toBe(0);
-    expect(chargeProgressFromHeldMs(1600)).toBeCloseTo(0.5);
-    expect(chargeProgressFromHeldMs(3000)).toBe(1);
-    expect(chargeProgressFromHeldMs(3600)).toBe(1);
+    expect(chargeProgressFromHeldMs(850)).toBeCloseTo(0.5);
+    expect(chargeProgressFromHeldMs(1500)).toBe(1);
+    expect(chargeProgressFromHeldMs(2000)).toBe(1);
   });
 
   it("maps progress to readable charge stages", () => {
@@ -43,10 +44,10 @@ describe("Fell Sweep charge rules", () => {
       knockback: 240 * 1.5,
     });
     expect(fellSweepScaling(1, combatConfig)).toEqual({
-      damage: 75,
+      damage: 88,
       reach: 64 * 1.5,
       arcHalfAngle: (Math.PI / 6) * 1.3,
-      knockback: 240 * 2.5,
+      knockback: 240 * 2.8,
     });
   });
 
@@ -119,10 +120,44 @@ describe("Fell Sweep charge rules", () => {
     };
 
     expect(fellSweepScaling(1, combatConfig, DEFAULT_FELL_SWEEP_CONFIG, true)).toEqual({
-      damage: 98,
+      damage: 114,
       reach: 64 * 1.5 * 1.2,
       arcHalfAngle: Math.PI,
-      knockback: 240 * 2.5 * 1.35,
+      knockback: 240 * 2.8 * 1.35,
+    });
+  });
+
+  describe("isPointInsideFissure helper", () => {
+    const origin = { x: 0, y: 0 };
+    const direction = { x: 1, y: 0 };
+    const length = 100;
+    const width = 20;
+
+    it("detects points exactly on the center line", () => {
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 50, y: 0 })).toBe(true);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 0, y: 0 })).toBe(true);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 100, y: 0 })).toBe(true);
+    });
+
+    it("detects points within the width bounds", () => {
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 50, y: 9 })).toBe(true);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 50, y: -9 })).toBe(true);
+    });
+
+    it("rejects points outside the width bounds", () => {
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 50, y: 11 })).toBe(false);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 50, y: -11 })).toBe(false);
+    });
+
+    it("rejects points past the length bounds without radius", () => {
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 101, y: 0 })).toBe(false);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: -1, y: 0 })).toBe(false);
+    });
+
+    it("detects points outside pure bounds when point radius is supplied", () => {
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 105, y: 0 }, 10)).toBe(true);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: -5, y: 0 }, 10)).toBe(true);
+      expect(isPointInsideFissure(origin, direction, length, width, { x: 50, y: 15 }, 10)).toBe(true);
     });
   });
 });

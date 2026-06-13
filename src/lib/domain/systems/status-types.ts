@@ -16,6 +16,9 @@ export enum StatusId {
   Injured = "injured",
   Cut = "cut",
   Hypothermia = "hypothermia",
+  Damp = "damp",
+  Wet = "wet",
+  Soaked = "soaked",
 }
 
 /** A status currently affecting the player. */
@@ -133,6 +136,28 @@ export const STATUS_DEFINITIONS: Record<StatusId, StatusDefinition> = {
     pulseEverySec: 4,
     pulse: { hpDelta: -1 },
     modifiers: { moveSpeedMult: 0.8 },
+  },
+  [StatusId.Damp]: {
+    id: StatusId.Damp,
+    label: "Damp",
+    icon: "💧",
+    applyMessage: "Your clothes are damp.",
+    expireMessage: "Your clothes dry out.",
+  },
+  [StatusId.Wet]: {
+    id: StatusId.Wet,
+    label: "Wet",
+    icon: "🌧️",
+    applyMessage: "You are soaking wet. Cold bites harder.",
+    expireMessage: "You begin to dry off.",
+  },
+  [StatusId.Soaked]: {
+    id: StatusId.Soaked,
+    label: "Soaked",
+    icon: "🫧",
+    applyMessage: "You are completely soaked. Movement slows.",
+    expireMessage: "You are no longer soaked.",
+    modifiers: { moveSpeedMult: 0.9 },
   },
 };
 

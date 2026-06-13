@@ -20,7 +20,7 @@ const currentQuest = $derived(() => {
       <ul class="objectives-list">
         {#each quest.objectives as obj}
           <li class="objective-item {obj.completed ? 'completed' : ''}">
-            <span class="bullet">âœ¦</span>
+            <span class="bullet">✦</span>
             <span class="objective-label">{obj.label}</span>
             <span class="objective-progress">({obj.current}/{obj.target})</span>
           </li>

@@ -168,7 +168,7 @@ export function triggerDashSystem(
 ): void {
   if (!zeroCooldowns && (movement.dashCooldownTimer > 0 || movement.isDashing)) return;
   if (stamina.current < config.dashStaminaCost) {
-    spawnEnvFloatingText(vfx, "âš¡ï¸ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "⚡️ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
     return;
   }
 
@@ -193,13 +193,13 @@ export function triggerDashSystem(
     normY = -1;
     movement.isInvulnerable = true;
     movement.invulnTimer = config.invulnDuration;
-    spawnEnvFloatingText(vfx, "âœ¿ EVADE! âœ¿", Colors.evade.flash, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "✿ EVADE! ✿", Colors.evade.flash, playerEntity.position!, entityLayer);
     spawnEnvParticles(vfx, Colors.evade.flash, 12, "bubble", playerEntity.position!, entityLayer);
   } else {
     const len = Math.sqrt(dirX * dirX + dirY * dirY);
     normX = dirX / len;
     normY = dirY / len;
-    spawnEnvFloatingText(vfx, "ðŸ’¨ DASH! ðŸ’¨", Colors.evade.dashText, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "💨 DASH! 💨", Colors.evade.dashText, playerEntity.position!, entityLayer);
     spawnEnvParticles(vfx, Colors.evade.dashParticle, 10, "smoke", playerEntity.position!, entityLayer);
   }
 

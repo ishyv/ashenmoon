@@ -33,6 +33,7 @@ import {
   BUNDLE_RESOURCES,
   BUNDLE_WARRIORS,
   BUNDLE_SHIKASHI,
+  BUNDLE_ICONS32,
   type UnitColor,
   type WarriorAnimKey,
 } from "$lib/core/assets/assets";
@@ -159,6 +160,8 @@ import {
 } from "$lib/state/rpg/status-effects.svelte";
 import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$lib/ui/player-feedback";
 import { setEnvironment } from "$lib/state/environment-state.svelte";
+import { tickWetnessState, wetnessState } from "$lib/state/rpg/wetness.svelte";
+import { setColdAccumulator } from "$lib/state/rpg/cold-exposure.svelte";
 import { tickExposureSystem } from "$lib/core/systems/exposure/exposure-system";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import {
@@ -201,7 +204,8 @@ import {
   weatherOverlaySystem,
 } from "$lib/core/systems/weather/weather-system";
 import { syncHudCooldownsSystem } from "$lib/core/systems/hud-sync-system";
-import { spawnResourceEntity, spawnCampSystem, spawnEnemy } from "$lib/core/systems/map/spawn-system";
+import { spawnResourceEntity, spawnCampSystem, spawnEnemy, spawnLandmark } from "$lib/core/systems/map/spawn-system";
+import { FogSystem } from "$lib/core/systems/atmosphere/fog-system";
 import { handleEnemyDeathSystem } from "$lib/core/systems/combat/enemy-death-system";
 import {
   CollisionFootprints,
@@ -233,6 +237,7 @@ export class GameEngine {
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
   public weatherResource = new WeatherResource();
+  public fogSystem = new FogSystem();
 
   // Facing vector
   private playerFacing: { x: number; y: number } = { x: 0, y: 1 };
@@ -345,6 +350,7 @@ export class GameEngine {
       await loadAssets(BUNDLE_PARTICLES);
       await loadAssets(BUNDLE_RESOURCES);
       await loadAssets(BUNDLE_SHIKASHI);
+      await loadAssets(BUNDLE_ICONS32);
 
       // Setup listeners via input resource
       const canvas = this.app.canvas as HTMLCanvasElement;
@@ -385,6 +391,10 @@ export class GameEngine {
       this.worldContainer.addChild(this.entityLayer);
       this.entityLayer.addChild(this.collisionOverlay);
       this.app.stage.addChild(this.worldContainer);
+
+      // Atmospheric fog layer — above world, below night overlay.
+      this.fogSystem.init();
+      this.app.stage.addChild(this.fogSystem.layer);
 
       // Night/weather overlay: covers the full screen in a dark rectangle.
       // Alpha is driven per-frame by visibilityMultiplier so day = transparent,
@@ -643,7 +653,7 @@ export class GameEngine {
           } else {
             spawnEnvFloatingText(
               this.vfxResource,
-              "âŒ Invalid Position!",
+              "❌ Invalid Position!",
               Colors.ui.error,
               this.playerEntity.position!,
               this.entityLayer
@@ -681,7 +691,7 @@ export class GameEngine {
           } else {
             spawnEnvFloatingText(
               this.vfxResource,
-              "âŒ Invalid Position!",
+              "❌ Invalid Position!",
               Colors.ui.error,
               this.playerEntity.position!,
               this.entityLayer
@@ -882,6 +892,18 @@ export class GameEngine {
 
       tickCampfireEntities(world, dt, { raining: this.weatherResource.state.raining });
 
+      // Wetness system — must run before weatherOverlaySystem so its multiplier is fresh
+      if (this.playerEntity.position) {
+        const pgxW = Math.round(this.playerEntity.position.x / TILE);
+        const pgyW = Math.round(this.playerEntity.position.y / TILE);
+        const isSheltered = this.shelterColdMultiplierAt(pgxW, pgyW) < 1;
+        const nearFire = isPointNearLitCampfire(world, {
+          x: this.playerEntity.position.x + TILE / 2,
+          y: this.playerEntity.position.y + TILE / 2,
+        });
+        tickWetnessState(dt, this.weatherResource.state.raining, isSheltered, nearFire);
+      }
+
       if (this.playerEntity.position) {
         const pgx = Math.round(this.playerEntity.position.x / TILE);
         const pgy = Math.round(this.playerEntity.position.y / TILE);
@@ -1038,8 +1060,19 @@ export class GameEngine {
         this.nightOverlay,
         this.worldContainer,
         (gx, gy) => this.shelterColdMultiplierAt(gx, gy),
-        dt
+        dt,
+        wetnessState.penalties.coldBuildRateMult
       );
+
+      // Atmospheric fog — collect lit campfire positions for local clearance
+      const campfirePositions: { x: number; y: number; heatRadius: number }[] = [];
+      for (const e of world.with("campfire", "position").entities) {
+        if (e.campfire?.isLit && e.position) {
+          campfirePositions.push({ x: e.position.x + 32, y: e.position.y + 32, heatRadius: getCampfireHeatRadiusTiles(e) });
+        }
+      }
+      this.fogSystem.tick(dt, this.weatherResource.state.timeOfDay, this.weatherResource.state.raining, campfirePositions);
+      setColdAccumulator(this.weatherResource.coldAccumulator);
 
       this.updateRenderOrder();
       this.drawCollisionOverlay();
@@ -1182,6 +1215,17 @@ export class GameEngine {
     // Scatter decorations. Base world always; scenarios only when opted in.
     if (wantDecorations) {
       spawnDecorationsSystem(this.mapResource, this.vfxResource, this.entityLayer);
+    }
+
+    // Spawn forest landmarks — procedural metadata for base world, explicit list for scenarios.
+    if (!scenario) {
+      for (const lm of this.mapResource.forestMetadata.landmarks) {
+        spawnLandmark(lm.kind, lm.x, lm.y, this.entityLayer, this.entitySprites, this.mapResource);
+      }
+    } else if (scenario.landmarks) {
+      for (const lm of scenario.landmarks) {
+        spawnLandmark(lm.kind, lm.gx, lm.gy, this.entityLayer, this.entitySprites, this.mapResource);
+      }
     }
 
     // Wildlife: the base world uses First Camp animal zones; scenarios only get

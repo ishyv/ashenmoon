@@ -3,7 +3,9 @@ import type { InteractionId } from "$lib/domain/interactions";
 import type { StationId } from "$lib/domain/stations";
 import type { AiState, AnimState, Faction } from "$lib/core/types";
 import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import type { CarcassProcessAction, CarcassState } from "$lib/domain/animals/carcass-processing";
 import type { CampfireState, CampStructureType } from "$lib/domain/camp/camp-state";
+import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 
 /**
  * Game entity component structure.
@@ -78,6 +80,17 @@ export interface Entity {
     scareSec?: number;
   };
 
+  /**
+   * Physical remains from an animal kill. Carcass rules live in the pure M3
+   * hunting domain; runtime systems only age, render, and process this state.
+   */
+  carcass?: {
+    speciesId: AnimalSpeciesId;
+    state: CarcassState;
+    ageSec: number;
+    processedActions: CarcassProcessAction[];
+  };
+
   // --- Combat components -----------------------------------------------------
   // These compose to make any entity a combat participant. The player carries
   // `health` + `knockback`; a hostile additionally carries `mover` + `ai` +
@@ -145,6 +158,12 @@ export interface Entity {
 
   /** Reward granted to the player when this entity dies. */
   loot?: { xpReward: number; drops?: readonly { itemId: string; qty: number }[] };
+
+  /** Placed world landmark with examine text and one-time item drops. */
+  landmark?: {
+    kind: LandmarkKind;
+    depleted: boolean;
+  };
 }
 
 /** Central miniplex ECS world instance. Shared across all game systems. */

@@ -168,7 +168,7 @@ function cancelProcess() {
                 {@const owned = getOwnedQty(itemId)}
                 {@const met = owned >= reqQty}
                 <div class="ingredient-row" class:met={met}>
-                  <span class="check-icon">{met ? "âœ“" : "â—‹"}</span>
+                  <span class="check-icon">{met ? "✓" : "○"}</span>
                   <span class="ing-name">{getItemDef(itemId)?.name.toLowerCase() ?? itemId}</span>
                   <span class="ing-qty">{owned} / {reqQty}</span>
                 </div>

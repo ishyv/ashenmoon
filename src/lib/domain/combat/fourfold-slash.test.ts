@@ -96,8 +96,53 @@ describe("Fourfold Slash Combo Rules", () => {
     expect(classifyFourfoldSlash(["bottom", "right", "left", "top"])).toBe("rising_wheel");
   });
 
-  it("classifies T-B-L-R as Crosswind Cut", () => {
-    expect(classifyFourfoldSlash(["top", "bottom", "left", "right"])).toBe("crosswind_cut");
+  it("classifies T-B-L-R as Starburst Cross", () => {
+    expect(classifyFourfoldSlash(["top", "bottom", "left", "right"])).toBe("starburst_cross");
+  });
+
+  it("classifies L-T-B-R as Vortex Slice", () => {
+    expect(classifyFourfoldSlash(["left", "top", "bottom", "right"])).toBe("vortex_slice");
+  });
+
+  it("partitions all 24 unique permutations correctly", () => {
+    const directions: ("top" | "right" | "bottom" | "left")[] = ["top", "right", "bottom", "left"];
+    const permutations: ("top" | "right" | "bottom" | "left")[][] = [];
+
+    function permute(arr: ("top" | "right" | "bottom" | "left")[], memo: ("top" | "right" | "bottom" | "left")[] = []) {
+      if (arr.length === 0) {
+        permutations.push(memo);
+        return;
+      }
+      for (let i = 0; i < arr.length; i++) {
+        const curr = arr.slice();
+        const next = curr.splice(i, 1);
+        permute(curr.slice(), memo.concat(next));
+      }
+    }
+    permute(directions);
+
+    expect(permutations.length).toBe(24);
+
+    const counts = {
+      wheel_slash: 0,
+      falling_wheel: 0,
+      rising_wheel: 0,
+      starburst_cross: 0,
+      vortex_slice: 0,
+      crosswind_cut: 0,
+    };
+
+    for (const seq of permutations) {
+      const type = classifyFourfoldSlash(seq);
+      counts[type]++;
+    }
+
+    expect(counts.wheel_slash).toBe(8);
+    expect(counts.falling_wheel).toBe(2);
+    expect(counts.rising_wheel).toBe(2);
+    expect(counts.starburst_cross).toBe(8);
+    expect(counts.vortex_slice).toBe(4);
+    expect(counts.crosswind_cut).toBe(0);
   });
 
   it("clears input buffer after successful combo", () => {

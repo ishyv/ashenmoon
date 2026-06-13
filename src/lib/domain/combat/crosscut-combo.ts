@@ -20,6 +20,7 @@ export interface CrosscutComboConfig {
   minFirstClickDistancePx: number;
   minSecondClickDistancePx: number;
   minDistanceBetweenClicksPx: number;
+  maxClickDistancePx: number;
   perfectAngleDegrees: number;
   excellentToleranceDegrees: number;
   goodToleranceDegrees: number;
@@ -52,7 +53,8 @@ export type CrosscutFailureReason =
   | "second_click_too_close"
   | "clicks_too_close"
   | "bad_angle"
-  | "insufficient_stamina";
+  | "insufficient_stamina"
+  | "too_far_from_player";
 
 export interface CrosscutComboResult {
   triggered: boolean;
@@ -92,12 +94,13 @@ const RAD_TO_DEG = 180 / Math.PI;
 export const DEFAULT_CROSSCUT_COMBO_CONFIG: CrosscutComboConfig = {
   comboWindowMs: 950,
   minFirstClickDistancePx: 32,
-  minSecondClickDistancePx: 32,
-  minDistanceBetweenClicksPx: 8,
+  minSecondClickDistancePx: 128,
+  minDistanceBetweenClicksPx: 128,
+  maxClickDistancePx: 300,
   perfectAngleDegrees: 90,
   excellentToleranceDegrees: 10,
-  goodToleranceDegrees: 18,
-  minimumToleranceDegrees: 22,
+  goodToleranceDegrees: 15,
+  minimumToleranceDegrees: 18,
   staminaCosts: {
     weak: 10,
     good: 5,
@@ -212,6 +215,10 @@ export function storeFirstCrosscutClick(
   state: CrosscutComboState,
   input: StoreFirstCrosscutClickInput,
 ): boolean {
+  const dist = distance(input.playerPosition, input.clickWorldPosition);
+  if (dist > input.config.maxClickDistancePx) {
+    return false;
+  }
   state.firstClickWorldPosition = { ...input.clickWorldPosition };
   state.firstPlayerPosition = { ...input.playerPosition };
   state.firstDirection = null;
@@ -253,6 +260,11 @@ export function tryResolveCrosscutCombo(
 
   if (input.nowMs < state.cooldownUntilMs) {
     return { triggered: false, reason: "cooldown" };
+  }
+
+  const clickDistToPlayer = distance(input.playerPosition, input.clickWorldPosition);
+  if (clickDistToPlayer > config.maxClickDistancePx) {
+    return { triggered: false, reason: "too_far_from_player" };
   }
 
   const clickDistance = distance(state.firstClickWorldPosition, input.clickWorldPosition);

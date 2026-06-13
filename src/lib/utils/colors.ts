@@ -91,4 +91,12 @@ export const Colors = {
     combat: 0xff8855,
     fellSweep: 0xff6622,
   },
+  fourfold: {
+    wheelSlash: 0xffd700,      // Gold
+    fallingWheel: 0xff3333,    // Crimson Fire
+    risingWheel: 0x1de9b6,     // Jade Green
+    starburstCross: 0x9d4edd,  // Electric Violet
+    vortexSlice: 0xff8f00,     // Amber Orange
+    crosswindCut: 0xc7a75c,    // Muted Sand
+  },
 } as const;

@@ -11,7 +11,14 @@ import {
 } from "./crosscut-combo";
 
 describe("Crosscut combo rules", () => {
-  const config = DEFAULT_CROSSCUT_COMBO_CONFIG;
+  const config = {
+    ...DEFAULT_CROSSCUT_COMBO_CONFIG,
+    minDistanceBetweenClicksPx: 8,
+    minSecondClickDistancePx: 32,
+    goodToleranceDegrees: 18,
+    minimumToleranceDegrees: 22,
+    maxClickDistancePx: 99999,
+  };
 
   function primedState(nowMs = 1000) {
     const state = createInitialCrosscutComboState();
@@ -419,5 +426,71 @@ describe("Crosscut combo rules", () => {
     });
     expect(result.triggered).toBe(true);
     expect(result.grade).toBe("excellent");
+  });
+
+  describe("click distance limits relative to player", () => {
+    it("refuses to store first click if it exceeds maxClickDistancePx", () => {
+      const state = createInitialCrosscutComboState();
+      const localConfig = {
+        ...DEFAULT_CROSSCUT_COMBO_CONFIG,
+        maxClickDistancePx: 150,
+      };
+
+      const success = storeFirstCrosscutClick(state, {
+        clickWorldPosition: { x: 100, y: 0 },
+        playerPosition: { x: 0, y: 0 },
+        nowMs: 1000,
+        config: localConfig,
+      });
+      expect(success).toBe(true);
+
+      const fail = storeFirstCrosscutClick(state, {
+        clickWorldPosition: { x: 200, y: 0 },
+        playerPosition: { x: 0, y: 0 },
+        nowMs: 1000,
+        config: localConfig,
+      });
+      expect(fail).toBe(false);
+    });
+
+    it("rejects tryResolveCrosscutCombo if the click is too far from player", () => {
+      const state = createInitialCrosscutComboState();
+      const localConfig = {
+        ...DEFAULT_CROSSCUT_COMBO_CONFIG,
+        minDistanceBetweenClicksPx: 8,
+        minSecondClickDistancePx: 32,
+        maxClickDistancePx: 150,
+      };
+
+      storeFirstCrosscutClick(state, {
+        clickWorldPosition: { x: 100, y: 0 },
+        playerPosition: { x: 0, y: 0 },
+        nowMs: 1000,
+        config: localConfig,
+      });
+
+      const resFar = tryResolveCrosscutCombo({
+        state,
+        config: localConfig,
+        nowMs: 1100,
+        playerPosition: { x: 0, y: 0 },
+        clickWorldPosition: { x: 200, y: 0 },
+        currentStamina: 100,
+      });
+      expect(resFar).toEqual({
+        triggered: false,
+        reason: "too_far_from_player",
+      });
+
+      const resClose = tryResolveCrosscutCombo({
+        state,
+        config: localConfig,
+        nowMs: 1100,
+        playerPosition: { x: 150, y: 0 },
+        clickWorldPosition: { x: 200, y: 0 },
+        currentStamina: 100,
+      });
+      expect(resClose.triggered).toBe(true);
+    });
   });
 });

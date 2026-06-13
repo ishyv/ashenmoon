@@ -1,11 +1,11 @@
-﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { World } from "miniplex";
 import { InputResource } from "$lib/core/input/input";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { setStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { CombatConfig, CombatResource, fellSweepSystem, updateFellSweepChargeSystem } from "./combat";
 import { playSound } from "$lib/audio/audio-engine";
-import { spawnEnvFloatingText, spawnShockwaveRing, spawnSlashArc } from "$lib/core/vfx/vfx";
+import { spawnEnvFloatingText, spawnShockwaveRing, spawnSlashArc, spawnFellSweepCleave, spawnFellSweepWhirl } from "$lib/core/vfx/vfx";
 
 vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
@@ -17,6 +17,8 @@ vi.mock("$lib/core/vfx/vfx", () => ({
   spawnDamageNumber: vi.fn(),
   spawnCrosscutIndicator: vi.fn(),
   clearCrosscutIndicators: vi.fn(),
+  spawnFellSweepCleave: vi.fn(),
+  spawnFellSweepWhirl: vi.fn(),
 }));
 
 vi.mock("$lib/audio/audio-engine", () => ({
@@ -61,7 +63,7 @@ describe("Fell Sweep runtime", () => {
   it("starts a staged charge while the mouse is held", () => {
     const { inputs, combat, vfx, player, entityLayer } = setup();
     inputs.isMouseHeld = true;
-    inputs.heldMs = 1600;
+    inputs.heldMs = 850;
 
     updateFellSweepChargeSystem(inputs, combat, vfx, 0.016, player, entityLayer, false, false);
 
@@ -73,7 +75,7 @@ describe("Fell Sweep runtime", () => {
   it("arms whirl mode after the held aim makes a full circle around the player", () => {
     const { inputs, combat, vfx, player, entityLayer } = setup();
     inputs.isMouseHeld = true;
-    inputs.heldMs = 1600;
+    inputs.heldMs = 850;
 
     for (const mouseWorld of [
       { x: 128, y: 32 },
@@ -93,7 +95,7 @@ describe("Fell Sweep runtime", () => {
   it("denies cooldown charge once per hold attempt", () => {
     const { inputs, combat, vfx, player, entityLayer } = setup();
     inputs.isMouseHeld = true;
-    inputs.heldMs = 1600;
+    inputs.heldMs = 850;
     combat.fellSweepCooldownTimer = 2;
 
     updateFellSweepChargeSystem(inputs, combat, vfx, 0.016, player, entityLayer, false, false);
@@ -114,7 +116,7 @@ describe("Fell Sweep runtime", () => {
     };
     world.add(enemy);
     inputs.isMouseHeld = true;
-    inputs.heldMs = 3000;
+    inputs.heldMs = 1500;
     updateFellSweepChargeSystem(inputs, combat, vfx, 0.016, player, entityLayer, false, false);
     inputs.isMouseHeld = false;
     inputs.pendingFellSweep = true;
@@ -124,7 +126,7 @@ describe("Fell Sweep runtime", () => {
     expect(enemy.health?.current).toBeLessThan(100);
     expect(stamina.current).toBe(80);
     expect(combat.fellSweepCooldownTimer).toBe(8);
-    expect(spawnSlashArc).toHaveBeenCalled();
+    expect(spawnFellSweepCleave).toHaveBeenCalled();
     expect(playSound).toHaveBeenCalledWith("player.fellsweep.release.high");
     expect(spawnShockwaveRing).toHaveBeenCalled();
   });
@@ -150,7 +152,7 @@ describe("Fell Sweep runtime", () => {
 
     fellSweepSystem(world, inputs, combat, config, vfx, 0.016, player, playerSprite, setPlayerAnim, entityLayer, false, false, 1, onEnemyKilled);
 
-    expect(enemyBehindAim.health?.current).toBe(2);
+    expect(enemyBehindAim.health?.current).toBe(0);
     expect(enemyBehindAim.knockback?.vx).toBeLessThan(0);
     expect(spawnShockwaveRing).toHaveBeenCalled();
   });

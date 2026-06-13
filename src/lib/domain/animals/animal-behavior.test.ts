@@ -79,4 +79,8 @@ describe("animal behavior", () => {
     expect(ANIMAL_DEFINITIONS.boar.attackCooldownSec).toBeGreaterThan(0);
     expect(ANIMAL_DEFINITIONS.wolf.attackCooldownSec).toBeGreaterThan(0);
   });
+
+  it("does not define direct loot drops for animals", () => {
+    expect(Object.values(ANIMAL_DEFINITIONS).every((definition) => !("drops" in definition))).toBe(true);
+  });
 });

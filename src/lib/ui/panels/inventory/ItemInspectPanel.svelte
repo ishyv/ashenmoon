@@ -48,7 +48,7 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
       </div>
       <div>
         <div class="inspect-name">{meta.name.toLowerCase()}</div>
-        <div class="inspect-subtitle">{meta.category} Â· {meta.rarity}</div>
+        <div class="inspect-subtitle">{meta.category} · {meta.rarity}</div>
       </div>
     </div>
 

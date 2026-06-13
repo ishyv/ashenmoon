@@ -1,4 +1,5 @@
 import type { Cell } from "$lib/core/types";
+import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 
 export interface ScenarioSpawnNode {
   id: string;
@@ -37,4 +38,6 @@ export interface ScenarioDefinition {
    * Null/omitted leaves the player's current loadout untouched.
    */
   startTool?: string | null;
+  /** Explicit landmark placements. The engine spawns these as interactable ECS entities. */
+  landmarks?: { kind: LandmarkKind; gx: number; gy: number }[];
 }

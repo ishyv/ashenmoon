@@ -1,5 +1,5 @@
 import type { World } from "miniplex";
-import type { Container } from "pixi.js";
+import { AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { LitCampfire } from "$lib/core/systems/camp/campfire-runtime-system";
 import { applyDamage, despawnEntity, type CombatConfig, type CombatResource } from "$lib/core/systems/combat/combat";
@@ -14,6 +14,8 @@ import {
   type AnimalRuntime,
 } from "$lib/domain/animals/animal-behavior";
 import { spawnAnimal } from "$lib/core/systems/map/spawn-system";
+import { spawnCarcassEntity } from "$lib/core/systems/animals/carcass-runtime";
+import { getAnimalFrames } from "$lib/core/assets/assets";
 
 type AnimalTimeOfDay = "day" | "dusk" | "night";
 
@@ -149,7 +151,17 @@ function tryAnimalAttackPrey(
   if (conflict.attackerDamage > 0) {
     applyDamage(predator, conflict.attackerDamage, preyPos.x, preyPos.y, 40, config, vfx, entityLayer);
   }
-  if (preyDied) despawnEntity(ecsWorld, prey, entityLayer, entitySprites, vfx);
+  if (preyDied) {
+    spawnCarcassEntity({
+      sourceEntityId: prey.id,
+      speciesId: prey.animal!.speciesId,
+      x: prey.position.x,
+      y: prey.position.y,
+      entityLayer,
+      entitySprites,
+    });
+    despawnEntity(ecsWorld, prey, entityLayer, entitySprites, vfx);
+  }
   animal.attackCooldownSec = def.attackCooldownSec ?? 1;
 }
 
@@ -161,6 +173,23 @@ function syncAnimalSprite(entity: Entity, entitySprites: Map<string, Container>)
   sprite.y = entity.position.y + TILE;
   sprite.zIndex = entity.position.y + TILE;
   sprite.alpha = entity.animal?.behavior === "flee" ? 0.9 : 1;
+
+  if (sprite instanceof AnimatedSprite && entity.animal) {
+    const speciesId = entity.animal.speciesId;
+    let anim: "idle" | "walk" | "eat" = "idle";
+    const behavior = entity.animal.behavior;
+    if (behavior === "wander" || behavior === "flee" || behavior === "attack" || behavior === "hunt") {
+      anim = "walk";
+    } else if (behavior === "graze" || behavior === "eat") {
+      anim = "eat";
+    }
+
+    const frames = getAnimalFrames(speciesId, anim);
+    if (frames && frames.length > 0 && sprite.textures !== frames) {
+      sprite.textures = frames;
+      sprite.play();
+    }
+  }
 }
 
 function handleScaredAnimal(

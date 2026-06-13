@@ -54,7 +54,7 @@ export interface FellSweepScaling {
 
 export const DEFAULT_FELL_SWEEP_CONFIG: FellSweepConfig = {
   holdStartMs: 200,
-  fullChargeMs: 3000,
+  fullChargeMs: 1500,
   staminaBaseCost: 20,
   staminaMinCost: 10,
   staminaCostReductionPerLevel: 1,
@@ -62,13 +62,13 @@ export const DEFAULT_FELL_SWEEP_CONFIG: FellSweepConfig = {
   cooldownMinSec: 4.0,
   cooldownReductionPerLevel: 0.4,
   damageMinMultiplier: 1.8,
-  damageMaxMultiplier: 3.0,
+  damageMaxMultiplier: 3.5,
   reachMinMultiplier: 1.2,
   reachMaxMultiplier: 1.5,
   arcMinMultiplier: 1.0,
   arcMaxMultiplier: 1.3,
   knockbackMinMultiplier: 1.5,
-  knockbackMaxMultiplier: 2.5,
+  knockbackMaxMultiplier: 2.8,
   chargeMoveSpeedMinMultiplier: 0.85,
   chargeMoveSpeedMaxMultiplier: 0.45,
   whirlRequiredTurnRad: Math.PI * 2,
@@ -202,4 +202,21 @@ export function smoothFellSweepAim(current: Vec2, target: Vec2, chargeProgress: 
     current.y + (target.y - current.y) * alpha,
     current,
   );
+}
+
+export function isPointInsideFissure(
+  origin: Vec2,
+  direction: Vec2,
+  lengthPx: number,
+  widthPx: number,
+  point: Vec2,
+  pointRadiusPx = 0
+): boolean {
+  const dx = point.x - origin.x;
+  const dy = point.y - origin.y;
+  const along = dx * direction.x + dy * direction.y;
+  if (along < -pointRadiusPx || along > lengthPx + pointRadiusPx) return false;
+  const perpX = dx - direction.x * along;
+  const perpY = dy - direction.y * along;
+  return Math.hypot(perpX, perpY) <= widthPx / 2 + pointRadiusPx;
 }

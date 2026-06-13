@@ -29,9 +29,9 @@
   // The player has a single weapon slot, so testing axe-gated vs pickaxe-gated
   // gatherables means swapping the equipped tool here.
   const TOOLS: { label: string; itemId: string | null }[] = [
-    { label: "ðŸª“ axe", itemId: "stone_axe" },
-    { label: "â›ï¸ pickaxe", itemId: "stone_pickaxe" },
-    { label: "âœ‹ bare", itemId: null },
+    { label: "🪓 axe", itemId: "stone_axe" },
+    { label: "⛏️ pickaxe", itemId: "stone_pickaxe" },
+    { label: "✋ bare", itemId: null },
   ];
   const equippedToolId = $derived(getEquippedWeaponId());
   let collisionTarget = $state("stone_node");
@@ -77,7 +77,7 @@
 <div class="scenario-panel">
   <div class="panel-header">
     <span class="panel-title">scenarios</span>
-    <button class="close-btn" onclick={onClose}>Ã—</button>
+    <button class="close-btn" onclick={onClose}>×</button>
   </div>
 
   <div class="panel-body">

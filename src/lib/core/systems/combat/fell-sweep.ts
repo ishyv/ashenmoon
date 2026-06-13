@@ -1,11 +1,11 @@
-﻿import type { World } from "miniplex";
+import type { World } from "miniplex";
 import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE } from "$lib/core/systems/map/map";
 import type { InputResource } from "$lib/core/input/input";
 import { CombatResource, CombatConfig, applyDamage } from "./combat";
 import type { VFXResource } from "$lib/core/vfx/vfx";
-import { spawnEnvFloatingText, spawnEnvParticles, spawnShockwaveRing, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
+import { spawnEnvFloatingText, spawnEnvParticles, spawnShockwaveRing, spawnSlashArc, triggerCameraShake, spawnFellSweepCleave, spawnFellSweepWhirl } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
@@ -21,6 +21,7 @@ import {
   smoothFellSweepAim,
   trackFellSweepWhirl,
   type FellSweepChargeStage,
+  isPointInsideFissure,
 } from "$lib/domain/combat/fell-sweep";
 
 function resetFellSweepCharge(combat: CombatResource): void {
@@ -281,7 +282,13 @@ export function fellSweepSystem(
 
   playerSprite.scale.x = ax < 0 ? -Math.abs(playerSprite.scale.x) : Math.abs(playerSprite.scale.x);
   setPlayerAnim("attack");
-  spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, scaling.reach, scaling.arcHalfAngle, Colors.combat.fellSweepArc);
+
+  if (isWhirl) {
+    spawnFellSweepWhirl(vfx, entityLayer, { x: pcx, y: pcy }, scaling.reach, Colors.combat.fellSweepArc);
+  } else {
+    spawnFellSweepCleave(vfx, entityLayer, { x: pcx, y: pcy }, aimed, scaling.reach * 1.5, TILE * 1.2, Colors.combat.fellSweepArc);
+  }
+
   playSound(releaseSoundForStage(stage));
   triggerCameraShake(vfx, isWhirl ? 10 : 4 + charge * 5, isWhirl ? 0.42 : 0.2 + charge * 0.14);
   spawnEnvParticles(vfx, isWhirl ? Colors.combat.fellSweepArc : Colors.world.dirt, isWhirl ? 30 : stage === "full" || stage === "critical" ? 18 : 9, "smoke", pos, entityLayer);
@@ -289,23 +296,101 @@ export function fellSweepSystem(
     spawnShockwaveRing(vfx, entityLayer, pcx, pcy, Colors.combat.fellSweepArc, isWhirl ? 0.65 : stage === "full" ? 0.5 : 0.35);
   }
 
-  const cosHalf = Math.cos(scaling.arcHalfAngle);
   const enemyRadius = TILE * 0.4;
   let hitCount = 0;
-  for (const e of world.with("health", "position").entities) {
-    const h = e.health!;
-    if (h.faction !== "hostile" || h.current <= 0) continue;
-    const ex = e.position!.x + TILE / 2;
-    const ey = e.position!.y + TILE / 2;
-    const dx = ex - pcx;
-    const dy = ey - pcy;
-    const d = Math.hypot(dx, dy);
-    if (d > scaling.reach + enemyRadius) continue;
-    if (!isWhirl && d > 1 && (ax * dx + ay * dy) / d < cosHalf) continue;
-    const died = applyDamage(e, scaling.damage, pcx, pcy, scaling.knockback, config, vfx, entityLayer);
-    hitCount++;
-    if (died) onEnemyKilled(e);
+
+  if (isWhirl) {
+    // 1. Vacuum Pull: pull hostiles within reach * 1.5 closer (75% closer to player center)
+    const pulledEntities: Entity[] = [];
+    const pullRadius = scaling.reach * 1.5;
+    for (const e of world.with("health", "position").entities) {
+      const h = e.health!;
+      if (h.faction !== "hostile" || h.current <= 0) continue;
+      const ex = e.position!.x + TILE / 2;
+      const ey = e.position!.y + TILE / 2;
+      const dx = ex - pcx;
+      const dy = ey - pcy;
+      const d = Math.hypot(dx, dy);
+      if (d <= pullRadius) {
+        const ex_new = ex * 0.25 + pcx * 0.75;
+        const ey_new = ey * 0.25 + pcy * 0.75;
+        e.position!.x = ex_new - TILE / 2;
+        e.position!.y = ey_new - TILE / 2;
+        e.position!.targetX = e.position!.x;
+        e.position!.targetY = e.position!.y;
+        pulledEntities.push(e);
+      }
+    }
+
+    // 2. Damage calculation: deals +10% damage per extra target caught
+    const numPulled = pulledEntities.length;
+    const damageMultiplier = 1 + Math.max(0, numPulled - 1) * 0.1;
+    const finalDamage = Math.round(scaling.damage * damageMultiplier);
+
+    // 3. Apply damage and radial knockback to all hostiles within the whirl reach
+    for (const e of world.with("health", "position").entities) {
+      const h = e.health!;
+      if (h.faction !== "hostile" || h.current <= 0) continue;
+      const ex = e.position!.x + TILE / 2;
+      const ey = e.position!.y + TILE / 2;
+      const dx = ex - pcx;
+      const dy = ey - pcy;
+      const d = Math.hypot(dx, dy);
+      if (d <= scaling.reach + enemyRadius) {
+        const died = applyDamage(e, finalDamage, pcx, pcy, scaling.knockback, config, vfx, entityLayer);
+        hitCount++;
+        if (died) onEnemyKilled(e);
+      }
+    }
+  } else {
+    // Fissure Slam (Cleave)
+    const fissureLength = scaling.reach * 1.5;
+    const fissureWidth = TILE * 1.2;
+    for (const e of world.with("health", "position").entities) {
+      const h = e.health!;
+      if (h.faction !== "hostile" || h.current <= 0) continue;
+      const ex = e.position!.x + TILE / 2;
+      const ey = e.position!.y + TILE / 2;
+
+      const hit = isPointInsideFissure(
+        { x: pcx, y: pcy },
+        aimed,
+        fissureLength,
+        fissureWidth,
+        { x: ex, y: ey },
+        enemyRadius
+      );
+      if (hit) {
+        const dx = ex - pcx;
+        const dy = ey - pcy;
+        const along = dx * ax + dy * ay;
+        const perpX = dx - ax * along;
+        const perpY = dy - ay * along;
+        const perpDist = Math.hypot(perpX, perpY);
+
+        const isDirectHit = perpDist <= TILE * 0.3 && along >= 0 && along <= fissureLength;
+
+        let finalDamage = scaling.damage;
+        if (isDirectHit) {
+          finalDamage = Math.round(scaling.damage * 1.3);
+          e.bleed = {
+            remainingSec: 6,
+            tickEverySec: 2,
+            tickTimer: 2,
+            damagePerTick: 4
+          };
+          spawnEnvFloatingText(vfx, "💥 Direct Hit!", Colors.ui.warning, e.position!, entityLayer);
+          playSound("combo.crosscut.bleed", e.position ? { position: e.position } : {});
+        }
+
+        // Apply linear knockback along fissure direction using coordinates relative to direction
+        const died = applyDamage(e, finalDamage, ex - ax, ey - ay, scaling.knockback, config, vfx, entityLayer);
+        hitCount++;
+        if (died) onEnemyKilled(e);
+      }
+    }
   }
+
   if (hitCount > 0 && (stage === "critical" || stage === "full")) {
     triggerCameraShake(vfx, 7 + charge * 3, 0.16);
   }

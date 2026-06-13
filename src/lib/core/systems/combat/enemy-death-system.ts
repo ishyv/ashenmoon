@@ -14,9 +14,14 @@ import { playSound } from "$lib/audio/audio-engine";
 import { despawnEntity } from "$lib/core/systems/combat/combat";
 import { TILE } from "$lib/core/systems/map/map";
 import { spawnItemDrop } from "$lib/core/systems/map/spawn-system";
+import { spawnCarcassEntity } from "$lib/core/systems/animals/carcass-runtime";
 
 /**
- * Handles all logic related to enemy/animal death: rewards, VFX, and removal.
+ * Handles kill resolution after shared combat reports an entity dead.
+ *
+ * INVARIANT: animals do not drop hunting materials directly. They become
+ * carcasses so M3 processing, spoilage, and predator-attraction rules have a
+ * physical world anchor. Non-animal hostiles keep the normal loot-drop path.
  */
 export function handleEnemyDeathSystem(
   enemy: Entity,
@@ -49,7 +54,16 @@ export function handleEnemyDeathSystem(
   
   playSound("enemy.death", pos ? { position: { x: pos.x + TILE / 2, y: pos.y + TILE / 2 } } : {});
 
-  if (pos && enemy.loot?.drops) {
+  if (pos && enemy.animal) {
+    spawnCarcassEntity({
+      sourceEntityId: enemy.id,
+      speciesId: enemy.animal.speciesId,
+      x: pos.x,
+      y: pos.y,
+      entityLayer,
+      entitySprites,
+    });
+  } else if (pos && enemy.loot?.drops) {
     for (const drop of enemy.loot.drops) {
       spawnItemDrop(drop.itemId, drop.qty, pos.x, pos.y, entityLayer, entitySprites);
     }

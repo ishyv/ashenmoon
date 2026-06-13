@@ -35,8 +35,15 @@ import {
   fallDirectionAwayFromPlayer,
   isPointInTreeFallZone,
 } from "$lib/domain/hazards/tree-fall-hazard";
+import { LANDMARK_DEFS } from "$lib/domain/worldgen/landmark-definitions";
 import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
 import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
+import {
+  M3_CARCASS_DEFINITIONS,
+  resolveCarcassProcessing,
+  resolveCarcassToolQuality,
+  type CarcassProcessAction,
+} from "$lib/domain/animals/carcass-processing";
 import {
   findProcessForStation,
   resolveStationProcessCompletion,
@@ -54,6 +61,12 @@ interface DialogueStateRef {
 
 const INTERACT_RANGE = 2;
 const CAMPFIRE_STATION = getStationDefinition("campfire");
+const CARCASS_ACTION_ORDER: readonly Exclude<CarcassProcessAction, "inspect">[] = [
+  "harvest_meat",
+  "remove_hide",
+  "extract_bone",
+  "collect_sinew",
+];
 
 interface ImmediateInteractionDeps {
   interaction: InteractionResource;
@@ -151,7 +164,11 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
   {
     id: "process",
     handle: ({ target, resources }) => {
-      const { onStationInteract } = resources.deps;
+      const { onStationInteract, vfx, entityLayer } = resources.deps;
+      if (target.carcass) {
+        processCarcassInteraction(target, vfx, entityLayer);
+        return;
+      }
       if (onStationInteract) {
         onStationInteract(target);
       }
@@ -169,6 +186,34 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
       triggerQuestEvent(GameEvent.Talk, target.id);
     },
   },
+  {
+    id: "examine",
+    handle: ({ target, resources }) => {
+      const { vfx, entityLayer } = resources.deps;
+      const lm = target.landmark;
+      if (!lm) return;
+
+      const def = LANDMARK_DEFS[lm.kind];
+      if (!def) return;
+
+      const playerEntity = getPlayerEntity();
+      const text = lm.depleted && def.depletedText ? def.depletedText : def.examineText;
+      spawnEnvFloatingText(vfx, text, Colors.resource.gold, playerEntity.position!, entityLayer);
+
+      if (!lm.depleted && def.drops.length > 0) {
+        lm.depleted = true;
+        for (const drop of def.drops) {
+          if (typeof drop.chance === "number" && Math.random() > drop.chance) continue;
+          void syncPickup(drop.itemId, `${target.id}_drop_${drop.itemId}`, drop.qty).then((r) => {
+            if (r.ok) applyRpgState(r.data.playerState);
+          });
+          const itemName = getItemDef(drop.itemId)?.name ?? drop.itemId;
+          spawnEnvFloatingText(vfx, `+${drop.qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
+        }
+        playSound("pickup");
+      }
+    },
+  },
 ]);
 
 export class InteractionResource {
@@ -184,6 +229,76 @@ export class InteractionResource {
   public requestCrafting = false;
   /** Active item process (boiling, smelting); null when nothing is processing. */
   public activeProcess: StationProcessRuntime | null = null;
+}
+
+function nextCarcassAction(target: Entity): Exclude<CarcassProcessAction, "inspect"> | null {
+  if (!target.carcass) return null;
+  const definition = M3_CARCASS_DEFINITIONS[target.carcass.speciesId];
+  for (const action of CARCASS_ACTION_ORDER) {
+    if (target.carcass.processedActions.includes(action)) continue;
+    if (definition.actions[action].yields.length === 0) continue;
+    return action;
+  }
+  return null;
+}
+
+function processCarcassInteraction(target: Entity, vfx: VFXResource, entityLayer: Container): void {
+  const carcass = target.carcass;
+  const player = getPlayerEntity();
+  if (!carcass || !player.position) return;
+
+  const action = nextCarcassAction(target);
+  if (!action) {
+    spawnEnvFloatingText(vfx, "nothing useful remains", Colors.ui.muted, player.position, entityLayer);
+    return;
+  }
+
+  const toolQuality = resolveCarcassToolQuality({
+    equippedItemId: getEquippedWeaponId(),
+    hasSharpFlint: getItemQty("flint_shard") > 0 || getItemQty("bone_shard") > 0,
+  });
+  const result = resolveCarcassProcessing({
+    carcass,
+    action,
+    toolQuality,
+  });
+
+  if (!result.ok) {
+    spawnEnvFloatingText(vfx, result.feedback, Colors.ui.error, player.position, entityLayer);
+    return;
+  }
+
+  // INVARIANT: mark the carcass before async inventory writes so repeated
+  // interaction cannot duplicate yields while persistence is still resolving.
+  carcass.processedActions = [...carcass.processedActions, result.action];
+  carcass.state = result.nextState;
+
+  void (async () => {
+    for (const yieldItem of result.yields) {
+      const sync = await syncPickup(yieldItem.itemId, `${target.id}:${result.action}:${yieldItem.itemId}`, yieldItem.qty);
+      if (sync.ok) applyRpgState(sync.data.playerState);
+    }
+  })();
+
+  for (const risk of result.risks) {
+    if (Math.random() < risk.chance) {
+      applyStatusEffect(risk.status, risk.durationSec, "hazard:carcass");
+      spawnEnvFloatingText(
+        vfx,
+        risk.status === StatusId.Cut ? "cut" : "sickened",
+        Colors.ui.error,
+        player.position,
+        entityLayer,
+      );
+    }
+  }
+
+  const yieldText = result.yields
+    .map((yieldItem) => `+${yieldItem.qty} ${getItemDef(yieldItem.itemId)?.name.toLowerCase() ?? yieldItem.itemId}`)
+    .join(", ");
+  spawnEnvFloatingText(vfx, yieldText || result.feedback, Colors.resource.gold, player.position, entityLayer);
+  spawnEnvParticles(vfx, Colors.combat.enemyDeath, 5, "sizzle", player.position, entityLayer);
+  playSound("node.deplete");
 }
 
 
@@ -308,7 +423,7 @@ export function handleHitFeedbackSystem(
 
     const isSuper = quantity > 1;
     const textStyle = new TextStyle({
-      fontFamily: "monospace",
+      fontFamily: ["monospace", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "sans-serif"],
       fontSize: isSuper ? 22 : 15,
       fontWeight: "bold",
       fill: isSuper ? Colors.resource.superText : isTree ? Colors.resource.wood : Colors.resource.ore,
@@ -745,7 +860,7 @@ export function runInteractionSystem(
       const playerEntity = getPlayerEntity();
       spawnEnvFloatingText(
         vfx,
-        "ðŸ”¥ Refuel cancelled",
+        "🔥 Refuel cancelled",
         Colors.ui.muted,
         playerEntity.position!,
         entityLayer
@@ -810,7 +925,7 @@ export function runInteractionSystem(
           const spawnFailText = (msg: string) => {
             const playerEntity = getPlayerEntity();
             const textStyle = new TextStyle({
-              fontFamily: "monospace",
+              fontFamily: ["monospace", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "sans-serif"],
               fontSize: 13,
               fontWeight: "bold",
               fill: Colors.ui.error,

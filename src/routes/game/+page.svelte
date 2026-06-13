@@ -12,6 +12,7 @@ import InputConfigHub, { type Bindings } from "$lib/ui/debug/InputConfigHub.svel
 import EquipmentPanel from "$lib/ui/panels/EquipmentPanel.svelte";
 import InventoryGrid from "$lib/ui/panels/InventoryGrid.svelte";
 import EnvironmentGauge from "$lib/ui/hud/EnvironmentGauge.svelte";
+import ConditionPanel from "$lib/ui/hud/ConditionPanel.svelte";
 import SkillHotbar from "$lib/ui/elements/SkillHotbar.svelte";
 import SkillTreePanel from "$lib/ui/panels/SkillTreePanel.svelte";
 import DialogueBox from "$lib/ui/elements/DialogueBox.svelte";
@@ -268,7 +269,7 @@ onDestroy(() => {
 </script>
 
 <svelte:head>
-  <title>Ashenmoor â€” Camp</title>
+  <title>Ashenmoon — Camp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cardo:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -310,7 +311,7 @@ onDestroy(() => {
   <div class="hud-corner">
     {#if lookAt}
       <div class="look-at">
-        <span class="look-icon">â—ˆ</span> {lookAt} <kbd>E</kbd>
+        <span class="look-icon">◈</span> {lookAt} <kbd>E</kbd>
       </div>
     {/if}
     {#if coords}
@@ -318,11 +319,11 @@ onDestroy(() => {
     {/if}
     <div class="legend">
       <kbd>WASD</kbd> move
-      <span class="sep">Â·</span>
+      <span class="sep">·</span>
       <kbd>E</kbd> harvest
-      <span class="sep">Â·</span>
+      <span class="sep">·</span>
       <kbd>/</kbd> console
-      <span class="sep">Â·</span>
+      <span class="sep">·</span>
       <span>scroll zoom</span>
     </div>
   </div>
@@ -358,6 +359,7 @@ onDestroy(() => {
   {/if}
 
   <EnvironmentGauge />
+  <ConditionPanel />
 
   <div class="bottom-hud-stack">
     {#if notify}

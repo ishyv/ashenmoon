@@ -1,12 +1,16 @@
 <script lang="ts">
 /**
  * EnvironmentGauge handles immersive environmental feedback:
- * 1. Screen vignettes for hazard states (Heat, Cold, Toxins, Humidity).
+ * 1. Screen vignettes for hazard states (Heat, Cold, Wetness, Toxins, Humidity).
  * 2. A minimalist, glassmorphic Temperature widget in the top-left corner.
  */
 import { fade } from "svelte/transition";
 import { activeEnvironment } from "$lib/state/environment-state.svelte";
 import { uiPreferences } from "$lib/state/runtime-ui-state.svelte";
+import { wetnessState } from "$lib/state/rpg/wetness.svelte";
+import { coldExposure } from "$lib/state/rpg/cold-exposure.svelte";
+
+const coldAccumulator = $derived(coldExposure.accumulator);
 
 let showTempWidget = $state(true);
 let tempFadeTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -21,10 +25,12 @@ const getTempColorName = $derived(() => {
 });
 
 // Vignette visibility checks
-const showHeatVignette = $derived(activeEnvironment.temperature >= 35);
-const showColdVignette = $derived(activeEnvironment.temperature <= 10);
+const showHeatVignette = $derived(activeEnvironment.temperature >= 28);
+const showColdVignette = $derived(activeEnvironment.temperature <= 10 || coldAccumulator > 15);
 const showToxicVignette = $derived(activeEnvironment.toxins > 0);
 const showHumidityVignette = $derived(activeEnvironment.humidity >= 65);
+const showWetVignette = $derived(wetnessState.level === "wet" || wetnessState.level === "soaked");
+const showSoakedVignette = $derived(wetnessState.level === "soaked");
 
 $effect(() => {
   if (!uiPreferences.dynamicEnvironment) {
@@ -64,15 +70,24 @@ $effect(() => {
 
 <!-- Immersive screen border overlays for environmental feedback -->
 {#if showHeatVignette}
-  <!-- Scales overlay opacity dynamically based on temperature intensity -->
-  {@const heatOpacity = Math.min(1.0, (activeEnvironment.temperature - 35) / 105)}
+  {@const heatOpacity = Math.min(1.0, (activeEnvironment.temperature - 28) / 112)}
   <div class="vignette heat-vignette" style="--intensity-opacity: {heatOpacity}"></div>
 {/if}
 
 {#if showColdVignette}
-  <!-- Scales overlay opacity dynamically based on coldness intensity -->
-  {@const coldOpacity = Math.min(1.0, (10 - activeEnvironment.temperature) / 60)}
+  {@const tempCold = Math.min(1.0, (10 - activeEnvironment.temperature) / 60)}
+  {@const accumCold = Math.min(1.0, Math.max(0, (coldAccumulator - 15) / 85))}
+  {@const coldOpacity = Math.max(tempCold, accumCold * 0.6)}
   <div class="vignette cold-vignette" style="--intensity-opacity: {coldOpacity}"></div>
+{/if}
+
+{#if showWetVignette}
+  {@const wetOpacity = wetnessState.level === "soaked" ? 0.85 : 0.5}
+  <div class="vignette wet-vignette" style="--intensity-opacity: {wetOpacity}"></div>
+{/if}
+
+{#if showSoakedVignette}
+  <div class="vignette soaked-vignette" style="--intensity-opacity: 0.6"></div>
 {/if}
 
 {#if showToxicVignette}
@@ -124,6 +139,21 @@ $effect(() => {
   .toxic-vignette {
     box-shadow: inset 0 0 80px rgba(168, 85, 247, 0.45);
     background: radial-gradient(circle, transparent 55%, rgba(168, 85, 247, 0.15) 100%);
+    animation: pulse 2.5s infinite ease-in-out;
+  }
+
+  /* Wet overlay: teal shimmer for wet/soaked state */
+  .wet-vignette {
+    box-shadow: inset 0 0 80px rgba(20, 180, 160, 0.45);
+    background: radial-gradient(circle, transparent 55%, rgba(20, 180, 160, 0.12) 100%);
+    animation: pulse 3.5s infinite ease-in-out;
+  }
+
+  /* Soaked overlay: heavier teal distortion on top */
+  .soaked-vignette {
+    box-shadow: inset 0 0 120px rgba(20, 160, 180, 0.55);
+    background: radial-gradient(circle, transparent 40%, rgba(20, 160, 180, 0.18) 100%);
+    backdrop-filter: blur(0.5px);
     animation: pulse 2.5s infinite ease-in-out;
   }
 

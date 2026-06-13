@@ -117,7 +117,8 @@ export function weatherOverlaySystem(
   nightOverlay: Graphics,
   worldContainer: Container,
   shelterColdMultiplierAt: (gx: number, gy: number) => number,
-  dt: number
+  dt: number,
+  coldBuildRateMult = 1
 ): void {
   if (nightOverlay && playerEntity.position) {
     const pgx = Math.round(playerEntity.position.x / TILE);
@@ -126,20 +127,20 @@ export function weatherOverlaySystem(
       x: playerEntity.position.x + TILE / 2,
       y: playerEntity.position.y + TILE / 2,
     });
-    
+
     const nightMods = nightEnvironmentModifiers({
       timeOfDay: weather.state.timeOfDay,
       nearLitCampfire: nearCampfire,
       shelterColdMultiplier: shelterColdMultiplierAt(pgx, pgy),
     });
-    
+
     const targetAlpha = 1 - nightMods.visibilityMultiplier;
     weather.nightOverlayAlpha += (targetAlpha - weather.nightOverlayAlpha) * Math.min(1, dt * 0.5);
     nightOverlay.alpha = weather.nightOverlayAlpha;
 
     const { temperatureDelta } = nightMods;
     if (temperatureDelta < 0) {
-      weather.coldAccumulator = Math.min(100, weather.coldAccumulator + (-temperatureDelta * 0.08 * dt));
+      weather.coldAccumulator = Math.min(100, weather.coldAccumulator + (-temperatureDelta * 0.08 * dt * coldBuildRateMult));
     } else {
       weather.coldAccumulator = Math.max(0, weather.coldAccumulator - (temperatureDelta * 0.2 * dt));
     }

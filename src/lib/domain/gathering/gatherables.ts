@@ -21,7 +21,9 @@ export type GatherableRenderKind =
   | "moss"
   | "rock_cursed"
   | "rock_cursed2"
-  | "rock_cursed3";
+  | "rock_cursed3"
+  | "tree_forgotten"
+  | "prop_forgotten";
 export type GatherableSolidKind = "none" | "tree" | "rock";
 export type GatherableSyncAction = "forest" | "mine";
 

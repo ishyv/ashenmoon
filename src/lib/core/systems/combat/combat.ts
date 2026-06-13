@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Combat core: the shared damage path, the player's melee swing, and knockback
  * integration. Everything here is faction-agnostic and entity-agnostic â€” the
  * player and every enemy run through the same `applyDamage` so hit reactions,
@@ -29,6 +29,7 @@ import {
   DEFAULT_DIRECTIONAL_MOMENTUM_COMBO_CONFIG,
   updateDirectionalMomentumCombo,
   processDirectionalMomentumStrike,
+  getComboDirection,
 } from "./directional-momentum-combo";
 import {
   updateKiteCombo,
@@ -212,7 +213,7 @@ export function applyDamage(
     amount = Math.round(amount * (1 + 0.15 * combat.kiteStacks));
     spawnEnvFloatingText(
       vfx,
-      "âš ï¸ Focus Broken!",
+      "⚠️ Focus Broken!",
       Colors.ui.error,
       target.position!,
       entityLayer,
@@ -583,7 +584,36 @@ export function playerAttackSystem(
 
   const isFourfold = fourfoldResult.status === "completed";
 
-  const crosscutResult = !isKiteReady && !isFourfold
+  // A "momentum step" is an attack whose direction matches the player's current
+  // movement direction. These clicks are building the Directional Momentum combo
+  // and must not seed or trigger the Crosscut combo — both combos use different
+  // inputs and should be independent.
+  const isMomentumStep = (() => {
+    const attackDir = getComboDirection(inputs.mouseWorld.x - pcx, inputs.mouseWorld.y - pcy);
+    if (!attackDir) return false;
+    let mx = 0, my = 0;
+    if (movement?.isDashing) {
+      mx = movement.dashVelocity.x;
+      my = movement.dashVelocity.y;
+    } else {
+      if (inputs.isActionPressed(InputAction.MoveUp)) my = -1;
+      if (inputs.isActionPressed(InputAction.MoveDown)) my = 1;
+      if (inputs.isActionPressed(InputAction.MoveLeft)) mx = -1;
+      if (inputs.isActionPressed(InputAction.MoveRight)) mx = 1;
+    }
+    let moveDir = getComboDirection(mx, my);
+    // Apply step-window tolerance (mirrors processDirectionalMomentumStrike)
+    if (!moveDir) {
+      const dmState = combat.directionalMomentumState;
+      if (dmState.lastMoveInputDirection &&
+          combat.currentTimeMs - dmState.lastMoveInputTime <= combat.directionalMomentumConfig.stepWindowMs) {
+        moveDir = dmState.lastMoveInputDirection;
+      }
+    }
+    return moveDir === attackDir;
+  })();
+
+  const crosscutResult = !isKiteReady && !isFourfold && !isMomentumStep
     ? tryResolveCrosscutCombo({
         state: combat.crosscutState,
         config: combat.crosscutConfig,
@@ -598,7 +628,9 @@ export function playerAttackSystem(
 
   // Primed/triggered combos respect the attack cooldown.
   // Basic attacks (not combos) bypass the hard cooldown check.
-  if (combat.attackCooldownTimer > 0 && isCombo) return;
+  // Note: Fourfold finishers and Crosscut combos bypass this cooldown because they are built from
+  // consecutive clicking sequences and are rate-limited by their own internal windows/cooldowns.
+  if (combat.attackCooldownTimer > 0 && isCombo && !isFourfold && !isCrosscut) return;
 
   let ax = inputs.mouseWorld.x - pcx;
   let ay = inputs.mouseWorld.y - pcy;
@@ -658,13 +690,17 @@ export function playerAttackSystem(
     useStaminaCost = staminaCostVal;
 
     if (finisherType === "wheel_slash") {
-      finisherColor = 0xd9c5b2;
+      finisherColor = Colors.fourfold.wheelSlash;
     } else if (finisherType === "falling_wheel") {
-      finisherColor = 0x8c7e73;
+      finisherColor = Colors.fourfold.fallingWheel;
     } else if (finisherType === "rising_wheel") {
-      finisherColor = 0xa6b8b1;
-    } else if (finisherType === "crosswind_cut") {
-      finisherColor = 0xbf8585;
+      finisherColor = Colors.fourfold.risingWheel;
+    } else if (finisherType === "starburst_cross") {
+      finisherColor = Colors.fourfold.starburstCross;
+    } else if (finisherType === "vortex_slice") {
+      finisherColor = Colors.fourfold.vortexSlice;
+    } else {
+      finisherColor = Colors.fourfold.crosswindCut;
     }
     arcColor = finisherColor;
   } else if (isCrosscut) {
@@ -686,7 +722,7 @@ export function playerAttackSystem(
   if (stamina.current < (isKiteCombo || isFourfold ? useStaminaCost : config.minStamina)) {
     spawnEnvFloatingText(
       vfx,
-      isKiteCombo ? "âš¡ï¸ too winded to kite" : isFourfold ? "âš¡ï¸ too winded to finish" : "âš¡ï¸ too winded to swing",
+      isKiteCombo ? "⚡️ too winded to kite" : isFourfold ? "⚡️ too winded to finish" : "⚡️ too winded to swing",
       Colors.ui.error,
       player.position!,
       entityLayer,
@@ -777,7 +813,29 @@ export function playerAttackSystem(
     spawnFourfoldFinisherSlash(vfx, entityLayer, pcx, pcy, effectiveReach, arcColor, finisherType);
     spawnEnvFloatingText(vfx, finisherName(finisherType), arcColor, player.position!, entityLayer);
     playSound("combo.crosscut.excellent");
-    triggerCameraShake(vfx, 6.0, 0.22);
+
+    let shakeIntensity = 6.0;
+    let shakeDuration = 0.22;
+    if (finisherType === "falling_wheel") {
+      shakeIntensity = 7.5;
+      shakeDuration = 0.26;
+    } else if (finisherType === "vortex_slice") {
+      shakeIntensity = 7.0;
+      shakeDuration = 0.24;
+    } else if (finisherType === "starburst_cross") {
+      shakeIntensity = 6.5;
+      shakeDuration = 0.22;
+    } else if (finisherType === "wheel_slash") {
+      shakeIntensity = 6.0;
+      shakeDuration = 0.22;
+    } else if (finisherType === "rising_wheel") {
+      shakeIntensity = 5.5;
+      shakeDuration = 0.20;
+    } else if (finisherType === "crosswind_cut") {
+      shakeIntensity = 5.0;
+      shakeDuration = 0.18;
+    }
+    triggerCameraShake(vfx, shakeIntensity, shakeDuration);
   } else if (isCrosscut) {
     spawnCrosscutSlash(vfx, entityLayer, crosscutSlashX, crosscutSlashY, angle, crosscutSlashReach, arcColor, crosscutResult.grade!, crosscutStacks);
     spawnEnvFloatingText(vfx, crosscutText(crosscutResult.grade!), arcColor, player.position!, entityLayer);
@@ -838,25 +896,29 @@ export function playerAttackSystem(
       if (crosscutResult.reason === "expired") {
         combat.crosscutState.cooldownUntilMs = combat.currentTimeMs + combat.crosscutConfig.comboCooldownMs;
         clearCrosscut(combat, vfx, entityLayer);
-        storeFirstCrosscutClick(combat.crosscutState, {
+        const stored = storeFirstCrosscutClick(combat.crosscutState, {
           clickWorldPosition: inputs.mouseWorld,
           playerPosition: { x: pcx, y: pcy },
           nowMs: combat.currentTimeMs,
           config: combat.crosscutConfig,
         });
-        spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, combat.crosscutConfig.comboWindowMs / 1000);
+        if (stored) {
+          spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, combat.crosscutConfig.comboWindowMs / 1000);
+        }
       } else {
         combat.crosscutState.cooldownUntilMs = combat.currentTimeMs + combat.crosscutConfig.comboCooldownMs;
         clearCrosscut(combat, vfx, entityLayer);
       }
     } else if (crosscutResult.reason === "no_starter") {
-      storeFirstCrosscutClick(combat.crosscutState, {
+      const stored = storeFirstCrosscutClick(combat.crosscutState, {
         clickWorldPosition: inputs.mouseWorld,
         playerPosition: { x: pcx, y: pcy },
         nowMs: combat.currentTimeMs,
         config: combat.crosscutConfig,
       });
-      spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, combat.crosscutConfig.comboWindowMs / 1000);
+      if (stored) {
+        spawnCrosscutIndicator(vfx, entityLayer, inputs.mouseWorld.x, inputs.mouseWorld.y, combat.crosscutConfig.comboWindowMs / 1000);
+      }
     }
   }
 }
@@ -867,6 +929,8 @@ function finisherName(type: FourfoldSlashType): string {
     case "falling_wheel": return "Falling Wheel";
     case "rising_wheel": return "Rising Wheel";
     case "crosswind_cut": return "Crosswind Cut";
+    case "starburst_cross": return "Starburst Cross";
+    case "vortex_slice": return "Vortex Slice";
   }
 }
 

@@ -7,6 +7,13 @@ const SH = (col: number, row: number): IconSheet => ({
   row,
   size: 32,
 });
+
+const I32 = (col: number, row: number): IconSheet => ({
+  src: "/assets/icons-32/icons.png",
+  col,
+  row,
+  size: 32,
+});
 import { buildItemTraitIndex, defineItems } from "./item-registry";
 import {
   AddStatus,
@@ -258,7 +265,75 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     }),
     Decayable({
       lifespanSec: 180,
-      effect: TransformInto(itemId("volatile_ash")),
+      effect: TransformInto(itemId("spoiled_meat")),
+    }),
+  ),
+  raw_small_meat: Item({
+    id: itemId("raw_small_meat"),
+    name: "Raw Small Meat",
+    description: "A small cut of fresh meat. It will not stay fresh for long.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pack", weight: 0.25, stackLimit: 16 },
+    iconSheet: SH(7, 12),
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(3), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 35))],
+    }),
+    Decayable({
+      lifespanSec: 180,
+      effect: TransformInto(itemId("spoiled_meat")),
+    }),
+  ),
+  raw_large_meat: Item({
+    id: itemId("raw_large_meat"),
+    name: "Raw Large Meat",
+    description: "A heavy cut of fresh meat. Good food if processed before rot takes it.",
+    rarity: Rarity.Common,
+    category: Category.Herb,
+    physical: { carryClass: "pack", weight: 0.65, stackLimit: 8 },
+    iconSheet: SH(7, 12),
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(5), ChanceOfVitals(0.35, AddStatus(StatusId.Sickness, 50))],
+    }),
+    Decayable({
+      lifespanSec: 180,
+      effect: TransformInto(itemId("spoiled_meat")),
+    }),
+  ),
+  spoiled_meat: Item({
+    id: itemId("spoiled_meat"),
+    name: "Spoiled Meat",
+    description: "Meat turning sour. The smell carries, and eating it is asking for misery.",
+    rarity: Rarity.Common,
+    category: Category.Reagent,
+    physical: { carryClass: "pack", weight: 0.35, stackLimit: 16 },
+    iconSheet: SH(8, 12),
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [RestoreHp(1), ChanceOfVitals(0.75, AddStatus(StatusId.Sickness, 80))],
+    }),
+    Decayable({
+      lifespanSec: 240,
+      effect: TransformInto(itemId("rotten_meat")),
+    }),
+  ),
+  rotten_meat: Item({
+    id: itemId("rotten_meat"),
+    name: "Rotten Meat",
+    description: "Blackened meat crawling toward uselessness. A predator lure, not food.",
+    rarity: Rarity.Common,
+    category: Category.Reagent,
+    physical: { carryClass: "pack", weight: 0.3, stackLimit: 16 },
+    iconSheet: SH(8, 12),
+  }).with(
+    Consumable({
+      verb: "eat",
+      onConsume: [ChanceOfVitals(0.95, AddStatus(StatusId.Sickness, 120))],
     }),
   ),
   cooked_meat: Item({
@@ -759,6 +834,51 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     }),
   ),
   // --- Animal byproducts -----------------------------------------------------
+  small_hide: Item({
+    id: itemId("small_hide"),
+    name: "Small Hide",
+    description: "A small animal hide. Enough for wraps, patches, or bedding scraps.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.18, stackLimit: 20 },
+    iconSheet: I32(0, 7),
+  }),
+  hide: Item({
+    id: itemId("hide"),
+    name: "Hide",
+    description: "Animal hide that can become wraps, shelter cover, or rough protection.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.8, stackLimit: 12 },
+    iconSheet: I32(1, 7),
+  }),
+  tough_hide: Item({
+    id: itemId("tough_hide"),
+    name: "Tough Hide",
+    description: "Dense hide from a dangerous animal. Harder to work, better protection.",
+    rarity: Rarity.Uncommon,
+    category: Category.Component,
+    physical: { carryClass: "pack", weight: 1.0, stackLimit: 10 },
+    iconSheet: I32(2, 7),
+  }),
+  small_bone: Item({
+    id: itemId("small_bone"),
+    name: "Small Bone",
+    description: "A thin bone suited for needles, pins, and delicate tool work.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
+    iconSheet: I32(1, 10),
+  }),
+  bone: Item({
+    id: itemId("bone"),
+    name: "Bone",
+    description: "A sturdy animal bone. It can be shaped into tools, points, or fasteners.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pack", weight: 0.25, stackLimit: 20 },
+    iconSheet: I32(1, 11),
+  }),
   bone_shard: Item({
     id: itemId("bone_shard"),
     name: "Bone Shard",
@@ -766,6 +886,34 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = defineItems({
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.1, stackLimit: 20 },
+    iconSheet: I32(2, 11),
+  }),
+  sinew: Item({
+    id: itemId("sinew"),
+    name: "Sinew",
+    description: "Tough tendon fiber. Strong binding for tools, hides, and future weapons.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.04, stackLimit: 30 },
+    iconSheet: I32(0, 6),
+  }),
+  fang: Item({
+    id: itemId("fang"),
+    name: "Fang",
+    description: "A predator fang with a clean point. Useful as a sharp component or warning token.",
+    rarity: Rarity.Uncommon,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.05, stackLimit: 10 },
+    iconSheet: I32(5, 7),
+  }),
+  tusk_shard: Item({
+    id: itemId("tusk_shard"),
+    name: "Tusk Shard",
+    description: "A broken tusk edge from a boar. Heavy, sharp, and awkward.",
+    rarity: Rarity.Uncommon,
+    category: Category.Component,
+    physical: { carryClass: "pocket", weight: 0.12, stackLimit: 10 },
+    iconSheet: I32(3, 11),
   }),
   feather: Item({
     id: itemId("feather"),

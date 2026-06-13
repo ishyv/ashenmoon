@@ -13,6 +13,7 @@ export const INTERACTION_IDS = [
   "combat",
   "talk",
   "refuel",
+  "examine",
 ] as const;
 
 /** Every kind of interaction an entity can advertise. */

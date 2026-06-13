@@ -264,7 +264,7 @@ export function breakCombo(
   if (state.isActive) {
     playSound("combo.momentum.break");
     if (player.position) {
-      spawnEnvFloatingText(vfx, "âš ï¸ Chain Broken!", Colors.ui.warning, player.position, entityLayer);
+      spawnEnvFloatingText(vfx, "⚠️ Chain Broken!", Colors.ui.warning, player.position, entityLayer);
       spawnComboBreakBurst(vfx, player.position, oldDirection, entityLayer);
     }
   }
@@ -378,7 +378,7 @@ function rollOverload(
 
     playSound("combo.momentum.overload");
     if (player.position) {
-      spawnEnvFloatingText(vfx, "âš ï¸ Overextended!", Colors.ui.error, player.position, entityLayer);
+      spawnEnvFloatingText(vfx, "⚠️ Overextended!", Colors.ui.error, player.position, entityLayer);
       flashEntity(vfx, entityLayer, player.id, player.position.x + TILE / 2, player.position.y + TILE, Colors.combat.playerHit);
     }
     triggerCameraShake(vfx, 3.5, 0.15);
@@ -442,7 +442,7 @@ export function processDirectionalMomentumStrike(
           // Normal stack gain
           playSound("combo.momentum.stack", { params: { stacks: state.currentStacks } });
           if (player.position) {
-            spawnEnvFloatingText(vfx, `âš¡ Momentum x${state.currentStacks}`, 0x8b5cf6, player.position, entityLayer);
+            spawnEnvFloatingText(vfx, `⚡ Momentum x${state.currentStacks}`, 0x8b5cf6, player.position, entityLayer);
             triggerCameraShake(vfx, 1.5 + state.currentStacks * 0.5, 0.08);
           }
         }
@@ -471,7 +471,7 @@ export function processDirectionalMomentumStrike(
             if (!overloaded) {
               playSound("combo.momentum.activate");
               if (player.position) {
-                spawnEnvFloatingText(vfx, "âš¡ Momentum Chain!", 0x06b6d4, player.position, entityLayer);
+                spawnEnvFloatingText(vfx, "⚡ Momentum Chain!", 0x06b6d4, player.position, entityLayer);
                 spawnDirectionalTrail(vfx, player.position, attackDir, entityLayer);
               }
             }

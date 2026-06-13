@@ -24,7 +24,7 @@ import type { FocusedGatherResource, FocusedTargetSprite } from "./focused-gathe
 const FOCUS_TARGET_Z = 110_000;
 
 const LABEL_STYLE = new TextStyle({
-  fontFamily: "monospace",
+  fontFamily: ["monospace", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "sans-serif"],
   fontSize: 13,
   fontWeight: "bold",
   fill: Colors.ui.white,

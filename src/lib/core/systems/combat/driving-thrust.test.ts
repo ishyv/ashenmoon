@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { World } from "miniplex";
 import { Container } from "pixi.js";
 import { CombatConfig, CombatResource } from "./combat";
@@ -148,8 +148,8 @@ describe("Driving Thrust combat system", () => {
     runThrust(ctx, 0);
     runThrust(ctx, 0.12);
 
-    expect(first.health!.current).toBe(82);
-    expect(second.health!.current).toBe(88);
+    expect(first.health!.current).toBe(79); // 10 * 1.8 * 1.15 (2 hits) = 21 damage
+    expect(second.health!.current).toBe(86); // 10 * 1.2 * 1.15 (2 hits) = 14 damage
     expect(outside.health!.current).toBe(100);
   });
 
