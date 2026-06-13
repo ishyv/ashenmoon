@@ -1,10 +1,10 @@
-<script lang="ts">
+﻿<script lang="ts">
 import { onMount } from "svelte";
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { stationProcessVerb, STATION_PROCESSES } from "$lib/domain/systems/station-process";
 import { getItemDef } from "$lib/domain/items";
 import { getFuelSummary } from "$lib/domain/camp/fuel";
-import { getItemQty } from "$lib/domain/inventory-api";
+import { getItemQty } from "$lib/state/rpg/inventory-api";
 import { getStationDefinition } from "$lib/domain/stations";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { StationProcessRuntime } from "$lib/domain/systems/station-process";
@@ -168,7 +168,7 @@ function cancelProcess() {
                 {@const owned = getOwnedQty(itemId)}
                 {@const met = owned >= reqQty}
                 <div class="ingredient-row" class:met={met}>
-                  <span class="check-icon">{met ? "✓" : "○"}</span>
+                  <span class="check-icon">{met ? "âœ“" : "â—‹"}</span>
                   <span class="ing-name">{getItemDef(itemId)?.name.toLowerCase() ?? itemId}</span>
                   <span class="ing-qty">{owned} / {reqQty}</span>
                 </div>
@@ -479,3 +479,4 @@ function cancelProcess() {
     color: white;
   }
 </style>
+

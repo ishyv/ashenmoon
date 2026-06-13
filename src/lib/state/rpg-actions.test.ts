@@ -3,7 +3,6 @@ import { gameState } from "$lib/state/game-state.svelte";
 import {
   addLocalInventoryQty,
   applyRpgState,
-  applyRpgStatePreservingLocalWeapon,
   equipLocalWeapon,
   setLocalHp,
   setRpgInventory,
@@ -63,27 +62,5 @@ describe("rpg actions", () => {
     const weapon = gameState.rpg.profile?.loadout.weapon;
     expect(typeof weapon === "object" ? weapon?.itemId : weapon).toBe("flint_axe");
     expect(gameState.rpg.profile?.hpCurrent).toBe(42);
-  });
-
-  it("preserves a local-only equipped tool when gameplay sync returns no weapon", () => {
-    setRpgProfile(state().profile);
-    equipLocalWeapon("stone_pickaxe");
-
-    applyRpgStatePreservingLocalWeapon(state({
-      inventory: { slots: { stone: { qty: 1 } } },
-    }));
-
-    const weapon = gameState.rpg.profile?.loadout.weapon;
-    expect(typeof weapon === "object" ? weapon?.itemId : weapon).toBe("stone_pickaxe");
-    expect(gameState.rpg.inventory?.slots.stone).toEqual({ qty: 1 });
-  });
-
-  it("does not preserve the local tool when gameplay sync reports it broke", () => {
-    setRpgProfile(state().profile);
-    equipLocalWeapon("stone_pickaxe");
-
-    applyRpgStatePreservingLocalWeapon(state(), { toolBroken: true });
-
-    expect(gameState.rpg.profile?.loadout.weapon).toBeNull();
   });
 });

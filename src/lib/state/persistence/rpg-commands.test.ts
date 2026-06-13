@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { StorageKeys } from "$lib/domain/game-events";
 import { SAVE_VERSION } from "$lib/state/persistence/migrations";
 import {
-  createDefaultPlayerState,
   getLocalRpgState,
   localRpgCommands,
   normalizePlayerState,
   saveLocalRpgState,
 } from "$lib/state/persistence/rpg-commands";
+import { createDefaultPlayerState } from "$lib/domain/rpg-defaults";
 
 describe("local RPG commands", () => {
   beforeEach(() => {

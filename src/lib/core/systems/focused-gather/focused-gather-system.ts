@@ -1,5 +1,5 @@
-/**
- * Focused Gathering — engine glue. Owns the live session, drives the pure
+﻿/**
+ * Focused Gathering â€” engine glue. Owns the live session, drives the pure
  * state machine each frame, routes canvas clicks into it, and on completion
  * grants the rolled yield, applies penalties, and destroys the node.
  *
@@ -16,17 +16,17 @@ import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import type { InputResource } from "$lib/core/input/input";
 import { spawnEnvFloatingText, spawnShockwaveRing, type VFXResource } from "$lib/core/vfx/vfx";
 import { Colors } from "$lib/utils/colors";
-import { stamina, spendStamina } from "$lib/domain/stamina.svelte";
+import { stamina, spendStamina } from "$lib/state/rpg/stamina.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
-import { getEquippedWeaponId } from "$lib/domain/inventory-api";
+import { getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { SkillKey } from "$lib/domain/game-events";
 import { StatusId } from "$lib/domain/systems/status-types";
-import { awardSkillXp } from "$lib/domain/skill-xp";
-import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
+import { awardSkillXp } from "$lib/state/rpg/skill-xp";
+import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
 import { syncPickup } from "$lib/state/persistence/remote-sync";
-import { applyRpgStatePreservingLocalWeapon } from "$lib/state/rpg-actions.svelte";
+import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import type { FocusedGatherSession } from "$lib/domain/gathering/focused-gather/focused-gather-types";
 import { resolveFocusedGatherActivation } from "$lib/domain/gathering/focused-gather/focused-gather-activation";
 import { generateTargets } from "$lib/domain/gathering/focused-gather/focused-gather-patterns";
@@ -124,7 +124,7 @@ export function runFocusedGatherSystem(
   const node = focused.node;
   if (session === null || node === null) return;
 
-  // The node vanished (destroyed elsewhere) — bail without payout.
+  // The node vanished (destroyed elsewhere) â€” bail without payout.
   if (!entitySprites.has(node.id)) {
     clearSprites(focused, entityLayer);
     focused.session = null;
@@ -284,7 +284,7 @@ function finalizeAndReward(
     const items = resolveYieldItems(def, result, session.profile.baseYield);
     for (const item of items) {
       void syncPickup(item.itemId, "", item.quantity).then((r) => {
-        if (r.ok) applyRpgStatePreservingLocalWeapon(r.data.playerState);
+        if (r.ok) applyRpgState(r.data.playerState);
       });
     }
 
@@ -330,3 +330,5 @@ function finalizeAndReward(
   focused.session = null;
   focused.node = null;
 }
+
+

@@ -1,4 +1,4 @@
-import type { AnimatedSprite, Container } from "pixi.js";
+﻿import type { AnimatedSprite, Container } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -7,12 +7,12 @@ import type { VFXResource } from "$lib/core/vfx/vfx";
 import { spawnEnvFloatingText, spawnEnvParticles, triggerCameraShake } from "$lib/core/vfx/vfx";
 import { gameState } from "$lib/state/game-state.svelte";
 import type { CombatResource } from "$lib/core/systems/combat/combat";
-import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
+import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
 import { findPlayerEntity } from "$lib/core/ecs/entity-queries";
-import { awardSkillXp } from "$lib/domain/skill-xp";
+import { awardSkillXp } from "$lib/state/rpg/skill-xp";
 import { SkillKey, InputAction } from "$lib/domain/game-events";
-import { getPlayerStats } from "$lib/domain/stats.svelte";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
 import { fellSweepMoveMultiplier } from "$lib/domain/combat/fell-sweep";
 
@@ -168,7 +168,7 @@ export function triggerDashSystem(
 ): void {
   if (!zeroCooldowns && (movement.dashCooldownTimer > 0 || movement.isDashing)) return;
   if (stamina.current < config.dashStaminaCost) {
-    spawnEnvFloatingText(vfx, "⚡️ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "âš¡ï¸ Out of Stamina!", Colors.ui.error, playerEntity.position!, entityLayer);
     return;
   }
 
@@ -193,13 +193,13 @@ export function triggerDashSystem(
     normY = -1;
     movement.isInvulnerable = true;
     movement.invulnTimer = config.invulnDuration;
-    spawnEnvFloatingText(vfx, "✿ EVADE! ✿", Colors.evade.flash, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "âœ¿ EVADE! âœ¿", Colors.evade.flash, playerEntity.position!, entityLayer);
     spawnEnvParticles(vfx, Colors.evade.flash, 12, "bubble", playerEntity.position!, entityLayer);
   } else {
     const len = Math.sqrt(dirX * dirX + dirY * dirY);
     normX = dirX / len;
     normY = dirY / len;
-    spawnEnvFloatingText(vfx, "💨 DASH! 💨", Colors.evade.dashText, playerEntity.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "ðŸ’¨ DASH! ðŸ’¨", Colors.evade.dashText, playerEntity.position!, entityLayer);
     spawnEnvParticles(vfx, Colors.evade.dashParticle, 10, "smoke", playerEntity.position!, entityLayer);
   }
 
@@ -416,3 +416,5 @@ export function playerMovementSystem(
 
   return false;
 }
+
+

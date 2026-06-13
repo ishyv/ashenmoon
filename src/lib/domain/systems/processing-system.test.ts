@@ -37,7 +37,7 @@ describe("Processing System", () => {
   describe("resolveProcessingCompletion", () => {
     it("transforms one unit of the source item", () => {
       const inv: Inventory = { slots: { dirty_water: { qty: 5 } } };
-      const effect = ITEM_DEFINITIONS.dirty_water.traits.find((t) => t.kind === "boilable")!
+      const effect = ITEM_DEFINITIONS.dirty_water!.traits.find((t) => t.kind === "boilable")!
         .effect;
 
       const next = resolveProcessingCompletion(inv, "dirty_water", effect, 1);

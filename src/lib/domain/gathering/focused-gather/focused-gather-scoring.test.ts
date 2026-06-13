@@ -5,7 +5,7 @@ import { FOCUSED_GATHER_PROFILES } from "./focused-gather-profiles";
 import type { FocusedGatherSession, FocusedGatherTarget } from "./focused-gather-types";
 
 function target(orderIndex: number, state: FocusedGatherTarget["state"], timingQuality?: number): FocusedGatherTarget {
-  return {
+  const t: FocusedGatherTarget = {
     id: `t${orderIndex}`,
     orderIndex,
     spawnAtMs: 0,
@@ -14,8 +14,9 @@ function target(orderIndex: number, state: FocusedGatherTarget["state"], timingQ
     radius: 20,
     movement: "static",
     state,
-    timingQuality,
   };
+  if (timingQuality !== undefined) t.timingQuality = timingQuality;
+  return t;
 }
 
 function session(targets: FocusedGatherTarget[], counters: Partial<FocusedGatherSession>): FocusedGatherSession {

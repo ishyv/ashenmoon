@@ -18,7 +18,10 @@ export type GatherableRenderKind =
   | "stone_pickup"
   | "flint_pickup"
   | "forage"
-  | "moss";
+  | "moss"
+  | "rock_cursed"
+  | "rock_cursed2"
+  | "rock_cursed3";
 export type GatherableSolidKind = "none" | "tree" | "rock";
 export type GatherableSyncAction = "forest" | "mine";
 
@@ -403,7 +406,7 @@ export function rollGatherRisk(
       return {
         status: risk.status,
         durationSec: risk.durationSec,
-        knowledgeItemId: risk.knowledgeItemId,
+        ...(risk.knowledgeItemId ? { knowledgeItemId: risk.knowledgeItemId } : {}),
       };
     }
   }

@@ -1,10 +1,10 @@
-import type { World } from "miniplex";
+﻿import type { World } from "miniplex";
 import type { Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { getAmbientEnvironment, TILE, type MapResource } from "$lib/core/systems/map/map";
 import { getItemDef } from "$lib/domain/items";
-import { learnAbout } from "$lib/domain/knowledge.svelte";
-import { learnRecipe } from "$lib/domain/crafting.svelte";
+import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
+import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
 import { spawnEnvFloatingText, spawnEnvParticles, type VFXResource } from "$lib/core/vfx/vfx";
 import { Colors } from "$lib/utils/colors";
 import { playSound } from "$lib/audio/audio-engine";
@@ -87,3 +87,4 @@ export function tickExposureSystem(
     }
   }
 }
+

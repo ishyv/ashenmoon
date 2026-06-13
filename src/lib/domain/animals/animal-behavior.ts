@@ -30,6 +30,7 @@ export interface AnimalDefinition {
   hungerDecayPerMinute: number;
   initialHunger: number;
   xpReward: number;
+  drops?: readonly { itemId: string; qty: number }[];
   damage?: number;
   attackCooldownSec?: number;
   preySpecies?: readonly AnimalSpeciesId[];
@@ -69,6 +70,7 @@ export const ANIMAL_DEFINITIONS: Record<AnimalSpeciesId, AnimalDefinition> = {
     hungerDecayPerMinute: 6,
     initialHunger: 20,
     xpReward: 4,
+    drops: [{ itemId: "raw_meat", qty: 1 }],
     preferredZones: ["rabbit_burrow", "clearing"],
   },
   deer: {
@@ -85,6 +87,7 @@ export const ANIMAL_DEFINITIONS: Record<AnimalSpeciesId, AnimalDefinition> = {
     hungerDecayPerMinute: 4,
     initialHunger: 20,
     xpReward: 4,
+    drops: [{ itemId: "raw_meat", qty: 1 }],
     preferredZones: ["deer_grazing", "clearing", "water_edge"],
   },
   boar: {
@@ -103,6 +106,7 @@ export const ANIMAL_DEFINITIONS: Record<AnimalSpeciesId, AnimalDefinition> = {
     hungerDecayPerMinute: 5,
     initialHunger: 20,
     xpReward: 18,
+    drops: [{ itemId: "raw_meat", qty: 2 }],
     damage: 13,
     attackCooldownSec: 1.5,
     preferredZones: ["boar_rooting", "forest_floor"],

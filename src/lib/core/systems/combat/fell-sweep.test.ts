@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { World } from "miniplex";
 import { InputResource } from "$lib/core/input/input";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import { setStamina, stamina } from "$lib/domain/stamina.svelte";
+import { setStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { CombatConfig, CombatResource, fellSweepSystem, updateFellSweepChargeSystem } from "./combat";
 import { playSound } from "$lib/audio/audio-engine";
 import { spawnEnvFloatingText, spawnShockwaveRing, spawnSlashArc } from "$lib/core/vfx/vfx";
@@ -188,3 +188,4 @@ describe("Fell Sweep runtime", () => {
     expect(playSound).toHaveBeenCalledWith("player.fellsweep.cancel");
   });
 });
+

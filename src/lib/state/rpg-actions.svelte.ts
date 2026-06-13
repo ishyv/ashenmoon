@@ -1,33 +1,12 @@
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
-import { gameState, createDefaultProfile, createDefaultSkills } from "$lib/state/game-state.svelte";
+import { createDefaultProfile, createDefaultSkills } from "$lib/domain/rpg-defaults";
+import { gameState } from "$lib/state/game-state.svelte";
 
 export function applyRpgState(state: RpgPlayerState | null): void {
   if (!state) return;
   gameState.rpg.profile = state.profile;
   gameState.rpg.inventory = state.inventory;
   gameState.rpg.skills = state.skills ?? createDefaultSkills();
-}
-
-export function applyRpgStatePreservingLocalWeapon(
-  state: RpgPlayerState | null,
-  options: { toolBroken?: boolean } = {},
-): void {
-  if (!state) return;
-  const localWeapon = gameState.rpg.profile?.loadout.weapon ?? null;
-  const remoteWeapon = state.profile.loadout.weapon;
-  const shouldPreserveLocalWeapon = !options.toolBroken && !!localWeapon && !remoteWeapon;
-  applyRpgState({
-    ...state,
-    profile: shouldPreserveLocalWeapon
-      ? {
-          ...state.profile,
-          loadout: {
-            ...state.profile.loadout,
-            weapon: localWeapon,
-          },
-        }
-      : state.profile,
-  });
 }
 
 export function setRpgInventory(inventory: RpgPlayerState["inventory"] | null): void {
@@ -67,9 +46,12 @@ export function removeLocalInventoryQty(itemId: string, qty: number): boolean {
   return true;
 }
 
+const DEFAULT_DURABILITY = 100;
+const DEV_INSTANCE_PREFIX = "dev_";
+
 export function equipLocalWeapon(itemId: string | null): void {
   const weapon = itemId
-    ? { instanceId: `dev_${Date.now()}`, itemId, durability: 100 }
+    ? { instanceId: `${DEV_INSTANCE_PREFIX}${Date.now()}`, itemId, durability: DEFAULT_DURABILITY }
     : null;
   if (!gameState.rpg.skills) {
     gameState.rpg.skills = createDefaultSkills();

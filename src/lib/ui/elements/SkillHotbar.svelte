@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 /**
  * SkillHotbar.svelte
  * Displays the active skill slots (Evade, Focused Gathering, Fell Sweep) with
@@ -6,7 +6,7 @@
  */
 import { gameState } from "$lib/state/game-state.svelte";
 import { cooldownsState } from "$lib/state/runtime-ui-state.svelte";
-import { stamina } from "$lib/domain/stamina.svelte";
+import { stamina } from "$lib/state/rpg/stamina.svelte";
 
 const evadeCooldown = $derived(cooldownsState.evade);
 const evadeMax = $derived(cooldownsState.evadeMax);
@@ -130,7 +130,7 @@ const combatSkillLevel = $derived((gameState.rpg.skills as typeof gameState.rpg.
     <div class="skill-key">HOLD</div>
     <div class="tooltip">
       <div class="title">Fell Sweep (Lvl {gameState.rpg.skills?.fellSweep?.level ?? 1})</div>
-      <div class="desc">Hold left-click and release to sweep. Any hold lands a blow — longer hold widens the arc and extends reach up to 30%. Release early for a quick weaker strike.</div>
+      <div class="desc">Hold left-click and release to sweep. Any hold lands a blow â€” longer hold widens the arc and extends reach up to 30%. Release early for a quick weaker strike.</div>
       <div class="cost">Cost: {Math.max(10, 20 - ((gameState.rpg.skills?.fellSweep?.level ?? 1) - 1))} Stamina / {Math.max(4, 8 - ((gameState.rpg.skills?.fellSweep?.level ?? 1) - 1) * 0.4).toFixed(1)}s cooldown</div>
     </div>
   </div>
@@ -352,3 +352,4 @@ const combatSkillLevel = $derived((gameState.rpg.skills as typeof gameState.rpg.
     font-weight: bold;
   }
 </style>
+

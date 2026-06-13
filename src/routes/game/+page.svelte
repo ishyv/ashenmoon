@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 import { onMount, onDestroy } from "svelte";
 import { GameEngine, type HudState } from "$lib/core/engine";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
@@ -21,9 +21,9 @@ import { activeEnvironment } from "$lib/state/environment-state.svelte";
 import { uiPreferences, loadUiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { loadGameState } from "$lib/state/game-state.svelte";
-import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
+import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
-import { dialogueState } from "$lib/domain/quests.svelte";
+import { dialogueState } from "$lib/state/rpg/quests.svelte";
 import StationPanel from "$lib/ui/panels/StationPanel.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
@@ -135,7 +135,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
   }
 }
 
-// --- Dialogue ↔ stack sync -----------------------------------------------
+// --- Dialogue â†” stack sync -----------------------------------------------
 // DialogueBox owns its open state in dialogueState.activeNpc (domain module).
 // These two effects bridge it into the overlay stack so Escape works correctly.
 
@@ -153,7 +153,7 @@ $effect(() => {
   }
 });
 
-// --- Station Panel ↔ stack sync ------------------------------------------
+// --- Station Panel â†” stack sync ------------------------------------------
 $effect(() => {
   if (!overlayStack.has(OverlayId.Station) && activeStationEntity) {
     activeStationEntity = null;
@@ -197,7 +197,7 @@ onMount(async () => {
     onInteract: handleInteract,
     onHudUpdate,
     onContextMenu: handleContextMenu,
-    scenarioId: scenarioParam,
+    ...(scenarioParam !== undefined ? { scenarioId: scenarioParam } : {}),
     onStationInteract: (target) => {
       activeStationEntity = target;
       overlayStack.push(OverlayId.Station);
@@ -210,11 +210,16 @@ onMount(async () => {
   envInterval = setInterval(async () => {
     if (!coords) return;
     try {
-      const payload = localRpgCommands.environmentTick({
-        temperature: activeEnvironment.temperature,
-        humidity: activeEnvironment.humidity,
-        toxins: activeEnvironment.toxins,
+      const result = await dispatchRpgCommand({
+        type: "environmentTick",
+        environment: {
+          temperature: activeEnvironment.temperature,
+          humidity: activeEnvironment.humidity,
+          toxins: activeEnvironment.toxins,
+        },
       });
+      if (!result.ok) throw new Error(result.error);
+      const payload = result.data;
       if (payload.mutated) {
         applyRpgState(payload.playerState);
           
@@ -263,7 +268,7 @@ onDestroy(() => {
 </script>
 
 <svelte:head>
-  <title>Ashenmoor — Camp</title>
+  <title>Ashenmoor â€” Camp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cardo:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -305,7 +310,7 @@ onDestroy(() => {
   <div class="hud-corner">
     {#if lookAt}
       <div class="look-at">
-        <span class="look-icon">◈</span> {lookAt} <kbd>E</kbd>
+        <span class="look-icon">â—ˆ</span> {lookAt} <kbd>E</kbd>
       </div>
     {/if}
     {#if coords}
@@ -313,11 +318,11 @@ onDestroy(() => {
     {/if}
     <div class="legend">
       <kbd>WASD</kbd> move
-      <span class="sep">·</span>
+      <span class="sep">Â·</span>
       <kbd>E</kbd> harvest
-      <span class="sep">·</span>
+      <span class="sep">Â·</span>
       <kbd>/</kbd> console
-      <span class="sep">·</span>
+      <span class="sep">Â·</span>
       <span>scroll zoom</span>
     </div>
   </div>
@@ -441,7 +446,7 @@ onDestroy(() => {
     inset: 0;
   }
 
-  /* Bottom-left HUD — stacks look-at, coords, legend top-to-bottom */
+  /* Bottom-left HUD â€” stacks look-at, coords, legend top-to-bottom */
   .hud-corner {
     position: absolute;
     bottom: 1.1rem;
@@ -648,3 +653,4 @@ onDestroy(() => {
     pointer-events: none;
   }
 </style>
+

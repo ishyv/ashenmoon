@@ -1,10 +1,18 @@
 import { StorageKeys } from "$lib/domain/game-events";
+import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 
 export interface UiPreferences {
   minimalHud: boolean;
   dynamicEnvironment: boolean;
   equipOnlyWithStash: boolean;
 }
+
+const DEFAULT_COOLDOWNS = {
+  evade: 1,
+  focusedGather: 12,
+  fellSweep: 8,
+  drivingThrust: 3.5,
+} as const;
 
 export const cooldownsState = $state<{
   evade: number;
@@ -18,14 +26,14 @@ export const cooldownsState = $state<{
   drivingThrustMax: number;
 }>({
   evade: 0,
-  evadeMax: 1,
+  evadeMax: DEFAULT_COOLDOWNS.evade,
   focusedGather: 0,
-  focusedGatherMax: 12,
+  focusedGatherMax: DEFAULT_COOLDOWNS.focusedGather,
   fellSweep: 0,
-  fellSweepMax: 8,
+  fellSweepMax: DEFAULT_COOLDOWNS.fellSweep,
   fellSweepCharge: 0,
   drivingThrust: 0,
-  drivingThrustMax: 3.5,
+  drivingThrustMax: DEFAULT_COOLDOWNS.drivingThrust,
 });
 
 export const debugConfig = $state<{ zeroCooldowns: boolean; showCollision: boolean }>({
@@ -40,31 +48,16 @@ export const uiPreferences = $state<UiPreferences>({
 });
 
 export function loadUiPreferences(): void {
-  if (typeof window === "undefined") return;
-  try {
-    const stored = localStorage.getItem(StorageKeys.uiPreferences);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed && typeof parsed === "object") {
-        if (typeof parsed.minimalHud === "boolean") uiPreferences.minimalHud = parsed.minimalHud;
-        if (typeof parsed.dynamicEnvironment === "boolean") {
-          uiPreferences.dynamicEnvironment = parsed.dynamicEnvironment;
-        }
-        if (typeof parsed.equipOnlyWithStash === "boolean") {
-          uiPreferences.equipOnlyWithStash = parsed.equipOnlyWithStash;
-        }
-      }
-    }
-  } catch (e) {
-    console.error("failed to load ui preferences:", e);
+  const stored = loadSlice<Partial<UiPreferences>>(StorageKeys.uiPreferences, {});
+  if (typeof stored.minimalHud === "boolean") uiPreferences.minimalHud = stored.minimalHud;
+  if (typeof stored.dynamicEnvironment === "boolean") {
+    uiPreferences.dynamicEnvironment = stored.dynamicEnvironment;
+  }
+  if (typeof stored.equipOnlyWithStash === "boolean") {
+    uiPreferences.equipOnlyWithStash = stored.equipOnlyWithStash;
   }
 }
 
 export function saveUiPreferences(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(StorageKeys.uiPreferences, JSON.stringify(uiPreferences));
-  } catch (e) {
-    console.error("failed to save ui preferences:", e);
-  }
+  saveSlice(StorageKeys.uiPreferences, $state.snapshot(uiPreferences));
 }

@@ -10,8 +10,40 @@ import {
   ANIMAL_DEFINITIONS,
   chooseAnimalBehavior,
   resolveAnimalConflict,
+  type AnimalDecision,
   type AnimalRuntime,
 } from "$lib/domain/animals/animal-behavior";
+import { spawnAnimal } from "$lib/core/systems/map/spawn-system";
+
+type AnimalTimeOfDay = "day" | "dusk" | "night";
+
+export function spawnInitialAnimalsSystem(
+  map: MapResource,
+  entityLayer: Container,
+  entitySprites: Map<string, Container>,
+  animalSeq: number
+): number {
+  let nextSeq = animalSeq;
+  for (const zone of map.forestMetadata.animalZones) {
+    switch (zone.kind) {
+      case "rabbit_burrow":
+        spawnAnimal(zone.x, zone.y, "rabbit", entityLayer, entitySprites, map, nextSeq++);
+        spawnAnimal(zone.x + 1, zone.y, "rabbit", entityLayer, entitySprites, map, nextSeq++);
+        break;
+      case "deer_grazing":
+        spawnAnimal(zone.x, zone.y, "deer", entityLayer, entitySprites, map, nextSeq++);
+        break;
+      case "boar_rooting":
+        spawnAnimal(zone.x, zone.y, "boar", entityLayer, entitySprites, map, nextSeq++);
+        break;
+      case "wolf_territory":
+        spawnAnimal(zone.x, zone.y, "wolf", entityLayer, entitySprites, map, nextSeq++);
+        break;
+    }
+  }
+  return nextSeq;
+}
+
 
 const BODY_HX = TILE * 0.22;
 const BODY_HY = TILE * 0.18;
@@ -131,6 +163,117 @@ function syncAnimalSprite(entity: Entity, entitySprites: Map<string, Container>)
   sprite.alpha = entity.animal?.behavior === "flee" ? 0.9 : 1;
 }
 
+function handleScaredAnimal(
+  entity: Entity,
+  map: MapResource,
+  dt: number,
+): boolean {
+  const animal = entity.animal!;
+  if (!animal.scareSec || animal.scareSec <= 0) return false;
+  animal.scareSec -= dt;
+
+  const def = ANIMAL_DEFINITIONS[animal.speciesId];
+  const pos = center(entity);
+  const angle = Math.random() * Math.PI * 2;
+  const fleeTargetX = pos.x + Math.cos(angle) * TILE;
+  const fleeTargetY = pos.y + Math.sin(angle) * TILE;
+  moveToward(entity, map, fleeTargetX, fleeTargetY, def.fleeSpeed, dt, true);
+  return true;
+}
+
+function updateWanderOrGraze(entity: Entity, map: MapResource, dt: number): void {
+  const animal = entity.animal!;
+  const def = ANIMAL_DEFINITIONS[animal.speciesId];
+  const pos = center(entity);
+  const home = animal.home;
+
+  if (Math.hypot(pos.x - home.x, pos.y - home.y) > HOME_LEASH_RADIUS_PX) {
+    moveToward(entity, map, home.x, home.y, def.moveSpeed * GRAZE_RETURN_SPEED_MULTIPLIER, dt);
+    return;
+  }
+
+  animal.wanderTimerSec = (animal.wanderTimerSec ?? 0) - dt;
+  if (animal.wanderTimerSec <= 0 || !animal.wanderTarget) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * TILE * 3;
+    animal.wanderTarget = {
+      x: home.x + Math.cos(angle) * radius,
+      y: home.y + Math.sin(angle) * radius,
+    };
+    animal.wanderTimerSec = 3 + Math.random() * 4;
+  }
+
+  const target = animal.wanderTarget;
+  if (target && Math.hypot(pos.x - target.x, pos.y - target.y) > TILE * 0.4) {
+    moveToward(entity, map, target.x, target.y, def.moveSpeed * 0.45, dt);
+  }
+}
+
+function applyAnimalDecision(input: {
+  entity: Entity;
+  decision: AnimalDecision;
+  map: MapResource;
+  dt: number;
+  player: Entity;
+  config: CombatConfig;
+  combat: CombatResource;
+  vfx: VFXResource;
+  entityLayer: Container;
+  entitySprites: Map<string, Container>;
+  ecsWorld: World<Entity>;
+  litCampfires: readonly LitCampfire[];
+  animalsById: ReadonlyMap<string, Entity>;
+}): void {
+  const {
+    entity,
+    decision,
+    map,
+    dt,
+    player,
+    config,
+    combat,
+    vfx,
+    entityLayer,
+    entitySprites,
+    ecsWorld,
+    litCampfires,
+    animalsById,
+  } = input;
+  const animal = entity.animal!;
+  const def = ANIMAL_DEFINITIONS[animal.speciesId];
+  const playerCenter = center(player);
+  const pos = center(entity);
+
+  if (decision.behavior === "flee") {
+    const from = decision.targetKind === "fire" && litCampfires[0] ? litCampfires[0] : playerCenter;
+    moveToward(entity, map, from.x, from.y, def.fleeSpeed, dt, true);
+    return;
+  }
+
+  if (decision.behavior === "hunt" && decision.targetId) {
+    const target = animalsById.get(decision.targetId);
+    if (target?.position) {
+      moveToward(entity, map, center(target).x, center(target).y, def.moveSpeed, dt);
+      tryAnimalAttackPrey(entity, target, config, vfx, entityLayer, entitySprites, ecsWorld);
+    }
+    return;
+  }
+
+  if (decision.behavior === "attack" && def.damage && Math.hypot(playerCenter.x - pos.x, playerCenter.y - pos.y) <= (def.attackRadiusPx ?? TILE)) {
+    tryAnimalAttackPlayer(entity, player, config, combat, vfx, entityLayer);
+    return;
+  }
+
+  if (decision.behavior === "threaten") {
+    animal.threatened = true;
+    return;
+  }
+
+  if (decision.behavior === "wander" || decision.behavior === "graze") {
+    updateWanderOrGraze(entity, map, dt);
+  }
+}
+
 export function animalEcologySystem(
   ecsWorld: World<Entity>,
   map: MapResource,
@@ -142,6 +285,7 @@ export function animalEcologySystem(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   litCampfires: readonly LitCampfire[],
+  timeOfDay: AnimalTimeOfDay,
 ): void {
   if (!player.position) return;
   const playerCenter = center(player);
@@ -155,35 +299,36 @@ export function animalEcologySystem(
     const def = ANIMAL_DEFINITIONS[animal.speciesId];
     tickAnimalNeeds(entity, dt);
 
+    const pos = center(entity);
+
+    if (handleScaredAnimal(entity, map, dt)) {
+      syncAnimalSprite(entity, entitySprites);
+      continue;
+    }
+
     const runtime = runtimes.find((candidate) => candidate.id === entity.id)!;
     const decision = chooseAnimalBehavior(runtime, {
       player: playerCenter,
       litCampfires,
       nearbyAnimals: runtimes.filter((candidate) => candidate.id !== entity.id),
-      timeOfDay: "day",
+      timeOfDay,
     });
     animal.behavior = decision.behavior;
-
-    const pos = center(entity);
-    if (decision.behavior === "flee") {
-      const from = decision.targetKind === "fire" && litCampfires[0] ? litCampfires[0] : playerCenter;
-      moveToward(entity, map, from.x, from.y, def.fleeSpeed, dt, true);
-    } else if (decision.behavior === "hunt" && decision.targetId) {
-      const target = animalsById.get(decision.targetId);
-      if (target?.position) {
-        moveToward(entity, map, center(target).x, center(target).y, def.moveSpeed, dt);
-        tryAnimalAttackPrey(entity, target, config, vfx, entityLayer, entitySprites, ecsWorld);
-      }
-    } else if (decision.behavior === "attack" && def.damage && Math.hypot(playerCenter.x - pos.x, playerCenter.y - pos.y) <= (def.attackRadiusPx ?? TILE)) {
-      tryAnimalAttackPlayer(entity, player, config, combat, vfx, entityLayer);
-    } else if (decision.behavior === "threaten") {
-      animal.threatened = true;
-    } else if (decision.behavior === "wander" || decision.behavior === "graze") {
-      const home = animal.home;
-      if (Math.hypot(pos.x - home.x, pos.y - home.y) > HOME_LEASH_RADIUS_PX) {
-        moveToward(entity, map, home.x, home.y, def.moveSpeed * GRAZE_RETURN_SPEED_MULTIPLIER, dt);
-      }
-    }
+    applyAnimalDecision({
+      entity,
+      decision,
+      map,
+      dt,
+      player,
+      config,
+      combat,
+      vfx,
+      entityLayer,
+      entitySprites,
+      ecsWorld,
+      litCampfires,
+      animalsById,
+    });
 
     syncAnimalSprite(entity, entitySprites);
   }

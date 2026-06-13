@@ -8,10 +8,10 @@ export interface RhythmConfig {
 }
 
 export const DEFAULT_RHYTHM_CONFIG: RhythmConfig = {
-  idealRecoveryMs: 1000,
+  idealRecoveryMs: 850,
   baseStaminaCost: 4,
   minDamageMultiplier: 0.35,
-  maxDamageMultiplier: 1.0,
+  maxDamageMultiplier: 2.0,
   minStaminaCostMultiplier: 1.0,
   maxStaminaCostMultiplier: 2.75,
 };

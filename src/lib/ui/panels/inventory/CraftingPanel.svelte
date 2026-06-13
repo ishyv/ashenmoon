@@ -205,7 +205,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
           
           {#if selectedRecipe}
             <!-- Recipe Ingredient Slot -->
-            {@const cost = selectedRecipe.costs[index]}
+            {@const cost = selectedRecipe.costs[index]!}
             {@const meta = getItemDef(cost.itemId)}
             {@const current = items.find((item) => item.itemId === cost.itemId)?.qty ?? 0}
             {@const satisfied = current >= cost.required}
@@ -231,7 +231,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
             </div>
           {:else}
             <!-- Experiment Crucible Slot -->
-            {@const itemId = experimentUniqueIds[index]}
+            {@const itemId = experimentUniqueIds[index]!}
             
             {#if index < experimentUniqueIds.length}
               {@const meta = getItemDef(itemId)}

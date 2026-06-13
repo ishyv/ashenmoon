@@ -72,7 +72,7 @@ export function applyModifiers(base: PlayerStats, mods: StatModifier[]): PlayerS
 
   for (const [stat, acc] of byStat) {
     const layer = result[layerOf(stat)] as unknown as Record<string, number>;
-    layer[stat] = (layer[stat] + acc.flat) * (1 + acc.percentAdd) * acc.mult;
+    layer[stat] = ((layer[stat] ?? 0) + acc.flat) * (1 + acc.percentAdd) * acc.mult;
   }
 
   return result;

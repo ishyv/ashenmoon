@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+﻿import { describe, expect, it, vi } from "vitest";
 import { World } from "miniplex";
 import {
   CombatConfig,
@@ -14,8 +14,19 @@ import { InputResource } from "$lib/core/input/input";
 import { MovementResource } from "$lib/core/systems/movement/movement";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { gameState } from "$lib/state/game-state.svelte";
-import { stamina, setStamina } from "$lib/domain/stamina.svelte";
+import { stamina, setStamina } from "$lib/state/rpg/stamina.svelte";
 import { InputAction } from "$lib/domain/game-events";
+import type { RhythmConfig } from "$lib/domain/combat/rhythm";
+
+// Explicit rhythm config so balance tuning in DEFAULT_RHYTHM_CONFIG doesn't break these tests.
+const TEST_RHYTHM_CONFIG: RhythmConfig = {
+  idealRecoveryMs: 1000,
+  baseStaminaCost: 4,
+  minDamageMultiplier: 0.35,
+  maxDamageMultiplier: 1.0,
+  minStaminaCostMultiplier: 1.0,
+  maxStaminaCostMultiplier: 2.75,
+};
 
 vi.mock("$lib/core/vfx/vfx", () => ({
   spawnEnvFloatingText: vi.fn(),
@@ -45,6 +56,7 @@ describe("Combat System - Directional Momentum Combo", () => {
     const world = new World<Entity>();
     const inputs = new MockInputResource();
     const combat = new CombatResource();
+    combat.rhythmConfig = TEST_RHYTHM_CONFIG;
     const config = new CombatConfig();
     const movement = new MovementResource();
     const vfx = { particles: [], comboRing: { visible: false, clear: vi.fn(), x: 0, y: 0, circle: vi.fn().mockReturnThis(), fill: vi.fn().mockReturnThis(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn() } } as any;
@@ -159,7 +171,7 @@ describe("Combat System - Directional Momentum Combo", () => {
 
     expect(state.isActive).toBe(true);
 
-    // Change movement to left — should break combo immediately on update frame
+    // Change movement to left â€” should break combo immediately on update frame
     inputs.pressed.clear();
     inputs.pressed.add(InputAction.MoveLeft);
 
@@ -316,3 +328,4 @@ describe("Combat System - Directional Momentum Combo", () => {
     expect(state.isActive).toBe(false);
   });
 });
+

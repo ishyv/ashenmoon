@@ -3,7 +3,7 @@ import type { InteractionId } from "$lib/domain/interactions";
 import type { StationId } from "$lib/domain/stations";
 import type { AiState, AnimState, Faction } from "$lib/core/types";
 import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
-import type { CampfireState } from "$lib/domain/camp/camp-state";
+import type { CampfireState, CampStructureType } from "$lib/domain/camp/camp-state";
 
 /**
  * Game entity component structure.
@@ -57,6 +57,14 @@ export interface Entity {
   /** Runtime state for a player-built or scenario campfire. */
   campfire?: CampfireState;
 
+  /** Typed camp-structure gameplay metadata; rendering/building ids are not rules. */
+  campStructure?: {
+    type: CampStructureType;
+    protectionRadiusPx?: number;
+    coldResistanceBonus?: number;
+    rainProtection?: number;
+  };
+
   /** First Camp wildlife marker. Behavior is owned by animal-ecology-system. */
   animal?: {
     speciesId: AnimalSpeciesId;
@@ -65,6 +73,9 @@ export interface Entity {
     threatened: boolean;
     attackCooldownSec: number;
     home: { x: number; y: number };
+    wanderTarget?: { x: number; y: number };
+    wanderTimerSec: number;
+    scareSec?: number;
   };
 
   // --- Combat components -----------------------------------------------------
@@ -133,7 +144,7 @@ export interface Entity {
   };
 
   /** Reward granted to the player when this entity dies. */
-  loot?: { xpReward: number };
+  loot?: { xpReward: number; drops?: readonly { itemId: string; qty: number }[] };
 }
 
 /** Central miniplex ECS world instance. Shared across all game systems. */

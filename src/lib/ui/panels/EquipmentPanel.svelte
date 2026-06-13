@@ -1,8 +1,7 @@
 <script lang="ts">
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
-import { applyRpgState } from "$lib/state/rpg-actions.svelte";
-import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
+import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { getItemDef } from "$lib/domain/items";
 
 let hoveredSlot = $state<string | null>(null);
@@ -24,7 +23,8 @@ function getDurabilityColor(percent: number): string {
 
 async function unequipTool() {
   try {
-    applyRpgState(localRpgCommands.equipTool(null));
+    const result = await dispatchRpgCommand({ type: "equipTool", itemId: null });
+    if (!result.ok) throw new Error(result.error);
   } catch (err) {
     console.error("Failed to unequip:", err);
   }
@@ -75,7 +75,10 @@ const weaponMeta = $derived(() => {
           {#if weapon()}
             {@const meta = weaponMeta()}
             {#if meta}
-              {#if meta.iconUrl}
+              {#if meta.iconSheet}
+                {@const s = meta.iconSheet}
+                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
+              {:else if meta.iconUrl}
                 <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
               {:else if meta.icon}
                 <span class="slot-icon slot-icon-emoji">{meta.icon}</span>

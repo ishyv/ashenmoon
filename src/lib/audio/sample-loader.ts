@@ -23,7 +23,8 @@ function sampleUrls(id: SoundId): string[] {
 export function getSampleBuffer(id: SoundId): AudioBuffer | null {
   const list = buffers.get(id);
   if (!list || list.length === 0) return null;
-  return list.length === 1 ? list[0] : list[Math.floor(Math.random() * list.length)];
+  const index = list.length === 1 ? 0 : Math.floor(Math.random() * list.length);
+  return list[index] ?? null;
 }
 
 async function decode(ctx: AudioContext, url: string): Promise<AudioBuffer | null> {

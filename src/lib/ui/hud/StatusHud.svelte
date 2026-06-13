@@ -1,11 +1,11 @@
-<script lang="ts">
+﻿<script lang="ts">
 /**
  * Active status chips above the HUD bars: icon + label + remaining seconds.
  * Reads `statusState.active`; never decides anything (the status system owns
  * application/expiry, this only displays it).
  */
 import { fade } from "svelte/transition";
-import { statusState } from "$lib/domain/status-effects.svelte";
+import { statusState } from "$lib/state/rpg/status-effects.svelte";
 import { STATUS_DEFINITIONS } from "$lib/domain/systems/status-types";
 </script>
 
@@ -61,3 +61,4 @@ import { STATUS_DEFINITIONS } from "$lib/domain/systems/status-types";
     color: rgba(255, 255, 255, 0.45);
   }
 </style>
+

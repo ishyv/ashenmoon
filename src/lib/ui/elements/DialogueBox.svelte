@@ -1,9 +1,9 @@
 <script lang="ts">
-import { activeQuests, dialogueState } from "$lib/domain/quests.svelte";
+import { activeQuests, dialogueState } from "$lib/state/rpg/quests.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { devGiveItem } from "$lib/state/dev-rpg-actions";
 import { playSound } from "$lib/audio/audio-engine";
-import { learnRecipe } from "$lib/domain/crafting.svelte";
+import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
 
 // Typings
 interface Objective {
@@ -25,7 +25,7 @@ function getDialogText(): string {
   }
 
   if (activeQuests.currentQuestId === "scavenger_tools") {
-    const quest = activeQuests.quests.scavenger_tools;
+    const quest = activeQuests.quests.scavenger_tools!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane")
       .every((o) => o.completed);
@@ -37,7 +37,7 @@ function getDialogText(): string {
   }
 
   if (activeQuests.currentQuestId === "securing_perimeter") {
-    const quest = activeQuests.quests.securing_perimeter;
+    const quest = activeQuests.quests.securing_perimeter!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane_2")
       .every((o) => o.completed);
@@ -49,7 +49,7 @@ function getDialogText(): string {
   }
 
   if (activeQuests.currentQuestId === "outpost_foundations") {
-    const quest = activeQuests.quests.outpost_foundations;
+    const quest = activeQuests.quests.outpost_foundations!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane_3")
       .every((o) => o.completed);
@@ -61,7 +61,7 @@ function getDialogText(): string {
   }
 
   if (activeQuests.currentQuestId === "outpost_sanctuary") {
-    const quest = activeQuests.quests.outpost_sanctuary;
+    const quest = activeQuests.quests.outpost_sanctuary!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane_4")
       .every((o) => o.completed);
@@ -117,7 +117,7 @@ function handleAction() {
     const hasAxeEquipped = equippedWeapon && (typeof equippedWeapon === "string" ? equippedWeapon === "flint_axe" : equippedWeapon.itemId === "flint_axe");
     const axeQty = (slots && slots.flint_axe && "qty" in slots.flint_axe ? slots.flint_axe.qty : 0) + (hasAxeEquipped ? 1 : 0);
     
-    const quest = activeQuests.quests.scavenger_tools;
+    const quest = activeQuests.quests.scavenger_tools!;
     const stickObj = quest.objectives.find((o) => o.id === "gather_stick");
     if (stickObj) {
       stickObj.current = Math.min(stickObj.target, stickQty);
@@ -142,7 +142,7 @@ function handleAction() {
     playSound("pickup");
     closeDialog();
   } else if (activeQuests.currentQuestId === "scavenger_tools") {
-    const quest = activeQuests.quests.scavenger_tools;
+    const quest = activeQuests.quests.scavenger_tools!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane")
       .every((o) => o.completed);
@@ -164,7 +164,7 @@ function handleAction() {
     }
     closeDialog();
   } else if (activeQuests.currentQuestId === "securing_perimeter") {
-    const quest = activeQuests.quests.securing_perimeter;
+    const quest = activeQuests.quests.securing_perimeter!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane_2")
       .every((o) => o.completed);
@@ -185,7 +185,7 @@ function handleAction() {
     }
     closeDialog();
   } else if (activeQuests.currentQuestId === "outpost_foundations") {
-    const quest = activeQuests.quests.outpost_foundations;
+    const quest = activeQuests.quests.outpost_foundations!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane_3")
       .every((o) => o.completed);
@@ -204,7 +204,7 @@ function handleAction() {
     }
     closeDialog();
   } else if (activeQuests.currentQuestId === "outpost_sanctuary") {
-    const quest = activeQuests.quests.outpost_sanctuary;
+    const quest = activeQuests.quests.outpost_sanctuary!;
     const allDoneExceptTalk = quest.objectives
       .filter((o) => o.id !== "talk_vane_4")
       .every((o) => o.completed);
@@ -231,6 +231,12 @@ function closeDialog() {
   dialogueState.activeNpc = null;
   if (typeInterval) clearInterval(typeInterval);
 }
+
+function canClaimReward(questId: string, talkObjectiveId: string): boolean {
+  const quest = activeQuests.quests[questId];
+  if (!quest) return false;
+  return quest.objectives.filter((o) => o.id !== talkObjectiveId).every((o) => o.completed) && !quest.rewardClaimed;
+}
 </script>
 
 {#if dialogueState.activeNpc}
@@ -251,19 +257,19 @@ function closeDialog() {
           <button class="action-btn accept" onclick={handleAction}>
             Accept Quest: Scavenger's Tools
           </button>
-        {:else if activeQuests.currentQuestId === "scavenger_tools" && activeQuests.quests.scavenger_tools.objectives.filter(o => o.id !== "talk_vane").every(o => o.completed) && !activeQuests.quests.scavenger_tools.rewardClaimed}
+        {:else if activeQuests.currentQuestId === "scavenger_tools" && canClaimReward("scavenger_tools", "talk_vane")}
           <button class="action-btn reward" onclick={handleAction}>
             ✓ Claim Reward (1x Copper Ingot)
           </button>
-        {:else if activeQuests.currentQuestId === "securing_perimeter" && activeQuests.quests.securing_perimeter.objectives.filter(o => o.id !== "talk_vane_2").every(o => o.completed) && !activeQuests.quests.securing_perimeter.rewardClaimed}
+        {:else if activeQuests.currentQuestId === "securing_perimeter" && canClaimReward("securing_perimeter", "talk_vane_2")}
           <button class="action-btn reward" onclick={handleAction}>
             ✓ Claim Reward (1x Iron Ingot)
           </button>
-        {:else if activeQuests.currentQuestId === "outpost_foundations" && activeQuests.quests.outpost_foundations.objectives.filter(o => o.id !== "talk_vane_3").every(o => o.completed) && !activeQuests.quests.outpost_foundations.rewardClaimed}
+        {:else if activeQuests.currentQuestId === "outpost_foundations" && canClaimReward("outpost_foundations", "talk_vane_3")}
           <button class="action-btn reward" onclick={handleAction}>
             ✓ Claim Reward (1x Copper Axe)
           </button>
-        {:else if activeQuests.currentQuestId === "outpost_sanctuary" && activeQuests.quests.outpost_sanctuary.objectives.filter(o => o.id !== "talk_vane_4").every(o => o.completed) && !activeQuests.quests.outpost_sanctuary.rewardClaimed}
+        {:else if activeQuests.currentQuestId === "outpost_sanctuary" && canClaimReward("outpost_sanctuary", "talk_vane_4")}
           <button class="action-btn reward" onclick={handleAction}>
             ✓ Claim Reward (1x Copper Pickaxe)
           </button>

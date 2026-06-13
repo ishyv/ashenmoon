@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "bun run check && vite build",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || true",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -35,7 +35,7 @@
   "dependencies": {
     "@hyvnt/hyvui": "^0.4.0",
     "@opentelemetry/api": "^1.9.1",
-    "@sveltejs/adapter-node": "^0.0.18",
+    "@sveltejs/adapter-node": "^5.5.4",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.0",
@@ -49,7 +49,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "@sveltejs/kit": "^0.0.30",
+    "@sveltejs/kit": "^2.65.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",

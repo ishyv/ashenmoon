@@ -1,5 +1,9 @@
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import { getLocalRpgState, saveLocalRpgState } from "$lib/state/persistence/rpg-commands";
+import {
+  createDefaultProfile,
+  createDefaultSkills,
+} from "$lib/domain/rpg-defaults";
 
 /**
  * Unified, reactive root for all persistent game data.
@@ -17,36 +21,7 @@ export interface GameState {
   };
 }
 
-/** Initial baseline for a new game. */
-export function createDefaultSkills(): RpgPlayerState["skills"] {
-  return {
-    lumberjacking: { level: 1, xp: 0, nextXp: 100 },
-    mining: { level: 1, xp: 0, nextXp: 100 },
-    evade: { level: 1, xp: 0, nextXp: 100 },
-    fellSweep: { level: 1, xp: 0, nextXp: 100 },
-    kiteCombo: { level: 1, xp: 0, nextXp: 100 },
-  };
-}
-
-export function createDefaultProfile(opts?: {
-  hpCurrent?: number;
-  weapon?: RpgPlayerState["profile"]["loadout"]["weapon"];
-}): RpgPlayerState["profile"] {
-  return {
-    hpCurrent: opts?.hpCurrent ?? 100,
-    stashSize: 20,
-    loadout: {
-      weapon: opts?.weapon ?? null,
-      shield: null,
-      helmet: null,
-      chest: null,
-      pants: null,
-      boots: null,
-      ring: null,
-      necklace: null,
-    },
-  };
-}
+const INITIAL_THIRST = 100;
 
 function createInitialState(): GameState {
   return {
@@ -56,7 +31,7 @@ function createInitialState(): GameState {
       skills: createDefaultSkills(),
     },
     survival: {
-      thirst: 100,
+      thirst: INITIAL_THIRST,
       wasParched: false,
     },
   };
@@ -89,6 +64,8 @@ export function loadGameState(): void {
  */
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+const AUTO_SAVE_DEBOUNCE_MS = 500;
+
 $effect.root(() => {
   $effect(() => {
     const snapshot = $state.snapshot(gameState.rpg);
@@ -101,6 +78,6 @@ $effect.root(() => {
       } catch (e) {
         console.error("GameState: Local RPG auto-save failed:", e);
       }
-    }, 500);
+    }, AUTO_SAVE_DEBOUNCE_MS);
   });
 });

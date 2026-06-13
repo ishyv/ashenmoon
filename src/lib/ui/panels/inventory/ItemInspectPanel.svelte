@@ -1,7 +1,8 @@
-<script lang="ts">
-import { canConsume, consumeItem, getConsumeVerb } from "$lib/domain/consume-actions";
+﻿<script lang="ts">
+import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-actions";
 import { getItemDef, reactsInto, traitOf } from "$lib/domain/items";
 import type { KnowledgeProperty } from "$lib/domain/knowledge/item-knowledge";
+import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 
 const KNOWLEDGE_LABELS: Record<KnowledgeProperty, string> = {
   edible: "edible",
@@ -43,17 +44,11 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
   <aside class="inspect-panel">
     <div class="inspect-header">
       <div class="inspect-visual">
-        {#if meta.iconUrl}
-          <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-        {:else if meta.icon}
-          <span class="inspect-icon-emoji">{meta.icon}</span>
-        {:else}
-          <span>{meta.name.slice(0, 2).toLowerCase()}</span>
-        {/if}
+        <ItemIcon def={meta} {itemId} />
       </div>
       <div>
         <div class="inspect-name">{meta.name.toLowerCase()}</div>
-        <div class="inspect-subtitle">{meta.category} · {meta.rarity}</div>
+        <div class="inspect-subtitle">{meta.category} Â· {meta.rarity}</div>
       </div>
     </div>
 
@@ -243,3 +238,4 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
     opacity: 0.5;
   }
 </style>
+

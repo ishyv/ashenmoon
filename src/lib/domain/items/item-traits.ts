@@ -33,7 +33,7 @@ export interface FlammableTrait {
 }
 
 /**
- * Defines a natural expiration or decay window.
+ * Defines a natural expiration or decay period.
  */
 export interface DecayableTrait {
   kind: "decayable";

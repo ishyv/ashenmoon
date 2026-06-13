@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+﻿import { describe, expect, it, vi } from "vitest";
 import { World } from "miniplex";
 import {
   CombatConfig,
@@ -12,7 +12,7 @@ import { InputAction, SkillKey } from "$lib/domain/game-events";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
-import { stamina, setStamina } from "$lib/domain/stamina.svelte";
+import { stamina, setStamina } from "$lib/state/rpg/stamina.svelte";
 import { MovementResource, playerMovementSystem } from "$lib/core/systems/movement/movement";
 
 // Mocking dependencies that aren't available in node/test environment
@@ -222,7 +222,7 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
     combat.kiteStacks = 3;
     combat.kiteStacksDecayTimer = 3.0;
 
-    // Tick time by 1.5 seconds — should NOT decay
+    // Tick time by 1.5 seconds â€” should NOT decay
     playerAttackSystem(
       world,
       inputs,
@@ -241,7 +241,7 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
     expect(combat.kiteStacks).toBe(3);
     expect(combat.kiteStacksDecayTimer).toBe(1.5);
 
-    // Tick by another 1.6 seconds (total 3.1) — should decay by 1 stack
+    // Tick by another 1.6 seconds (total 3.1) â€” should decay by 1 stack
     playerAttackSystem(
       world,
       inputs,
@@ -412,3 +412,4 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
     expect(combat.swingActiveTimer).toBeCloseTo(0.264, 4);
   });
 });
+

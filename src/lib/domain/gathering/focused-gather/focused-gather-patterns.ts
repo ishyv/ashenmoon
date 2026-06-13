@@ -24,7 +24,8 @@ function randRange(rng: () => number, min: number, max: number): number {
 }
 
 function pick<T>(rng: () => number, items: readonly T[]): T {
-  return items[Math.min(items.length - 1, Math.floor(rng() * items.length))];
+  if (items.length === 0) throw new Error("cannot pick from an empty focused-gather pattern pool");
+  return items[Math.min(items.length - 1, Math.floor(rng() * items.length))]!;
 }
 
 /** Base offset for target `i` of `count` under a given pattern, in world px. */
@@ -52,7 +53,7 @@ function patternOffset(
         { x: -1, y: 0 },
         { x: 1, y: 0 },
       ];
-      const d = dirs[i % 4];
+      const d = dirs[i % dirs.length]!;
       const scale = 0.6 + 0.4 * Math.floor(i / 4);
       return { x: d.x * r * scale, y: d.y * r * scale };
     }

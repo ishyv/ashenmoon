@@ -5,7 +5,7 @@ import { resolveConsume } from "./consume-system";
 
 describe("boiling dirty water", () => {
   it("dirty water carries a boilable trait that transforms into clean water", () => {
-    const trait = ITEM_DEFINITIONS.dirty_water.traits.find((t) => t.kind === "boilable");
+    const trait = ITEM_DEFINITIONS.dirty_water!.traits.find((t) => t.kind === "boilable");
     expect(trait).toBeDefined();
     if (trait?.kind !== "boilable") throw new Error("unreachable");
     expect(trait.effect).toEqual({ kind: "transform", into: "clean_water", preserveQuantity: true });
@@ -41,7 +41,7 @@ describe("boiling dirty water", () => {
   });
 
   it("boiled output has no sickness risk", () => {
-    const outcome = resolveConsume(ITEM_DEFINITIONS.clean_water, () => 0.0)!;
+    const outcome = resolveConsume(ITEM_DEFINITIONS.clean_water!, () => 0.0)!;
     expect(outcome.holderCommands.every((c) => c.kind !== "add_status")).toBe(true);
   });
 });

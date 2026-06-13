@@ -3,6 +3,7 @@ import {
   DEFAULT_CARRY_CLASS,
   Rarity,
   type ItemDefinition,
+  type IconSheet,
   type ItemId,
   type ItemPhysicalProperties,
 } from "./item-types";
@@ -18,6 +19,7 @@ interface ItemBaseInput {
   rarity: Rarity;
   category: Category;
   physical?: Partial<ItemPhysicalProperties>;
+  iconSheet?: IconSheet;
   iconUrl?: string;
   icon?: string;
 }
@@ -32,18 +34,21 @@ interface ItemBaseInput {
 export function Item(base: ItemBaseInput): ItemDefinition & {
   with: (...traits: ItemTrait[]) => ItemDefinition;
 } {
+  const physical: ItemPhysicalProperties = {
+    carryClass: base.physical?.carryClass ?? DEFAULT_CARRY_CLASS,
+    weight: base.physical?.weight ?? 1,
+    ...(base.physical?.stackLimit !== undefined ? { stackLimit: base.physical.stackLimit as number } : {}),
+  };
+
   const definition: ItemDefinition = {
     id: base.id,
     name: base.name,
     description: base.description,
     rarity: base.rarity,
     category: base.category,
-    physical: {
-      carryClass: base.physical?.carryClass ?? DEFAULT_CARRY_CLASS,
-      weight: base.physical?.weight ?? 1,
-      stackLimit: base.physical?.stackLimit,
-    },
+    physical,
     traits: [],
+    ...(base.iconSheet !== undefined && { iconSheet: base.iconSheet }),
     ...(base.iconUrl !== undefined && { iconUrl: base.iconUrl }),
     ...(base.icon !== undefined && { icon: base.icon }),
   };

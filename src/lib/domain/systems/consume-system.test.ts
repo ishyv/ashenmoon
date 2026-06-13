@@ -3,10 +3,10 @@ import { resolveConsume } from "./consume-system";
 import { ITEM_DEFINITIONS } from "$lib/domain/items/item-definitions";
 import { StatusId } from "./status-types";
 
-const dirtyWater = ITEM_DEFINITIONS.dirty_water;
-const cleanWater = ITEM_DEFINITIONS.clean_water;
-const panacea = ITEM_DEFINITIONS.debug_panacea;
-const stone = ITEM_DEFINITIONS.stone;
+const dirtyWater = ITEM_DEFINITIONS.dirty_water!;
+const cleanWater = ITEM_DEFINITIONS.clean_water!;
+const panacea = ITEM_DEFINITIONS.debug_panacea!;
+const stone = ITEM_DEFINITIONS.stone!;
 
 describe("resolveConsume", () => {
   it("returns null for non-consumable items", () => {

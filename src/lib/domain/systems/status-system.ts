@@ -34,11 +34,11 @@ export function applyStatus(
   if (existing) {
     return list.map((s) =>
       s.id === id
-        ? { ...s, remainingSec: Math.max(s.remainingSec, durationSec), source: source ?? s.source }
+        ? { ...s, remainingSec: Math.max(s.remainingSec, durationSec), ...(source !== undefined ? { source } : {}) }
         : s,
     );
   }
-  return [...list, { id, remainingSec: durationSec, source }];
+  return [...list, { id, remainingSec: durationSec, ...(source !== undefined ? { source } : {}) }];
 }
 
 export function clearStatus(list: ActiveStatus[], id: StatusId): ActiveStatus[] {

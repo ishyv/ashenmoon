@@ -129,17 +129,23 @@ function gatherablePrefab(def: GatherableDefinition): PrefabDefinition {
     components.push({ type: "collider", solidKind: def.solidKind });
   }
 
+  const persistence: { syncAction?: string; syncLocationId?: string } | undefined =
+    def.syncAction || def.syncLocationId
+      ? {
+          ...(def.syncAction !== undefined ? { syncAction: def.syncAction } : {}),
+          ...(def.syncLocationId !== undefined ? { syncLocationId: def.syncLocationId } : {}),
+        }
+      : undefined;
+  const interaction = interactionForGatherable(def);
+
   return {
     id: def.id,
     displayName: def.displayName,
     components,
     render: { kind: def.renderKind },
-    interaction: interactionForGatherable(def),
+    ...(interaction !== undefined ? { interaction } : {}),
     collision: def.collision ?? { solid: def.solidKind !== "none" },
-    persistence:
-      def.syncAction || def.syncLocationId
-        ? { syncAction: def.syncAction, syncLocationId: def.syncLocationId }
-        : undefined,
+    ...(persistence !== undefined ? { persistence } : {}),
     feedback: {
       spawn: `${def.displayName} appears.`,
       interact: def.feedback.start,

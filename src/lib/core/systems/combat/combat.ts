@@ -1,6 +1,6 @@
-/**
+﻿/**
  * Combat core: the shared damage path, the player's melee swing, and knockback
- * integration. Everything here is faction-agnostic and entity-agnostic — the
+ * integration. Everything here is faction-agnostic and entity-agnostic â€” the
  * player and every enemy run through the same `applyDamage` so hit reactions,
  * i-frames, and knockback behave identically on both sides. Enemy *behaviour*
  * (who swings, when) lives in enemy-ai.ts; this file owns the rules of a hit.
@@ -48,8 +48,8 @@ import {
   spawnCrosscutIndicator,
   clearCrosscutIndicators,
 } from "$lib/core/vfx/vfx";
-import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
-import { getPlayerStats } from "$lib/domain/stats.svelte";
+import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { mitigatePhysical, staminaCost } from "$lib/domain/stats/stat-calculation";
 import { playSound } from "$lib/audio/audio-engine";
 import { Colors } from "$lib/utils/colors";
@@ -68,7 +68,7 @@ import {
   type CrosscutComboState,
   type CrosscutGrade,
 } from "$lib/domain/combat/crosscut-combo";
-import { evaluate as evaluateRhythm, type RhythmResult } from "$lib/domain/combat/rhythm";
+import { evaluate as evaluateRhythm, DEFAULT_RHYTHM_CONFIG, type RhythmConfig, type RhythmResult } from "$lib/domain/combat/rhythm";
 import {
   clearFourfoldSlashState,
   createInitialFourfoldSlashState,
@@ -107,7 +107,7 @@ export class CombatConfig {
   /* Roughly represents the arc size, could be used to tweak as per player skills */
   public arcSize = 30; 
   
-  /** half the swing cone; the arc spans aim ± this (radians). */
+  /** half the swing cone; the arc spans aim Â± this (radians). */
   public arcHalfAngle =
     (this.arcSize * Math.PI) / 180; /* first value should be between 30 and 60 ideally */
   public damage = 25;
@@ -143,10 +143,10 @@ export class CombatResource {
   public inCombatTimer = 0;
   /**
    * Recent significant movement direction changes, oldest first (max 3).
-   * Used to detect the A → -A → A footwork pattern that triggers the thrust combo.
+   * Used to detect the A â†’ -A â†’ A footwork pattern that triggers the thrust combo.
    */
   public movePhases: { x: number; y: number }[] = [];
-  /** Last recorded movement direction — used to detect phase transitions. */
+  /** Last recorded movement direction â€” used to detect phase transitions. */
   public lastMoveVec: { x: number; y: number } | null = null;
   /** Seconds until the phase history expires due to inactivity. */
   public comboResetTimer = 0;
@@ -179,13 +179,14 @@ export class CombatResource {
     overloadDebuffTimer: 0,
   };
   public directionalMomentumConfig: DirectionalMomentumComboConfig = { ...DEFAULT_DIRECTIONAL_MOMENTUM_COMBO_CONFIG };
+  public rhythmConfig: RhythmConfig = { ...DEFAULT_RHYTHM_CONFIG };
 }
 
 /**
  * Apply one hit to a target. Returns whether the hit was lethal so the caller
  * can run the appropriate death flow (enemy despawn+loot, or player respawn).
  * No-ops (returns false) when the target has no health, is mid-i-frames, or is
- * already dead — callers can fire this freely without pre-checking.
+ * already dead â€” callers can fire this freely without pre-checking.
  */
 export function applyDamage(
   target: Entity,
@@ -211,7 +212,7 @@ export function applyDamage(
     amount = Math.round(amount * (1 + 0.15 * combat.kiteStacks));
     spawnEnvFloatingText(
       vfx,
-      "⚠️ Focus Broken!",
+      "âš ï¸ Focus Broken!",
       Colors.ui.error,
       target.position!,
       entityLayer,
@@ -424,12 +425,12 @@ function maybeApplyCrosscutBleed(
   if (target.position) {
     spawnEnvFloatingText(vfx, "bleeding", Colors.combat.crosscutBleed, target.position, entityLayer, `bleed:${target.id}`);
   }
-  playSound("combo.crosscut.bleed", { position: target.position });
+  playSound("combo.crosscut.bleed", target.position ? { position: target.position } : {});
   return true;
 }
 
 function clearEnemyBleed(entity: Entity): void {
-  entity.bleed = undefined;
+  delete entity.bleed;
 }
 
 export function tickEnemyBleedSystem(
@@ -676,7 +677,7 @@ export function playerAttackSystem(
     combat.kiteStacksDecayTimer = 0;
 
     // Evaluate rhythm
-    rhythmEval = evaluateRhythm(combat.currentTimeMs, combat.lastBasicAttackAtMs);
+    rhythmEval = evaluateRhythm(combat.currentTimeMs, combat.lastBasicAttackAtMs, combat.rhythmConfig);
     effectiveDamage = Math.round(effectiveDamage * rhythmEval.damageMultiplier);
     useStaminaCost = rhythmEval.staminaCost;
   }
@@ -685,7 +686,7 @@ export function playerAttackSystem(
   if (stamina.current < (isKiteCombo || isFourfold ? useStaminaCost : config.minStamina)) {
     spawnEnvFloatingText(
       vfx,
-      isKiteCombo ? "⚡️ too winded to kite" : isFourfold ? "⚡️ too winded to finish" : "⚡️ too winded to swing",
+      isKiteCombo ? "âš¡ï¸ too winded to kite" : isFourfold ? "âš¡ï¸ too winded to finish" : "âš¡ï¸ too winded to swing",
       Colors.ui.error,
       player.position!,
       entityLayer,
@@ -783,7 +784,7 @@ export function playerAttackSystem(
     playSound(crosscutResult.grade === "excellent" ? "combo.crosscut.excellent" : "combo.crosscut", {
       position: { x: pcx, y: pcy },
       gain: 1 + Math.min(4, crosscutStacks - 1) * 0.08,
-      params: { grade: crosscutResult.grade, stacks: crosscutStacks },
+      params: { ...(crosscutResult.grade ? { grade: crosscutResult.grade } : {}), stacks: crosscutStacks },
     });
     triggerCameraShake(
       vfx,
@@ -868,3 +869,4 @@ function finisherName(type: FourfoldSlashType): string {
     case "crosswind_cut": return "Crosswind Cut";
   }
 }
+

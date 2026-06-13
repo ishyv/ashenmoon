@@ -1,5 +1,6 @@
 <script lang="ts">
 import { getItemDef, traitOf } from "$lib/domain/items";
+import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 import type { InventoryItemView } from "./types";
 
 let {
@@ -26,7 +27,6 @@ let {
     <div class="grid">
       {#each items as { itemId, qty }}
         {@const meta = getItemDef(itemId)}
-        {@const iconUrl = meta?.iconUrl}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
@@ -36,13 +36,7 @@ let {
           onclick={() => onSelect(itemId)}
         >
           <div class="item-visual">
-            {#if iconUrl}
-              <img src={iconUrl} alt={meta?.name ?? itemId} class="item-icon-img" />
-            {:else if meta?.icon}
-              <span class="item-icon-emoji">{meta.icon}</span>
-            {:else}
-              <span>{(meta?.name ?? itemId).slice(0, 2).toLowerCase()}</span>
-            {/if}
+            <ItemIcon def={meta} {itemId} />
           </div>
           {#if qty > 1}
             <div class="qty-badge">{qty}</div>

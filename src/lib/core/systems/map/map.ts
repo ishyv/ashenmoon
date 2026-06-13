@@ -1,4 +1,4 @@
-import { Container, Graphics, TilingSprite } from "pixi.js";
+import { Container, Graphics, Sprite, TilingSprite } from "pixi.js";
 import { Cell, type AABB } from "$lib/core/types";
 import { SeededNoise } from "$lib/utils/noise";
 import {
@@ -9,10 +9,14 @@ import {
   getTreeVariantTexture,
   getRockVariantTexture,
   getWoodItemTexture,
+  getBushTexture,
+  getCloudTexture,
 } from "$lib/core/assets/assets";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId } from "$lib/domain/game-events";
+import { ENGINE_CONFIG } from "$lib/core/engine-config";
+import type { VFXResource } from "$lib/core/vfx/vfx";
 
 export const TILE = 64;
 
@@ -366,7 +370,7 @@ export function buildMapSystem(map: MapResource): void {
     water_source: 0,
   };
   const pickupKinds = Object.keys(pickupTargets);
-  const hasNeededPickups = () => pickupKinds.some((kind) => pickupCounts[kind] < pickupTargets[kind]);
+  const hasNeededPickups = () => pickupKinds.some((kind) => (pickupCounts[kind] ?? 0) < (pickupTargets[kind] ?? 0));
 
   for (let r = 3; r < 14 && hasNeededPickups(); r++) {
     for (let theta = 0; theta < 360; theta += 15) {
@@ -385,7 +389,7 @@ export function buildMapSystem(map: MapResource): void {
         const gatherableId = pickupKinds[Math.floor(normalizedHash * pickupKinds.length)] ?? "stick_pickup";
         if ((pickupCounts[gatherableId] ?? 0) < (pickupTargets[gatherableId] ?? 0)) {
           addSpawn(gatherableId, x, y, "pickup");
-          pickupCounts[gatherableId]++;
+          pickupCounts[gatherableId] = (pickupCounts[gatherableId] ?? 0) + 1;
         }
       }
     }
@@ -558,3 +562,50 @@ export function getAmbientEnvironment(
 
   return { temperature, humidity, toxins };
 }
+
+/**
+ * Scatters bushes and ambient clouds across the world.
+ */
+export function spawnDecorationsSystem(
+  map: MapResource,
+  vfx: VFXResource,
+  entityLayer: Container,
+): void {
+  const { mapW: W, mapH: H } = map;
+
+  for (let gy = 0; gy < H; gy++) {
+    for (let gx = 0; gx < W; gx++) {
+      const cell = map.cells[gy * W + gx];
+      if (cell !== Cell.Meadows && cell !== Cell.CrimsonGrove) continue;
+      if (map.solidCoords.has(coordKey(gx, gy))) continue;
+
+      const hash = (gx * 1031 + gy * 2053) & 0xffff;
+      if (hash > 0xffff * 0.06) continue;
+      const variant = ((hash % 4) + 1) as 1 | 2 | 3 | 4;
+      const bush = new Sprite(getBushTexture(variant));
+      bush.anchor.set(0.5, 1);
+      bush.x = gx * TILE + TILE / 2 + ((hash >> 8) % 10) - 5;
+      bush.y = gy * TILE + TILE + ((hash >> 4) % 10) - 5;
+      bush.scale.set(TILE / 80);
+      bush.alpha = 0.7 + (hash & 0x0f) / 60;
+      entityLayer.addChild(bush);
+    }
+  }
+
+  // Ambient cloud drift
+  for (let i = 0; i < ENGINE_CONFIG.CLOUDS.COUNT; i++) {
+    const variant = ((i % 8) + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+    const cloud = new Sprite(getCloudTexture(variant));
+    cloud.anchor.set(0.5, 0.5);
+    cloud.x = (i / ENGINE_CONFIG.CLOUDS.COUNT) * W * TILE + Math.random() * TILE * 10;
+    cloud.y = Math.random() * H * TILE;
+    cloud.scale.set(0.7 + Math.random() * 0.7);
+    cloud.alpha = 0.28 + Math.random() * 0.2;
+    entityLayer.addChild(cloud);
+    vfx.clouds.push({
+      sprite: cloud,
+      vx: ENGINE_CONFIG.CLOUDS.MIN_VX + Math.random() * ENGINE_CONFIG.CLOUDS.RANDOM_VX,
+    });
+  }
+}
+

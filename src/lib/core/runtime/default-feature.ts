@@ -16,15 +16,17 @@ const resource: ComponentFactory = ({ component }) => {
   const def = getGatherableDefinition(component.gatherableId);
   if (!def) throw new Error(`unknown gatherable: ${component.gatherableId}`);
   const drop = def.yieldTable[0];
+  const resourceComponent = {
+    hp: def.depletion?.hp ?? 15,
+    maxHp: def.depletion?.hp ?? 15,
+    drop: drop?.itemId ?? "stick",
+    gatherableId: def.id,
+    ...(def.syncAction !== undefined ? { rpgAction: def.syncAction } : {}),
+    ...(def.syncLocationId !== undefined ? { rpgLocationId: def.syncLocationId } : {}),
+  };
+
   return {
-    resource: {
-      hp: def.depletion?.hp ?? 15,
-      maxHp: def.depletion?.hp ?? 15,
-      drop: drop?.itemId ?? "stick",
-      gatherableId: def.id,
-      rpgAction: def.syncAction,
-      rpgLocationId: def.syncLocationId,
-    },
+    resource: resourceComponent,
     interactable: { name: def.displayName, action: def.interactionKind === "repeated_action" ? "gather" : "pickup" },
   };
 };

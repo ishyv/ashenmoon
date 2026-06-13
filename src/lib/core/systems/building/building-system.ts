@@ -13,7 +13,7 @@ import { Cell } from "$lib/core/types";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { getBuildingSpec } from "$lib/domain/building-specs";
-import { createCampfireState } from "$lib/domain/camp/camp-state";
+import { createCampfireState, type CampStructureType } from "$lib/domain/camp/camp-state";
 import { CollisionFootprints, computeRenderZ, resolveCollisionAabb } from "$lib/domain/collision";
 import {
   isValidBuildingPlacement,
@@ -29,8 +29,30 @@ export class BuildingResource {
   public currentPlacementType: string | null = null;
   public previewSprite: Sprite | null = null;
   public previewIndicator: Graphics | null = null;
-  public onPlacementCancelCb?: () => void;
-  public onPlacementCompleteCb?: () => void;
+  public onPlacementCancelCb?: (() => void) | undefined;
+  public onPlacementCompleteCb?: (() => void) | undefined;
+}
+
+const CAMP_STRUCTURE_TYPES = new Set<string>([
+  "campfire",
+  "primitive_work_surface",
+  "drying_rack",
+  "crude_shelter",
+  "marker_sign",
+]);
+
+function campStructureFor(type: string): Entity["campStructure"] | undefined {
+  if (!CAMP_STRUCTURE_TYPES.has(type)) return undefined;
+  const campType = type as CampStructureType;
+  if (campType === "crude_shelter") {
+    return {
+      type: campType,
+      protectionRadiusPx: TILE * 2.5,
+      coldResistanceBonus: 0.45,
+      rainProtection: 0.5,
+    };
+  }
+  return { type: campType };
 }
 
 function placementContext(map: MapResource, playerPos: { x: number; y: number }): BuildingPlacementContext {
@@ -89,6 +111,7 @@ export function spawnBuildingSystem(
 
   const station = spec.stationId ? { stationId: spec.stationId } : undefined;
   const campfire = spec.stationId === "campfire" ? createCampfireState({ isLit: false }) : undefined;
+  const campStructure = campStructureFor(type);
   const interactable = spec.stationId
     ? { name: spec.displayName, action: "process" as const }
     : type === "crude_shelter" || type === "marker_sign"
@@ -101,6 +124,7 @@ export function spawnBuildingSystem(
     collider: { isSolid: true },
     ...(station ? { station } : {}),
     ...(campfire ? { campfire } : {}),
+    ...(campStructure ? { campStructure } : {}),
     ...(interactable ? { interactable } : {}),
   });
 

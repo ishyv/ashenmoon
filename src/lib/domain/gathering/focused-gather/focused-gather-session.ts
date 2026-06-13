@@ -40,7 +40,7 @@ export function createSession(
   };
 }
 
-/** Promote pending targets that have spawned and expire active ones past their window. */
+/** Promote pending targets that have spawned and expire active ones past their period. */
 export function tickSession(session: FocusedGatherSession, nowMs: number): void {
   if (session.state !== "active") return;
   const elapsed = nowMs - session.startedAtMs;

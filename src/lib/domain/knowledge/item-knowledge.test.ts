@@ -31,28 +31,28 @@ describe("learn / query", () => {
 
 describe("discoverableProperties", () => {
   it("derives facts from traits (dirty water: edible, thirst, toxic, boilable)", () => {
-    expect(discoverableProperties(ITEM_DEFINITIONS.dirty_water).sort()).toEqual(
+    expect(discoverableProperties(ITEM_DEFINITIONS.dirty_water!).sort()).toEqual(
       ["boilable", "edible", "thirst_value", "toxicity"].sort(),
     );
   });
 
   it("flags clean water as edible + hydrating but not toxic", () => {
-    const props = discoverableProperties(ITEM_DEFINITIONS.clean_water);
+    const props = discoverableProperties(ITEM_DEFINITIONS.clean_water!);
     expect(props).toContain("edible");
     expect(props).toContain("thirst_value");
     expect(props).not.toContain("toxicity");
   });
 
   it("marks oak wood flammable and ghost lily perishable", () => {
-    expect(discoverableProperties(ITEM_DEFINITIONS.oak_wood)).toContain("flammable");
-    expect(discoverableProperties(ITEM_DEFINITIONS.ghost_lily)).toContain("perishable");
+    expect(discoverableProperties(ITEM_DEFINITIONS.oak_wood!)).toContain("flammable");
+    expect(discoverableProperties(ITEM_DEFINITIONS.ghost_lily!)).toContain("perishable");
   });
 });
 
 describe("inspectItem", () => {
   it("partitions discoverable facts into known and unknown", () => {
     const knowledge = learn(EMPTY_KNOWLEDGE, "dirty_water", "edible", "thirst_value");
-    const view = inspectItem(ITEM_DEFINITIONS.dirty_water, knowledge);
+    const view = inspectItem(ITEM_DEFINITIONS.dirty_water!, knowledge);
     expect(view.known.sort()).toEqual(["edible", "thirst_value"]);
     expect(view.unknown.sort()).toEqual(["boilable", "toxicity"]);
   });

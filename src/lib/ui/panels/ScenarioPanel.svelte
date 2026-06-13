@@ -1,9 +1,9 @@
-<script lang="ts">
+﻿<script lang="ts">
   import type { GameEngine } from "$lib/core/engine";
   import { SCENARIO_REGISTRY } from "$lib/domain/scenarios";
   import { GATHERABLE_DEFINITIONS } from "$lib/domain/gathering/gatherables";
-  import { equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
-  import { getEquippedWeaponId } from "$lib/domain/inventory-api";
+  import { equipTool } from "$lib/state/rpg-controller.svelte";
+  import { getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
   import { debugConfig } from "$lib/state/runtime-ui-state.svelte";
   import { CollisionFootprints, type CollisionFootprint } from "$lib/domain/collision";
 
@@ -29,9 +29,9 @@
   // The player has a single weapon slot, so testing axe-gated vs pickaxe-gated
   // gatherables means swapping the equipped tool here.
   const TOOLS: { label: string; itemId: string | null }[] = [
-    { label: "🪓 axe", itemId: "stone_axe" },
-    { label: "⛏️ pickaxe", itemId: "stone_pickaxe" },
-    { label: "✋ bare", itemId: null },
+    { label: "ðŸª“ axe", itemId: "stone_axe" },
+    { label: "â›ï¸ pickaxe", itemId: "stone_pickaxe" },
+    { label: "âœ‹ bare", itemId: null },
   ];
   const equippedToolId = $derived(getEquippedWeaponId());
   let collisionTarget = $state("stone_node");
@@ -77,7 +77,7 @@
 <div class="scenario-panel">
   <div class="panel-header">
     <span class="panel-title">scenarios</span>
-    <button class="close-btn" onclick={onClose}>×</button>
+    <button class="close-btn" onclick={onClose}>Ã—</button>
   </div>
 
   <div class="panel-body">
@@ -106,7 +106,7 @@
           <button
             class="toggle-btn"
             class:on={equippedToolId === t.itemId}
-            onclick={() => equipLocalWeapon(t.itemId)}
+            onclick={() => void equipTool(t.itemId)}
           >
             {t.label}
           </button>
@@ -125,7 +125,7 @@
         </button>
         <button class="tool-btn" onclick={() => {
           const g = engine!.devPlayerGrid();
-          engine!.spawnEnemy(g.gx + 2, g.gy);
+          engine!.devSpawnEnemy(g.gx + 2, g.gy);
         }}>
           spawn enemy nearby
         </button>
@@ -402,3 +402,4 @@
     border-color: rgba(255, 220, 120, 0.2);
   }
 </style>
+

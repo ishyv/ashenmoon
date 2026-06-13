@@ -1,6 +1,6 @@
 import { ITEM_DEFINITIONS, type ItemDefinition } from "$lib/domain/items";
 import { STATION_DEFINITIONS, type ProcessType, type StationDefinition, type StationId } from "$lib/domain/stations";
-import type { Inventory } from "./inventory-system";
+import { removeStackQty, type Inventory } from "./inventory-system";
 
 export interface StationProcess {
   readonly id: string;
@@ -29,6 +29,28 @@ export interface StationProcessRuntime {
 export interface StationProcessTickContext {
   readonly raining: boolean;
 }
+
+export type StationProcessKnowledgeTrait =
+  | "boilable"
+  | "flammable"
+  | "heat_sensitive"
+  | "perishable";
+
+export type StationProcessCompletionResult =
+  | {
+      readonly ok: true;
+      readonly inventory: Inventory;
+      readonly outputItemId: string;
+      readonly outputQty: number;
+      readonly recipeToLearn?: string;
+      readonly knowledge: readonly { itemId: string; trait: StationProcessKnowledgeTrait }[];
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "missing_inputs";
+      readonly missing: readonly { itemId: string; required: number; have: number }[];
+      readonly inventory: Inventory;
+    };
 
 export const STATION_PROCESS_VERB: Record<ProcessType, string> = {
   heat: "processing",
@@ -266,4 +288,80 @@ export function findProcessForStation(
     }
   }
   return null;
+}
+
+function stackQty(inventory: Inventory, itemId: string): number {
+  const slot = inventory.slots[itemId];
+  return slot && "qty" in slot ? slot.qty : 0;
+}
+
+type StationProcessLike = Pick<StationProcess, "stationId" | "inputs" | "outputItemId" | "outputQty">;
+
+function stationKnowledgeFor(
+  process: StationProcessLike,
+  firstInputId: string | undefined,
+): readonly { itemId: string; trait: StationProcessKnowledgeTrait }[] {
+  if (!firstInputId) return [];
+  if (process.stationId === "campfire") {
+    if (process.outputItemId === "clean_water") return [{ itemId: firstInputId, trait: "boilable" }];
+    if (process.outputItemId === "charcoal") return [{ itemId: firstInputId, trait: "flammable" }];
+    if (process.outputItemId === "hardened_clay") return [{ itemId: firstInputId, trait: "heat_sensitive" }];
+  }
+  if (process.stationId === "drying_rack") return [{ itemId: firstInputId, trait: "perishable" }];
+  return [];
+}
+
+function recipeDiscoveryFor(process: StationProcessLike): string | undefined {
+  if (process.stationId === "primitive_work_surface") return process.outputItemId;
+  if (process.outputItemId === "charcoal") return "charcoal";
+  return undefined;
+}
+
+/**
+ * Completes a station process as pure inventory math plus side-effect
+ * descriptions. Runtime systems consume the returned knowledge/recipe events;
+ * they do not duplicate ingredient checks or hand-edit inventory stacks.
+ */
+export function resolveStationProcessCompletion(input: {
+  readonly inventory: Inventory;
+  readonly process: StationProcessLike;
+}): StationProcessCompletionResult {
+  const { inventory, process } = input;
+  const missing = Object.entries(process.inputs)
+    .map(([itemId, required]) => ({
+      itemId,
+      required,
+      have: stackQty(inventory, itemId),
+    }))
+    .filter((entry) => entry.have < entry.required);
+
+  if (missing.length > 0) {
+    return { ok: false, reason: "missing_inputs", missing, inventory };
+  }
+
+  let next = inventory;
+  for (const [itemId, qty] of Object.entries(process.inputs)) {
+    next = removeStackQty(next, itemId, qty);
+  }
+
+  const currentOutputQty = stackQty(next, process.outputItemId);
+  next = {
+    ...next,
+    slots: {
+      ...next.slots,
+      [process.outputItemId]: { qty: currentOutputQty + process.outputQty },
+    },
+  };
+
+  const firstInputId = Object.keys(process.inputs)[0];
+  const recipeToLearn = recipeDiscoveryFor(process);
+
+  return {
+    ok: true,
+    inventory: next,
+    outputItemId: process.outputItemId,
+    outputQty: process.outputQty,
+    ...(recipeToLearn !== undefined ? { recipeToLearn } : {}),
+    knowledge: stationKnowledgeFor(process, firstInputId),
+  };
 }

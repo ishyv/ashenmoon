@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 /**
  * Bottom-center HUD: a flex row of stat bars. Children stay centered, grow into
  * the available width, and shrink when space runs out.
@@ -11,10 +11,10 @@ import { fade } from "svelte/transition";
 import StatBar from "./StatBar.svelte";
 import StatusHud from "./StatusHud.svelte";
 import LevelBadge from "./LevelBadge.svelte";
-import { getPlayerStats } from "$lib/domain/stats.svelte";
-import { stamina, staminaConfig } from "$lib/domain/stamina.svelte";
-import { thirstEvent, thirstConfig } from "$lib/domain/survival.svelte";
-import { statusState } from "$lib/domain/status-effects.svelte";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
+import { stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
+import { thirstEvent, thirstConfig } from "$lib/state/rpg/survival.svelte";
+import { statusState } from "$lib/state/rpg/status-effects.svelte";
 import { uiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 
@@ -121,3 +121,4 @@ $effect(() => {
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
   }
 </style>
+

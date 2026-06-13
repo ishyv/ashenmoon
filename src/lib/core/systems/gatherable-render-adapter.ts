@@ -1,6 +1,7 @@
 import { Sprite, type Texture } from "pixi.js";
 import {
   getBushTexture,
+  getCursedRockTexture,
   getRockTexture,
   getRockVariantTexture,
   getTreeTexture,
@@ -30,6 +31,9 @@ export const GATHERABLE_RENDER_ADAPTERS = {
   flint_pickup: { texture: () => getRockVariantTexture(2), pickupScaleTiles: 0.35 },
   forage: { texture: () => getBushTexture(1), pickupScaleTiles: 0.4 },
   moss: { texture: () => getBushTexture(2), pickupScaleTiles: 0.4 },
+  rock_cursed: { texture: () => getCursedRockTexture(1), pickupScaleTiles: 0.85 },
+  rock_cursed2: { texture: () => getCursedRockTexture(2), pickupScaleTiles: 0.85 },
+  rock_cursed3: { texture: () => getCursedRockTexture(3), pickupScaleTiles: 0.85 },
 } satisfies Record<GatherableRenderKind, GatherableRenderAdapter>;
 
 export function validateGatherableRenderAdapters(kinds: readonly GatherableRenderKind[]): string[] {

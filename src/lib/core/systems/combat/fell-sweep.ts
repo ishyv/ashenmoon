@@ -1,4 +1,4 @@
-import type { World } from "miniplex";
+﻿import type { World } from "miniplex";
 import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE } from "$lib/core/systems/map/map";
@@ -7,7 +7,7 @@ import { CombatResource, CombatConfig, applyDamage } from "./combat";
 import type { VFXResource } from "$lib/core/vfx/vfx";
 import { spawnEnvFloatingText, spawnEnvParticles, spawnShockwaveRing, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
-import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
+import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { Colors } from "$lib/utils/colors";
 import {
   chargeProgressFromHeldMs,
@@ -226,8 +226,8 @@ export function renderFellSweepChargeFeedback(
 }
 
 /**
- * Fell Sweep — charged melee attack. Activated by holding LMB for >= 800ms.
- * Charge level (0–1) scales arc width (+30%), reach (+50%), and damage (1.8x–3x).
+ * Fell Sweep â€” charged melee attack. Activated by holding LMB for >= 800ms.
+ * Charge level (0â€“1) scales arc width (+30%), reach (+50%), and damage (1.8xâ€“3x).
  * Long cooldown at level 1, reduced by 0.4s per level (floor 4s).
  */
 export function fellSweepSystem(
@@ -311,3 +311,4 @@ export function fellSweepSystem(
   }
   resetFellSweepCharge(combat);
 }
+

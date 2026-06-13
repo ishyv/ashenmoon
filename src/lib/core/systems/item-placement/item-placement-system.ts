@@ -31,8 +31,8 @@ export class ItemPlacementResource {
   public currentItemId: string | null = null;
   public previewSprite: Sprite | null = null;
   public previewIndicator: Graphics | null = null;
-  public onPlacementCancelCb?: () => void;
-  public onPlacementCompleteCb?: () => void;
+  public onPlacementCancelCb?: (() => void) | undefined;
+  public onPlacementCompleteCb?: (() => void) | undefined;
 }
 
 export function getItemTexture(itemId: string): Texture {

@@ -461,7 +461,7 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
         const inner = r * 0.72;
         arc.graphic.circle(0, 0, r);
         arc.graphic.circle(0, 0, inner);
-        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.65 });
+        arc.graphic.fill({ color: arc.color ?? 0xffffff, alpha: (1 - t) * 0.65 });
         arc.graphic.circle(0, 0, r).stroke({ color: Colors.ui.white, width: 3, alpha: (1 - t) * 0.75 });
       } else if (variant === "falling_wheel") {
         const yOffset = t * 36;
@@ -471,7 +471,7 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
         arc.graphic.arc(0, yOffset, r, 0, Math.PI);
         arc.graphic.arc(0, yOffset, inner, Math.PI, 0, true);
         arc.graphic.closePath();
-        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.75 });
+        arc.graphic.fill({ color: arc.color ?? 0xffffff, alpha: (1 - t) * 0.75 });
         arc.graphic.arc(0, yOffset, r, 0, Math.PI).stroke({ color: Colors.ui.white, width: 3, alpha: (1 - t) * 0.8 });
       } else if (variant === "rising_wheel") {
         const yOffset = -t * 36;
@@ -481,14 +481,14 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
         arc.graphic.arc(0, yOffset, r, Math.PI, 2 * Math.PI);
         arc.graphic.arc(0, yOffset, inner, 2 * Math.PI, Math.PI, true);
         arc.graphic.closePath();
-        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.75 });
+        arc.graphic.fill({ color: arc.color ?? 0xffffff, alpha: (1 - t) * 0.75 });
         arc.graphic.arc(0, yOffset, r, Math.PI, 2 * Math.PI).stroke({ color: Colors.ui.white, width: 3, alpha: (1 - t) * 0.8 });
       } else if (variant === "crosswind_cut") {
         const r = arc.reach * (0.5 + 0.5 * t);
         const inner = r * 0.8;
         arc.graphic.circle(0, 0, r);
         arc.graphic.circle(0, 0, inner);
-        arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.5 });
+        arc.graphic.fill({ color: arc.color ?? 0xffffff, alpha: (1 - t) * 0.5 });
 
         const len = arc.reach * (0.4 + 0.7 * t);
         const half = len * 0.8;
@@ -501,7 +501,7 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
         arc.graphic.lineTo(Math.cos(angle1) * half, Math.sin(angle1) * half);
         arc.graphic.moveTo(-Math.cos(angle2) * half, -Math.sin(angle2) * half);
         arc.graphic.lineTo(Math.cos(angle2) * half, Math.sin(angle2) * half);
-        arc.graphic.stroke({ color: arc.color, width, alpha });
+        arc.graphic.stroke({ color: arc.color ?? 0xffffff, width, alpha });
 
         arc.graphic.moveTo(-Math.cos(angle1) * half * 0.8, -Math.sin(angle1) * half * 0.8);
         arc.graphic.lineTo(Math.cos(angle1) * half * 0.8, Math.sin(angle1) * half * 0.8);
@@ -528,7 +528,7 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
 
       arc.graphic.moveTo(Math.cos(arc.angle) * -half, Math.sin(arc.angle) * -half);
       arc.graphic.lineTo(Math.cos(arc.angle) * half, Math.sin(arc.angle) * half);
-      arc.graphic.stroke({ color: arc.color, width, alpha });
+      arc.graphic.stroke({ color: arc.color ?? 0xffffff, width, alpha });
 
       arc.graphic.moveTo(Math.cos(arc.angle) * -half, Math.sin(arc.angle) * -half);
       arc.graphic.lineTo(Math.cos(arc.angle) * half, Math.sin(arc.angle) * half);
@@ -577,7 +577,7 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
     arc.graphic.arc(0, 0, r, a0, a1);
     arc.graphic.arc(0, 0, inner, a1, a0, true);
     arc.graphic.closePath();
-    arc.graphic.fill({ color: arc.color, alpha: (1 - t) * 0.5 });
+    arc.graphic.fill({ color: arc.color ?? 0xffffff, alpha: (1 - t) * 0.5 });
     // bright leading edge sells the swing direction
     arc.graphic.arc(0, 0, r, a1 - arc.halfAngle * 0.25, a1).stroke({
       color: Colors.ui.white,

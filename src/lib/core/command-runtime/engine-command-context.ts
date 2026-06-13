@@ -1,12 +1,13 @@
-import type { CommandSource, SkillCommandKey } from "$lib/domain/game-command";
-import { setStamina, spendStamina, stamina, staminaConfig } from "$lib/domain/stamina.svelte";
+﻿import type { CommandSource, SkillCommandKey } from "$lib/domain/game-command";
+import { setStamina, spendStamina, stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
+import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import {
   applyStatusEffect,
   clearAllStatusEffects,
   clearStatusEffect,
   statusState,
-} from "$lib/domain/status-effects.svelte";
-import { setThirst, thirst, thirstConfig } from "$lib/domain/survival.svelte";
+} from "$lib/state/rpg/status-effects.svelte";
+import { setThirst, thirst, thirstConfig } from "$lib/state/rpg/survival.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
 import type { GameEngine } from "$lib/core/engine";
 import type { CommandContext } from "./command-runtime";
@@ -36,7 +37,7 @@ function rpgInspectText(): string {
 
 function skillInspectText(): string {
   if (!gameState.rpg.skills) return "skills state not initialized";
-  return Object.entries(gameState.rpg.skills)
+  return Object.entries(gameState.rpg.skills as RpgPlayerState["skills"])
     .map(([key, skill]) => `${key}: Lvl ${skill.level} (${skill.xp}/${skill.nextXp} XP)`)
     .join(" | ");
 }
@@ -193,3 +194,4 @@ export function createEngineCommandContext(
 }
 
 export const statusCommandIds = Object.values(StatusId);
+

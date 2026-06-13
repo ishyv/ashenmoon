@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { World } from "miniplex";
 import { Container } from "pixi.js";
 import { CombatConfig, CombatResource } from "./combat";
@@ -8,7 +8,7 @@ import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { MapResource, TILE } from "$lib/core/systems/map/map";
 import { MovementResource } from "$lib/core/systems/movement/movement";
 import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
-import { setStamina, stamina } from "$lib/domain/stamina.svelte";
+import { setStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 
 vi.mock("$lib/core/vfx/vfx", async () => {
   const actual = await vi.importActual<typeof import("$lib/core/vfx/vfx")>("$lib/core/vfx/vfx");
@@ -218,3 +218,4 @@ describe("Driving Thrust combat system", () => {
     expect(ctx.player.position!.x).toBeLessThan(7 * TILE);
   });
 });
+

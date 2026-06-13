@@ -1,4 +1,4 @@
-import type { World } from "miniplex";
+﻿import type { World } from "miniplex";
 import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -17,8 +17,8 @@ import {
   type Vec2,
 } from "$lib/domain/combat/driving-thrust";
 import { PLAYER_BODY } from "$lib/domain/collision";
-import { spendStamina, stamina } from "$lib/domain/stamina.svelte";
-import { getPlayerStats } from "$lib/domain/stats.svelte";
+import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { Colors } from "$lib/utils/colors";
 import {
@@ -260,7 +260,7 @@ export function drivingThrustSystem(
         player.position!,
         entityLayer,
       );
-      playSound("combo.driving_thrust.denied", { position: player.position });
+      playSound("combo.driving_thrust.denied", player.position ? { position: player.position } : {});
     } else {
       spendStamina(combat.drivingThrustConfig.staminaCost, "burst");
       combat.drivingThrustCooldownTimer = combat.drivingThrustConfig.cooldownMs / 1000;
@@ -335,3 +335,4 @@ export function renderDrivingThrustPreview(
   g.lineTo(ex, ey);
   g.stroke({ color: Colors.combat.drivingThrust, width: 3, alpha: 0.75 });
 }
+

@@ -1,18 +1,17 @@
-<script lang="ts">
+﻿<script lang="ts">
 import { onDestroy, onMount } from "svelte";
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
-import { applyRpgState } from "$lib/state/rpg-actions.svelte";
-import { localRpgCommands } from "$lib/state/persistence/rpg-commands";
+import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { devFlags } from "$lib/state/dev-flags.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
-import { triggerQuestEvent } from "$lib/domain/quests.svelte";
+import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system";
 import { getExperimentHint, matchExperiment } from "$lib/domain/crafting/experimental";
-import { inspect as inspectKnowledge } from "$lib/domain/knowledge.svelte";
-import { knownRecipeList, learnRecipe } from "$lib/domain/crafting.svelte";
+import { inspect as inspectKnowledge } from "$lib/state/rpg/knowledge.svelte";
+import { knownRecipeList, learnRecipe } from "$lib/state/rpg/crafting.svelte";
 import { BUILDING_SPECS } from "$lib/domain/building-specs";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 import ItemGrid from "./inventory/ItemGrid.svelte";
@@ -70,7 +69,8 @@ $effect(() => {
 
 function getStashUsage(): number {
   let count = 0;
-  for (const slot of Object.values(gameState.rpg.inventory?.slots ?? {})) {
+  const slots = (gameState.rpg.inventory?.slots ?? {}) as Record<string, RpgInventorySlot>;
+  for (const slot of Object.values(slots)) {
     if (slot && "qty" in slot) {
       count += slot.qty;
     } else if (slot && "instances" in slot) {
@@ -90,9 +90,10 @@ function slotQty(slot: RpgInventorySlot): number {
   return "qty" in slot ? slot.qty : slot.instances.length;
 }
 
-function equipTool(itemId: string) {
+async function equipTool(itemId: string) {
   try {
-    applyRpgState(localRpgCommands.equipTool(itemId));
+    const result = await dispatchRpgCommand({ type: "equipTool", itemId });
+    if (!result.ok) throw new Error(result.error);
     playSound("pickup");
   } catch (err) {
     console.error("equip error:", err instanceof Error ? err.message : String(err));
@@ -106,7 +107,7 @@ function isEquipped(itemId: string): boolean {
 }
 
 const itemsList = $derived<InventoryItemView[]>(
-  Object.entries(gameState.rpg.inventory?.slots ?? {})
+  Object.entries((gameState.rpg.inventory?.slots ?? {}) as Record<string, RpgInventorySlot>)
     .map(([itemId, slot]) => ({ itemId, qty: slotQty(slot) }))
     .filter((item) => item.qty > 0),
 );
@@ -179,10 +180,11 @@ function canBuild(recipe: BuildRecipeView): boolean {
 async function craftItem(recipe: CraftRecipe): Promise<void> {
   if (!canCraft(recipe)) return;
   try {
-    applyRpgState(localRpgCommands.craft(recipe.id, {
+    const result = await dispatchRpgCommand({ type: "craft", recipeId: recipe.id, context: {
       isNearCampfire: engine?.isNearCampfire() ?? false,
       availableStations: engine?.nearbyStationIds?.() ?? [],
-    }));
+    }});
+    if (!result.ok) throw new Error(result.error);
     playSound("craft");
     
     // Clear items in mix if we successfully crafted something
@@ -436,3 +438,4 @@ async function runExperiment() {
     }
   }
 </style>
+

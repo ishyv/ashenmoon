@@ -36,17 +36,17 @@ describe("tickSession", () => {
   it("activates pending targets once their spawn time elapses", () => {
     const session = makeSession();
     tickSession(session, 1000); // elapsed 0 -> target 0 spawns
-    expect(session.targets[0].state).toBe("active");
-    expect(session.targets[1].state).toBe("pending");
+    expect(session.targets[0]!.state).toBe("active");
+    expect(session.targets[1]!.state).toBe("pending");
     tickSession(session, 1150); // elapsed 150 -> target 1 spawns
-    expect(session.targets[1].state).toBe("active");
+    expect(session.targets[1]!.state).toBe("active");
   });
 
   it("marks targets missed past their window", () => {
     const session = makeSession();
     tickSession(session, 1000);
     tickSession(session, 1000 + 1001); // past target 0 expiry (0 + 1000)
-    expect(session.targets[0].state).toBe("missed");
+    expect(session.targets[0]!.state).toBe("missed");
     expect(session.missedTargets).toBe(1);
   });
 });
@@ -57,7 +57,7 @@ describe("registerClick", () => {
     tickSession(session, 1000);
     const outcome = registerClick(session, { x: 0, y: 0 }, 1000);
     expect(outcome).toBe("hit");
-    expect(session.targets[0].state).toBe("hit");
+    expect(session.targets[0]!.state).toBe("hit");
     expect(session.successfulHits).toBe(1);
     expect(session.committed).toBe(true);
   });
@@ -69,7 +69,7 @@ describe("registerClick", () => {
     const late = makeSession();
     tickSession(late, 1000);
     registerClick(late, { x: 0, y: 0 }, 1900); // 100ms of 1000 remaining
-    expect(early.targets[0].timingQuality!).toBeGreaterThan(late.targets[0].timingQuality!);
+    expect(early.targets[0]!.timingQuality!).toBeGreaterThan(late.targets[0]!.timingQuality!);
   });
 
   it("treats clicking a later target out of order as a wrong click, not a hit", () => {
@@ -78,7 +78,7 @@ describe("registerClick", () => {
     const outcome = registerClick(session, { x: 100, y: 0 }, 1150); // clicked target 1, not 0
     expect(outcome).toBe("wrong");
     expect(session.wrongClicks).toBe(1);
-    expect(session.targets[1].state).toBe("active");
+    expect(session.targets[1]!.state).toBe("active");
   });
 
   it("ignores clicks when nothing is active", () => {
@@ -111,7 +111,7 @@ describe("isComplete / finalizeSession", () => {
     registerClick(session, { x: 0, y: 0 }, 1000); // hit target 0
     finalizeSession(session, 1200, "cancelled");
     expect(session.state).toBe("cancelled");
-    expect(session.targets[1].state).toBe("missed");
+    expect(session.targets[1]!.state).toBe("missed");
     expect(session.missedTargets).toBe(1);
   });
 });

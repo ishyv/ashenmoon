@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 /**
  * Character level + xp progress, bottom HUD. The numeral flashes accent for a
  * beat when a level-up fires (driven by levelUpEvent, same moment as the
@@ -9,7 +9,7 @@ import {
   getCharacterXp,
   getCharacterNextXp,
   levelUpEvent,
-} from "$lib/domain/stats.svelte";
+} from "$lib/state/rpg/stats.svelte";
 
 const level = $derived(getCharacterLevel());
 const xp = $derived(getCharacterXp());
@@ -86,3 +86,4 @@ $effect(() => {
     box-shadow: 0 0 6px var(--accent);
   }
 </style>
+

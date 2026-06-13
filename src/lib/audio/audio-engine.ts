@@ -116,7 +116,7 @@ export function playSound(id: SoundId, opts: PlayOpts = {}): void {
   const ctx = e.ctx;
   const nowMs = ctx.currentTime * 1000;
   if (shouldThrottle(lastPlayed, id, def.throttleMs, nowMs)) return;
-  while (recentVoices.length > 0 && nowMs - recentVoices[0] > VOICE_WINDOW_MS) recentVoices.shift();
+  while (recentVoices.length > 0 && nowMs - (recentVoices[0] ?? nowMs) > VOICE_WINDOW_MS) recentVoices.shift();
   if (recentVoices.length >= MAX_VOICES_PER_WINDOW) return;
 
   const voiceGain = ctx.createGain();

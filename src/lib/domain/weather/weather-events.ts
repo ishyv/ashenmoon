@@ -18,11 +18,17 @@ export interface WorldEvent {
   forcesCombat: boolean;
 }
 
-export const WORLD_EVENT_FEEDBACK: Record<WorldEventType, { message: string; sound?: SoundId }> = {
-  wolf_howl: { message: "You hear a distant howl echoing through the trees.", sound: "ambient.wind" },
-  animal_hunt: { message: "A frantic chase crashes through the brush.", sound: "node.deplete" },
-  bird_flock_reveal: { message: "Birds burst from the canopy ahead.", sound: "node.deplete" },
-  rain: { message: "rain begins to patter.", sound: "ambient.wind" },
+export interface WorldEventFeedback {
+  readonly message: string;
+  readonly tone: "info" | "warning";
+  readonly sound?: SoundId;
+}
+
+export const WORLD_EVENT_FEEDBACK: Record<WorldEventType, WorldEventFeedback> = {
+  wolf_howl: { message: "a distant howl echoes through the trees.", tone: "warning", sound: "ambient.wind" },
+  animal_hunt: { message: "a frantic chase crashes through the brush.", tone: "warning", sound: "node.deplete" },
+  bird_flock_reveal: { message: "birds burst from the canopy ahead.", tone: "info", sound: "node.deplete" },
+  rain: { message: "rain begins to patter.", tone: "info", sound: "ambient.wind" },
 };
 
 export const WORLD_EVENT_COOLDOWNS_SEC: Record<WorldEventType, number> = {

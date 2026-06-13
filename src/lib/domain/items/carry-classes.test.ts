@@ -54,8 +54,8 @@ describe("canEnterGrid / isStashable", () => {
 
 describe("content tagging", () => {
   it("tags survival items as pocket", () => {
-    expect(carryClassOf(ITEM_DEFINITIONS.clean_water)).toBe("pocket");
-    expect(carryClassOf(ITEM_DEFINITIONS.dirty_water)).toBe("pocket");
+    expect(carryClassOf(ITEM_DEFINITIONS.clean_water!)).toBe("pocket");
+    expect(carryClassOf(ITEM_DEFINITIONS.dirty_water!)).toBe("pocket");
   });
 
   it("requires physical data on milestone items", () => {
@@ -77,7 +77,7 @@ describe("content tagging", () => {
       "weak_medicine",
       "debug_panacea",
     ]) {
-      const defn = ITEM_DEFINITIONS[itemId];
+      const defn = ITEM_DEFINITIONS[itemId]!;
       expect(defn, itemId).toBeDefined();
       expect(defn.physical.weight, itemId).toBeGreaterThan(0);
       expect(["pocket", "pack", "haul"], itemId).toContain(defn.physical.carryClass);

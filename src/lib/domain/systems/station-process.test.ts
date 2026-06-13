@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createStationProcessRuntime,
   findProcessForStation,
+  resolveStationProcessCompletion,
   tickStationProcessRuntime,
   validateStationProcesses,
   type StationProcess,
@@ -95,5 +96,46 @@ describe("station process runtime", () => {
 
     expect(rainedOn.elapsedSec).toBe(3);
     expect(rainedOn.remainingSec).toBe(7);
+  });
+});
+
+describe("resolveStationProcessCompletion", () => {
+  const process: StationProcess = {
+    id: "test_charcoal",
+    stationId: "campfire",
+    inputs: { branch: 2 },
+    processType: "burn",
+    durationSec: 5,
+    outputItemId: "charcoal",
+    outputQty: 1,
+  };
+
+  it("deducts inputs, adds output, and reports discovery/knowledge feedback", () => {
+    const result = resolveStationProcessCompletion({
+      inventory: { slots: { branch: { qty: 3 }, charcoal: { qty: 1 } } },
+      process,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      inventory: { slots: { branch: { qty: 1 }, charcoal: { qty: 2 } } },
+      outputItemId: "charcoal",
+      outputQty: 1,
+      recipeToLearn: "charcoal",
+      knowledge: [{ itemId: "branch", trait: "flammable" }],
+    });
+  });
+
+  it("does not mutate inventory when inputs are missing", () => {
+    const inventory: Inventory = { slots: { branch: { qty: 1 } } };
+
+    const result = resolveStationProcessCompletion({ inventory, process });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "missing_inputs",
+      missing: [{ itemId: "branch", required: 2, have: 1 }],
+      inventory,
+    });
   });
 });

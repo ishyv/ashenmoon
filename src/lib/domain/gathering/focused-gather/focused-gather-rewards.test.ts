@@ -38,14 +38,14 @@ describe("resolveYieldItems", () => {
   it("beats normal yield on an excellent run", () => {
     const result = computeResult(score(0.95), FOCUSED_GATHER_PROFILES.easy, "stone_node");
     const items = resolveYieldItems(stoneDef, result, 4, () => 0.99);
-    expect(items[0].quantity).toBe(7); // round(4 * 1.75)
+    expect(items[0]!.quantity).toBe(7); // round(4 * 1.75)
   });
 
   it("undershoots normal but never gives zero on a ruined run", () => {
     const result = computeResult(score(0.05), FOCUSED_GATHER_PROFILES.easy, "stone_node");
     const items = resolveYieldItems(stoneDef, result, 4, () => 0.99);
-    expect(items[0].quantity).toBe(1); // round(4 * 0.25) = 1, floored at 1
-    expect(items[0].quantity).toBeLessThan(4);
+    expect(items[0]!.quantity).toBe(1); // round(4 * 0.25) = 1, floored at 1
+    expect(items[0]!.quantity).toBeLessThan(4);
   });
 
   it("does not roll a bonus when the node has no secondary yield", () => {

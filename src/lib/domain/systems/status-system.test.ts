@@ -18,10 +18,10 @@ describe("applyStatus", () => {
     const list = applyStatus([], StatusId.Sickness, 60);
     const refreshed = applyStatus(list, StatusId.Sickness, 30);
     expect(refreshed).toHaveLength(1);
-    expect(refreshed[0].remainingSec).toBe(60);
+    expect(refreshed[0]!.remainingSec).toBe(60);
 
     const extended = applyStatus(refreshed, StatusId.Sickness, 90);
-    expect(extended[0].remainingSec).toBe(90);
+    expect(extended[0]!.remainingSec).toBe(90);
   });
 });
 
@@ -37,7 +37,7 @@ describe("tickStatuses", () => {
   it("decrements remaining time", () => {
     const list = applyStatus([], StatusId.Injured, 45);
     const { next } = tickStatuses(list, 5);
-    expect(next[0].remainingSec).toBe(40);
+    expect(next[0]!.remainingSec).toBe(40);
   });
 
   it("reports expiry exactly once and drops the status", () => {

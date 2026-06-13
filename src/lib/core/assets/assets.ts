@@ -390,6 +390,22 @@ export const BUNDLE_TERRAIN_DECO: string[] = [
   ASSET_PATHS.decorations.rubberDuck,
 ];
 
+const CURSED_BASE = "/assets/cursed-land/objects";
+
+export const CURSED_LAND_PATHS = {
+  rock1: `${CURSED_BASE}/Rock1_shadow1_1.png`,
+  rock2: `${CURSED_BASE}/Rock2_shadow2_1.png`,
+  rock3: `${CURSED_BASE}/Rock3_shadow1_1.png`,
+  ruins1: `${CURSED_BASE}/Ruins_shadow1_3.png`,
+  bones1: `${CURSED_BASE}/Bones_shadow1_1.png`,
+} as const;
+
+export const BUNDLE_CURSED_DECO = [
+  CURSED_LAND_PATHS.rock1,
+  CURSED_LAND_PATHS.rock2,
+  CURSED_LAND_PATHS.rock3,
+];
+
 /** Resource nodes: all tree/stump variants + gold/wood/meat items. */
 export const BUNDLE_RESOURCES: string[] = [
   ...ASSET_PATHS.resources.trees,
@@ -490,6 +506,39 @@ function cachedTexture(path: string): Texture {
 }
 
 // ---------------------------------------------------------------------------
+// Cursed Land rocks
+// ---------------------------------------------------------------------------
+
+export function getCursedRockTexture(variant: 1 | 2 | 3): Texture {
+  const path =
+    variant === 1
+      ? CURSED_LAND_PATHS.rock1
+      : variant === 2
+        ? CURSED_LAND_PATHS.rock2
+        : CURSED_LAND_PATHS.rock3;
+  return cachedTexture(path);
+}
+
+const SHIKASHI_PATH = "/assets/shikashi-icons/icons.png";
+const SHIKASHI_SIZE = 32;
+const shikashiCache = new Map<string, Texture>();
+export const BUNDLE_SHIKASHI = [SHIKASHI_PATH];
+
+/** Slices one icon from the shikashi 32×32 grid spritesheet (col/row are 0-based). */
+export function getShikashiIconTexture(col: number, row: number): Texture {
+  const key = `${col},${row}`;
+  let tex = shikashiCache.get(key);
+  if (!tex) {
+    tex = new Texture({
+      source: requireTexture(SHIKASHI_PATH).source,
+      frame: new Rectangle(col * SHIKASHI_SIZE, row * SHIKASHI_SIZE, SHIKASHI_SIZE, SHIKASHI_SIZE),
+    });
+    shikashiCache.set(key, tex);
+  }
+  return tex;
+}
+
+// ---------------------------------------------------------------------------
 // Grass tile (existing — used by engine.ts)
 // ---------------------------------------------------------------------------
 
@@ -552,6 +601,24 @@ export function getWaterBackgroundTexture(): Texture {
 
 export function getShadowTexture(): Texture {
   return cachedTexture(ASSET_PATHS.tilemaps.shadow);
+}
+
+/** Generates a warm radial gradient texture for campfire lighting. */
+export function generateCampfireGlowTexture(): Texture {
+  if (typeof document === "undefined") return Texture.EMPTY;
+  const radius = 384;
+  const canvas = document.createElement("canvas");
+  canvas.width = radius * 2;
+  canvas.height = radius * 2;
+  const ctx = canvas.getContext("2d")!;
+  const grad = ctx.createRadialGradient(radius, radius, 0, radius, radius, radius);
+  grad.addColorStop(0, "rgba(255, 235, 205, 0.45)"); // Warm orange/white center
+  grad.addColorStop(0.35, "rgba(255, 190, 130, 0.25)"); // Mid glow
+  grad.addColorStop(0.7, "rgba(255, 150, 90, 0.1)"); // Fading glow
+  grad.addColorStop(1, "rgba(255, 150, 90, 0)"); // Fades out completely
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, radius * 2, radius * 2);
+  return Texture.from(canvas);
 }
 
 // ---------------------------------------------------------------------------

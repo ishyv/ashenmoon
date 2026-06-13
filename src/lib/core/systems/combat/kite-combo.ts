@@ -1,12 +1,12 @@
-import { Graphics, type Container } from "pixi.js";
+﻿import { Graphics, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
 import type { VFXResource } from "$lib/core/vfx/vfx";
 import { TILE } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
-import { stamina, staminaConfig } from "$lib/domain/stamina.svelte";
+import { stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
-import { awardSkillXp } from "$lib/domain/skill-xp";
+import { awardSkillXp } from "$lib/state/rpg/skill-xp";
 import { InputAction, SkillKey } from "$lib/domain/game-events";
 import { CombatResource, CombatConfig } from "./combat";
 import { spawnEnvFloatingText, spawnSlashArc, triggerCameraShake } from "$lib/core/vfx/vfx";
@@ -14,7 +14,7 @@ import { playSound } from "$lib/audio/audio-engine";
 
 /**
  * Records significant player movement direction changes into `combat.movePhases`
- * so `playerAttackSystem` can detect the A → -A → A thrust combo. Call every frame
+ * so `playerAttackSystem` can detect the A â†’ -A â†’ A thrust combo. Call every frame
  * regardless of whether an attack is pending.
  */
 export function trackMovementCombo(combat: CombatResource, inputs: InputResource): void {
@@ -23,7 +23,7 @@ export function trackMovementCombo(combat: CombatResource, inputs: InputResource
   const my = (inputs.isActionPressed(InputAction.MoveDown)  ? 1 : 0)
            - (inputs.isActionPressed(InputAction.MoveUp)    ? 1 : 0);
   const len = Math.hypot(mx, my);
-  if (len < 0.1) return; // standing still — no phase advance
+  if (len < 0.1) return; // standing still â€” no phase advance
 
   const nx = mx / len;
   const ny = my / len;
@@ -156,15 +156,15 @@ export function applyKiteComboFinisher(
 
   let arcColor: number = Colors.combat.kiteArc;
   if (currentStacks === 1) {
-    spawnEnvFloatingText(vfx, "🪶 Kite Focus I", Colors.combat.kiteArc, player.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "ðŸª¶ Kite Focus I", Colors.combat.kiteArc, player.position!, entityLayer);
     triggerCameraShake(vfx, 3, 0.1);
   } else if (currentStacks === 2) {
     arcColor = 0x00f0ff; // Cyan
-    spawnEnvFloatingText(vfx, "⚡ Kite Focus II", 0x00f0ff, player.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "âš¡ Kite Focus II", 0x00f0ff, player.position!, entityLayer);
     triggerCameraShake(vfx, 4.5, 0.12);
   } else {
     arcColor = 0xffcc00; // Gold
-    spawnEnvFloatingText(vfx, "🔥 Kite Focus III [MAX]", 0xffcc00, player.position!, entityLayer);
+    spawnEnvFloatingText(vfx, "ðŸ”¥ Kite Focus III [MAX]", 0xffcc00, player.position!, entityLayer);
     triggerCameraShake(vfx, 6.5, 0.15);
   }
 
@@ -196,14 +196,16 @@ export function handleKiteComboHit(
     // Reward stamina
     const staminaReward = 15 + 5 * currentStacks;
     stamina.current = Math.min(staminaConfig.max, stamina.current + staminaReward);
-    spawnEnvFloatingText(vfx, `⚡ +${staminaReward} Stamina`, 0x55ff55, player.position!, entityLayer);
+    spawnEnvFloatingText(vfx, `âš¡ +${staminaReward} Stamina`, 0x55ff55, player.position!, entityLayer);
 
     // HP sacrifice penalty to avoid high stack spamming
     if (currentStacks >= 2) {
       const hpCost = 5 * (currentStacks - 1);
       const pHp = player.health!;
       pHp.current = Math.max(1, pHp.current - hpCost);
-      spawnEnvFloatingText(vfx, `💔 -${hpCost} HP (Strain)`, Colors.ui.error, player.position!, entityLayer);
+      spawnEnvFloatingText(vfx, `ðŸ’” -${hpCost} HP (Strain)`, Colors.ui.error, player.position!, entityLayer);
     }
   }
 }
+
+

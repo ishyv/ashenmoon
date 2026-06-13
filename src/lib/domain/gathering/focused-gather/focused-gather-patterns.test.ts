@@ -5,7 +5,7 @@ import { FOCUSED_GATHER_PROFILES } from "./focused-gather-profiles";
 /** Deterministic rng cycling through a fixed sequence. */
 function seededRng(seq: number[]): () => number {
   let i = 0;
-  return () => seq[i++ % seq.length];
+  return () => seq[i++ % seq.length]!;
 }
 
 describe("generateTargets", () => {
@@ -20,7 +20,7 @@ describe("generateTargets", () => {
     const profile = FOCUSED_GATHER_PROFILES.hard;
     const targets = generateTargets(profile, { x: 0, y: 0 }, seededRng([0.1, 0.9, 0.4, 0.6]));
     for (let i = 1; i < targets.length; i++) {
-      expect(targets[i].spawnAtMs).toBeGreaterThanOrEqual(targets[i - 1].spawnAtMs);
+      expect(targets[i]!.spawnAtMs).toBeGreaterThanOrEqual(targets[i - 1]!.spawnAtMs);
     }
   });
 
@@ -44,7 +44,7 @@ describe("generateTargets", () => {
 
   it("starts the first wave at time zero", () => {
     const targets = generateTargets(FOCUSED_GATHER_PROFILES.easy, { x: 0, y: 0 }, seededRng([0.5]));
-    expect(targets[0].spawnAtMs).toBe(0);
+    expect(targets[0]!.spawnAtMs).toBe(0);
   });
 
   it("generates targets that never overlap in space if they overlap in active lifetime", () => {
@@ -55,8 +55,8 @@ describe("generateTargets", () => {
         const targets = generateTargets(profile, { x: 100, y: 100 }, Math.random);
         for (let i = 0; i < targets.length; i++) {
           for (let j = i + 1; j < targets.length; j++) {
-            const t1 = targets[i];
-            const t2 = targets[j];
+            const t1 = targets[i]!;
+            const t2 = targets[j]!;
             const timeOverlaps = t2.spawnAtMs < t1.expiresAtMs && t2.expiresAtMs > t1.spawnAtMs;
             if (timeOverlaps) {
               const dist = Math.hypot(t1.position.x - t2.position.x, t1.position.y - t2.position.y);

@@ -1,4 +1,4 @@
-import { AnimatedSprite, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
+﻿import { AnimatedSprite, Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -14,20 +14,20 @@ import { Cell } from "$lib/core/types";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { gameState } from "$lib/state/game-state.svelte";
-import { applyRpgStatePreservingLocalWeapon, setRpgInventory } from "$lib/state/rpg-actions.svelte";
+import { applyRpgState, setRpgInventory } from "$lib/state/rpg-actions.svelte";
 import { getItemDef } from "$lib/domain/items";
 import { Colors } from "$lib/utils/colors";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
-import { awardSkillXp } from "$lib/domain/skill-xp";
+import { awardSkillXp } from "$lib/state/rpg/skill-xp";
 import { SkillKey, InputAction, EntityId, GameEvent } from "$lib/domain/game-events";
-import { getItemQty, getEquippedWeaponId } from "$lib/domain/inventory-api";
+import { getItemQty, getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
 import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remote-sync";
-import { transformStackQty, removeStackQty } from "$lib/domain/systems/inventory-system";
+import { transformStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
 import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
-import { applyStatusEffect } from "$lib/domain/status-effects.svelte";
+import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { emitPlayerHpDelta } from "$lib/ui/player-feedback";
 import {
@@ -35,16 +35,22 @@ import {
   fallDirectionAwayFromPlayer,
   isPointInTreeFallZone,
 } from "$lib/domain/hazards/tree-fall-hazard";
-import { learnAbout } from "$lib/domain/knowledge.svelte";
-import { learnRecipe } from "$lib/domain/crafting.svelte";
+import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
+import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
 import {
   findProcessForStation,
+  resolveStationProcessCompletion,
   tickStationProcessRuntime,
   type StationProcessRuntime,
   type StationProcessTickContext,
 } from "$lib/domain/systems/station-process";
 import { InteractionDispatcher } from "$lib/core/runtime/interactions";
 import type { RuntimeResourceMap } from "$lib/core/runtime/runtime";
+import type { ParticleFXKey } from "$lib/core/assets/assets";
+
+interface DialogueStateRef {
+  activeNpc: { id: string; name: string } | null;
+}
 
 const INTERACT_RANGE = 2;
 const CAMPFIRE_STATION = getStationDefinition("campfire");
@@ -55,12 +61,12 @@ interface ImmediateInteractionDeps {
   entityLayer: Container;
   entitySprites: Map<string, Container>;
   playerSprite: AnimatedSprite;
-  triggerQuestEvent: (evt: string, arg?: any, arg2?: any) => void;
-  dialogueState: any;
-  getTreeFrames: () => any[];
-  getStumpTexture: () => any;
-  map?: MapResource;
-  onStationInteract?: (target: Entity) => void;
+  triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void;
+  dialogueState: DialogueStateRef;
+  getTreeFrames: () => Texture[];
+  getStumpTexture: () => Texture;
+  map?: MapResource | undefined;
+  onStationInteract?: ((target: Entity) => void) | undefined;
 }
 
 interface ImmediateInteractionResources extends RuntimeResourceMap {
@@ -85,7 +91,7 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
 
       if (item) {
         void syncPickup(item, target.id, qty).then((r) => {
-          if (r.ok) applyRpgStatePreservingLocalWeapon(r.data.playerState);
+          if (r.ok) applyRpgState(r.data.playerState);
         });
 
         const itemName = getItemDef(item)?.name ?? item;
@@ -259,8 +265,8 @@ export function handleHitFeedbackSystem(
   vfx: VFXResource,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
-  getParticleFXFrames: (name: any) => any[],
-  getWoodItemTexture: () => any
+  getParticleFXFrames: (key: ParticleFXKey) => Texture[],
+  getWoodItemTexture: () => Texture
 ): void {
   const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
   const isTree = gatherable?.solidKind === "tree";
@@ -268,7 +274,7 @@ export function handleHitFeedbackSystem(
   const hitPos = entity.position
     ? { x: entity.position.x + TILE / 2, y: entity.position.y + TILE / 2 }
     : undefined;
-  playSound(gatherSoundId(gatherable?.gatherSound), { position: hitPos });
+  playSound(gatherSoundId(gatherable?.gatherSound), hitPos ? { position: hitPos } : {});
 
   const sprite = entitySprites.get(entity.id);
   if (sprite && entity.position) {
@@ -427,9 +433,9 @@ export function depleteNodeSystem(
   vfx: VFXResource,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
-  triggerQuestEvent: (evt: string, val?: any) => void,
-  getTreeFrames: () => any[],
-  getStumpTexture: () => any,
+  triggerQuestEvent: (evt: string, val?: string) => void,
+  getTreeFrames: () => Texture[],
+  getStumpTexture: () => Texture,
   map?: MapResource
 ): void {
   const pos = entity.position!;
@@ -576,10 +582,10 @@ export function triggerImmediateInteraction(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   playerSprite: AnimatedSprite,
-  triggerQuestEvent: (evt: string, arg?: any, arg2?: any) => void,
-  dialogueState: any,
-  getTreeFrames: () => any[],
-  getStumpTexture: () => any,
+  triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void,
+  dialogueState: DialogueStateRef,
+  getTreeFrames: () => Texture[],
+  getStumpTexture: () => Texture,
   map?: MapResource,
   onStationInteract?: (target: Entity) => void
 ): void {
@@ -637,12 +643,12 @@ export function runInteractionSystem(
   entitySprites: Map<string, Container>,
   onInteract: (target: Entity) => void,
   devConsoleLog: (text: string) => void,
-  triggerQuestEvent: (evt: string, arg?: any, arg2?: any) => void,
-  dialogueState: any,
-  getParticleFXFrames: (name: any) => any[],
-  getWoodItemTexture: () => any,
-  getTreeFrames: () => any[],
-  getStumpTexture: () => any,
+  triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void,
+  dialogueState: DialogueStateRef,
+  getParticleFXFrames: (key: ParticleFXKey) => Texture[],
+  getWoodItemTexture: () => Texture,
+  getTreeFrames: () => Texture[],
+  getStumpTexture: () => Texture,
   isPlacementMode: boolean,
   isDashing: boolean,
   onHit: (entity: Entity, yieldName: string, quantity: number) => void,
@@ -690,34 +696,14 @@ export function runInteractionSystem(
       }
       if (tickedProc.remainingSec <= 0) {
         if (gameState.rpg.inventory) {
-          let inv = gameState.rpg.inventory;
-          let hasIngredients = true;
-          const inputs = proc.inputs;
-          for (const [inId, reqQty] of Object.entries(inputs)) {
-            const slot = inv.slots[inId];
-            if (!slot || !("qty" in slot) || slot.qty < reqQty) {
-              hasIngredients = false;
-              break;
-            }
-          }
+          const result = resolveStationProcessCompletion({
+            inventory: gameState.rpg.inventory,
+            process: proc,
+          });
 
-          if (hasIngredients) {
-            for (const [inId, reqQty] of Object.entries(inputs)) {
-              inv = removeStackQty(inv, inId, reqQty);
-            }
-            const outId = proc.outputItemId;
-            const outQty = proc.outputQty;
-            const targetSlot = inv.slots[outId];
-            const targetQty = targetSlot && "qty" in targetSlot ? targetSlot.qty : 0;
-            inv = {
-              ...inv,
-              slots: {
-                ...inv.slots,
-                [outId]: { qty: targetQty + outQty }
-              }
-            };
-
-            setRpgInventory(inv);
+          if (result.ok) {
+            setRpgInventory(result.inventory);
+            const outId = result.outputItemId;
             const resultName = getItemDef(outId)?.name ?? outId;
             spawnEnvFloatingText(
               vfx,
@@ -728,20 +714,10 @@ export function runInteractionSystem(
             );
             playSound("craft");
 
-            if (proc.stationId === "campfire") {
-              if (outId === "clean_water") {
-                learnAbout(Object.keys(inputs)[0], "boilable");
-              } else if (outId === "charcoal") {
-                learnAbout(Object.keys(inputs)[0], "flammable");
-                learnRecipe("charcoal");
-              } else if (outId === "hardened_clay") {
-                learnAbout(Object.keys(inputs)[0], "heat_sensitive");
-              }
-            } else if (proc.stationId === "drying_rack") {
-              learnAbout(Object.keys(inputs)[0], "perishable");
-            } else if (proc.stationId === "primitive_work_surface") {
-              learnRecipe(outId);
+            for (const knowledge of result.knowledge) {
+              learnAbout(knowledge.itemId, knowledge.trait);
             }
+            if (result.recipeToLearn) learnRecipe(result.recipeToLearn);
 
             triggerQuestEvent(GameEvent.Boil, outId);
             triggerQuestEvent("craft", outId);
@@ -769,7 +745,7 @@ export function runInteractionSystem(
       const playerEntity = getPlayerEntity();
       spawnEnvFloatingText(
         vfx,
-        "🔥 Refuel cancelled",
+        "ðŸ”¥ Refuel cancelled",
         Colors.ui.muted,
         playerEntity.position!,
         entityLayer
@@ -982,7 +958,7 @@ export function runInteractionSystem(
       if (res && res.rpgLocationId && res.rpgAction) {
         void syncGather(res.rpgAction, res.rpgLocationId).then((r) => {
           if (r.ok) {
-            applyRpgStatePreservingLocalWeapon(r.data.playerState, { toolBroken: r.data.toolBroken });
+            applyRpgState(r.data.playerState);
             for (const mat of r.data.materialsGained) {
               devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
             }
@@ -997,3 +973,5 @@ export function runInteractionSystem(
     }
   }
 }
+
+

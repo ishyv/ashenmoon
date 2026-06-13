@@ -1,6 +1,6 @@
-<script lang="ts">
+﻿<script lang="ts">
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
-import { activeQuests } from "$lib/domain/quests.svelte";
+import { activeQuests } from "$lib/state/rpg/quests.svelte";
 
 const currentQuest = $derived(() => {
   const questId = activeQuests.currentQuestId;
@@ -20,7 +20,7 @@ const currentQuest = $derived(() => {
       <ul class="objectives-list">
         {#each quest.objectives as obj}
           <li class="objective-item {obj.completed ? 'completed' : ''}">
-            <span class="bullet">✦</span>
+            <span class="bullet">âœ¦</span>
             <span class="objective-label">{obj.label}</span>
             <span class="objective-progress">({obj.current}/{obj.target})</span>
           </li>
@@ -99,3 +99,4 @@ const currentQuest = $derived(() => {
     color: rgba(255, 255, 255, 0.25);
   }
 </style>
+

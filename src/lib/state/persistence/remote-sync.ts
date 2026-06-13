@@ -7,18 +7,19 @@
  * feedback. No retries or offline queue (a deliberate non-goal for now).
  */
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
-import { localRpgCommands, type GatherSync, type MaterialGain } from "$lib/state/persistence/rpg-commands";
+import type { GatherSync, MaterialGain } from "$lib/domain/rpg-reducer";
+import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 
 export type { GatherSync, MaterialGain };
 
 export type SyncResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-function syncLocal<T>(fn: () => T): Promise<SyncResult<T>> {
+async function syncLocal<T>(fn: () => T | Promise<T>): Promise<SyncResult<T>> {
   try {
-    return Promise.resolve({ ok: true, data: fn() });
+    return { ok: true, data: await fn() };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return Promise.resolve({ ok: false, error: message });
+    return { ok: false, error: message };
   }
 }
 
@@ -27,7 +28,7 @@ export function syncGather(action: string, locationId: string): Promise<SyncResu
   if (action !== "mine" && action !== "forest") {
     return Promise.resolve({ ok: false, error: "Invalid gather action" });
   }
-  return syncLocal(() => localRpgCommands.gather(action, locationId));
+  return dispatchRpgCommand({ type: "gather", action, locationId }) as Promise<SyncResult<GatherSync>>;
 }
 
 /** Ground pickup. `itemId` is the gathered item; `pickupId` the world entity id. */
@@ -36,12 +37,12 @@ export function syncPickup(
   pickupId: string,
   quantity = 1,
 ): Promise<SyncResult<{ playerState: RpgPlayerState }>> {
-  return syncLocal(() => ({ playerState: localRpgCommands.pickup(itemId, pickupId, quantity).playerState }));
+  return dispatchRpgCommand({ type: "pickup", itemId, pickupId, quantity }) as Promise<SyncResult<{ playerState: RpgPlayerState }>>;
 }
 
 /** Refuel the campfire (consumes wood from the local RPG save). */
 export function syncRefuel(): Promise<SyncResult<{ playerState: RpgPlayerState }>> {
-  return syncLocal(() => ({ playerState: localRpgCommands.refuel().playerState }));
+  return dispatchRpgCommand({ type: "refuel" }) as Promise<SyncResult<{ playerState: RpgPlayerState }>>;
 }
 
 /** Place a building; deducts materials and returns the new local state. */
@@ -50,7 +51,11 @@ export function syncBuild(
   x: number,
   y: number,
 ): Promise<SyncResult<RpgPlayerState>> {
-  return syncLocal(() => localRpgCommands.build(type, x, y));
+  return syncLocal(async () => {
+    const result = await dispatchRpgCommand({ type: "build", buildingType: type, x, y });
+    if (!result.ok) throw new Error(result.error);
+    return result.data.playerState;
+  });
 }
 
 /** Place an item; deducts the item from inventory and returns the new local state. */
@@ -58,5 +63,9 @@ export function syncPlaceItem(
   itemId: string,
   qty = 1,
 ): Promise<SyncResult<RpgPlayerState>> {
-  return syncLocal(() => localRpgCommands.placeItem(itemId, qty));
+  return syncLocal(async () => {
+    const result = await dispatchRpgCommand({ type: "placeItem", itemId, quantity: qty });
+    if (!result.ok) throw new Error(result.error);
+    return result.data.playerState;
+  });
 }

@@ -1,11 +1,13 @@
 import { untrack } from "svelte";
 import { emitEnvironmentChanged, type EnvironmentState } from "$lib/domain/systems/environment-system";
 
-export const activeEnvironment = $state<EnvironmentState>({
+const INITIAL_ENVIRONMENT: EnvironmentState = {
   temperature: 20,
   humidity: 40,
   toxins: 0,
-});
+};
+
+export const activeEnvironment = $state<EnvironmentState>({ ...INITIAL_ENVIRONMENT });
 
 export function setEnvironment(next: Partial<EnvironmentState>): void {
   const previous = untrack<EnvironmentState>(() => ({

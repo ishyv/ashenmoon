@@ -57,6 +57,8 @@ If a mechanic has no readable feedback, it is not finished.
 - Prefer composition over one-off behavior.
 - Prefer typed data and pure systems over callbacks hidden in definitions.
 - Prefer events over per-frame rule polling.
+- Document non-obvious ownership, ordering, and migration invariants in code.
+  Do not leave future readers to reverse-engineer why state seams exist.
 - Avoid broad `any` and careless casts.
 - Keep `GameEngine` as an orchestrator, not a dumping ground.
 - Keep changes small, reviewable, and tied to Milestone 1 unless explicitly
