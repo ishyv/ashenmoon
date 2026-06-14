@@ -2,7 +2,7 @@ import type { RpgPlayerState } from "$lib/domain/rpg-types";
 
 export const CAMP_FUEL_OPTIONS = [
   { itemId: "firewood_bundle", qty: 1, fuelMs: 90_000 },
-  { itemId: "oak_wood", qty: 3, fuelMs: 75_000 },
+  { itemId: "wood", qty: 3, fuelMs: 75_000 },
   { itemId: "branch", qty: 4, fuelMs: 55_000 },
   { itemId: "stick", qty: 6, fuelMs: 35_000 },
 ] as const;

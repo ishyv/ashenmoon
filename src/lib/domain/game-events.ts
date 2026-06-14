@@ -64,6 +64,7 @@ export const StorageKeys = {
   survival: "ashenmoor_survival",
   rpg: "ashenmoor_rpg",
   statuses: "ashenmoor_statuses",
+  wounds: "ashenmoor_wounds",
   knowledge: "ashenmoor_knowledge",
   recipes: "ashenmoor_recipes",
   audio: "ashenmoor_audio",

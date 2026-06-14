@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 import { onMount } from "svelte";
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { stationProcessVerb, STATION_PROCESSES } from "$lib/domain/systems/station-process";
@@ -124,7 +124,7 @@ function cancelProcess() {
           <!-- Refuel Campfire -->
           {@const fuelSummary = getFuelSummary({
             firewood_bundle: getOwnedQty("firewood_bundle"),
-            oak_wood: getOwnedQty("oak_wood"),
+            wood: getOwnedQty("wood"),
             branch: getOwnedQty("branch"),
             stick: getOwnedQty("stick"),
           })}
@@ -184,7 +184,7 @@ function cancelProcess() {
               {#if activeProc && activeProc.targetEntityId === entity.id}
                 station busy
               {:else if meetsReqs}
-                start refining
+                process
               {:else}
                 missing ingredients
               {/if}

@@ -54,4 +54,78 @@ describe("RPG reducer", () => {
     expect(result.reactions.length).toBeGreaterThan(0);
     expect(result.playerState.inventory.slots.clay).toBeUndefined();
   });
+
+  it("handles equipping and unequipping wearable gear, transferring items between inventory and slots", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.hide_cloak = { qty: 1 };
+
+    // 1. Equip hide_cloak
+    const equipped = reduceRpgCommand(state, {
+      type: "equipGear",
+      itemId: "hide_cloak",
+      slot: "chest",
+    });
+
+    const chestSlot = equipped.playerState.profile.loadout.chest;
+    expect(chestSlot && typeof chestSlot === "object" ? chestSlot.itemId : null).toBe("hide_cloak");
+    expect(equipped.playerState.inventory.slots.hide_cloak).toBeUndefined();
+
+    // 2. Unequip hide_cloak
+    const unequipped = reduceRpgCommand(equipped.playerState, {
+      type: "equipGear",
+      itemId: null,
+      slot: "chest",
+    });
+
+    expect(unequipped.playerState.profile.loadout.chest).toBeNull();
+    expect(unequipped.playerState.inventory.slots.hide_cloak).toEqual({ qty: 1 });
+  });
+
+  it("handles swapping equipped gear correctly", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.hide_cloak = { qty: 1 };
+    state.inventory.slots.fur_lined_wrap = { qty: 1 };
+
+    // Equip hide_cloak
+    const step1 = reduceRpgCommand(state, {
+      type: "equipGear",
+      itemId: "hide_cloak",
+      slot: "chest",
+    });
+
+    // Swap to fur_lined_wrap
+    const step2 = reduceRpgCommand(step1.playerState, {
+      type: "equipGear",
+      itemId: "fur_lined_wrap",
+      slot: "chest",
+    });
+
+    const chestSlot = step2.playerState.profile.loadout.chest;
+    expect(chestSlot && typeof chestSlot === "object" ? chestSlot.itemId : null).toBe("fur_lined_wrap");
+    expect(step2.playerState.inventory.slots.hide_cloak).toEqual({ qty: 1 });
+    expect(step2.playerState.inventory.slots.fur_lined_wrap).toBeUndefined();
+  });
+
+  it("throws an error when trying to equip an item not in inventory or with wrong slot type", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.hide_cloak = { qty: 1 };
+
+    // Item not in inventory
+    expect(() =>
+      reduceRpgCommand(state, {
+        type: "equipGear",
+        itemId: "fur_lined_wrap",
+        slot: "chest",
+      })
+    ).toThrow("Item not in inventory");
+
+    // Wrong slot type (hide_cloak is wearable body, cannot go to helmet)
+    expect(() =>
+      reduceRpgCommand(state, {
+        type: "equipGear",
+        itemId: "hide_cloak",
+        slot: "helmet",
+      })
+    ).toThrow("cannot be equipped in slot helmet");
+  });
 });

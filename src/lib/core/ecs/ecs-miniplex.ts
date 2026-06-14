@@ -78,6 +78,10 @@ export interface Entity {
     wanderTarget?: { x: number; y: number };
     wanderTimerSec: number;
     scareSec?: number;
+    /** Last horizontal movement direction; drives sprite scale-flip. */
+    facingX: 1 | -1;
+    /** Cached animation state name; prevents redundant texture swaps. */
+    animState: string;
   };
 
   /**

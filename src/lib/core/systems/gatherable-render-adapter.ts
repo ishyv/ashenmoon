@@ -7,8 +7,6 @@ import {
   getTreeTexture,
   getTreeVariantTexture,
   getWoodItemTexture,
-  getForgottenTreeTexture,
-  getForgottenPropTexture,
 } from "$lib/core/assets/assets";
 import { TILE } from "$lib/core/systems/map/map";
 import { computeRenderZ } from "$lib/domain/collision";
@@ -36,8 +34,6 @@ export const GATHERABLE_RENDER_ADAPTERS = {
   rock_cursed: { texture: () => getCursedRockTexture(1), pickupScaleTiles: 0.85 },
   rock_cursed2: { texture: () => getCursedRockTexture(2), pickupScaleTiles: 0.85 },
   rock_cursed3: { texture: () => getCursedRockTexture(3), pickupScaleTiles: 0.85 },
-  tree_forgotten: { texture: () => getForgottenTreeTexture(0, 0), pickupScaleTiles: 0.4 },
-  prop_forgotten: { texture: () => getForgottenPropTexture(0, 0), pickupScaleTiles: 0.4 },
 } satisfies Record<GatherableRenderKind, GatherableRenderAdapter>;
 
 export function validateGatherableRenderAdapters(kinds: readonly GatherableRenderKind[]): string[] {

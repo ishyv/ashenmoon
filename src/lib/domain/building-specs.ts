@@ -28,6 +28,18 @@ export interface BuildingSpec {
   stationId?: StationId;
 }
 
+export const M3_BUILDABLE_IDS = [
+  "spike_barrier",
+  "rain_catcher",
+  "meat_smoking_rack",
+  "simple_bedroll",
+  "storage_pile",
+  "marker_sign",
+  "crude_shelter",
+] as const;
+
+export type M3BuildableId = (typeof M3_BUILDABLE_IDS)[number];
+
 export const BUILDING_SPECS: Record<string, BuildingSpec> = {
   wall: {
     displayName: "wall",
@@ -63,7 +75,7 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     footprint: { w: 1, h: 1 },
     textureType: "house3",
     sprite: { w: 1, h: 1 },
-    cost: { stick: 4, leaves: 6 },
+    cost: { branch: 3, bark: 4, vine: 2 },
     stationId: "storage_pile",
   },
   campfire: {
@@ -107,7 +119,7 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     footprint: { w: 1, h: 1 },
     textureType: "house1",
     sprite: { w: 1, h: 1 },
-    cost: { branch: 6, leaves: 8, grass_fiber: 4, bark: 2 },
+    cost: { branch: 5, green_leaves: 8, bark_rope: 2, vine: 2 },
   },
   marker_sign: {
     displayName: "marker sign",
@@ -115,23 +127,40 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     footprint: { w: 1, h: 1 },
     textureType: "house3",
     sprite: { w: 1, h: 1 },
-    cost: { stick: 1, bark: 1, charcoal: 1 },
+    cost: { stick: 1, bark: 2, charcoal: 1 },
   },
-  water_collector: {
-    displayName: "water collector",
-    description: "a crude vessel to passively collect rainwater.",
-    footprint: { w: 1, h: 1 },
-    textureType: "house2",
-    sprite: { w: 1, h: 1 },
-    cost: { clay: 4, stick: 6 },
-  },
-  simple_barrier: {
-    displayName: "simple barrier",
-    description: "a basic protective barricade.",
+  spike_barrier: {
+    displayName: "spike barrier",
+    description: "sharpened stakes lashed into a crude argument against teeth.",
     footprint: { w: 1, h: 1 },
     textureType: "house3",
     sprite: { w: 1, h: 1 },
-    cost: { branch: 3, grass_fiber: 2 },
+    cost: { stick: 8, branch: 3, bark_rope: 2, flint_shard: 1 },
+  },
+  rain_catcher: {
+    displayName: "rain catcher",
+    description: "a hide-stretched frame that catches rainwater.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house2",
+    sprite: { w: 1, h: 1 },
+    cost: { branch: 4, cured_hide: 1, bark_rope: 2, sealing_paste: 1 },
+  },
+  meat_smoking_rack: {
+    displayName: "meat smoking rack",
+    description: "a rack that feeds smoke around meat instead of direct flame.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house3",
+    sprite: { w: 1, h: 1 },
+    cost: { branch: 5, grass_cord: 4, clay: 2, stone: 4 },
+    stationId: "meat_smoking_rack",
+  },
+  simple_bedroll: {
+    displayName: "simple bedroll",
+    description: "layered leaves, hide, and fiber for a barely civilized rest.",
+    footprint: { w: 1, h: 1 },
+    textureType: "house1",
+    sprite: { w: 1, h: 1 },
+    cost: { dried_hide: 1, green_leaves: 8, grass_cord: 6, feather: 4 },
   },
 };
 

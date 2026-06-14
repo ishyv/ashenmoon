@@ -3,6 +3,7 @@ import { createDefaultProfile, createDefaultSkills } from "$lib/domain/rpg-defau
 import {
   reduceRpgCommand,
   type GatherSync,
+  type ExperimentSync,
   type RpgReducerResult,
 } from "$lib/domain/rpg-reducer";
 import type {
@@ -19,21 +20,29 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 
 export type RpgCommand =
   | { type: "equipTool"; itemId: string | null }
+  | {
+      type: "equipGear";
+      itemId: string | null;
+      slot: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace";
+    }
   | { type: "pickup"; itemId: string; pickupId: string; quantity?: number }
   | { type: "gather"; action: "mine" | "forest"; locationId: string }
   | { type: "refuel" }
   | { type: "craft"; recipeId: string; context: CraftContext }
-  | { type: "build"; buildingType: string; x: number; y: number }
+  | { type: "experiment"; inputs: Record<string, number>; context: CraftContext }
+  | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number }
   | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
 
 type CommandData = {
   equipTool: { playerState: RpgPlayerState };
+  equipGear: { playerState: RpgPlayerState };
   pickup: { playerState: RpgPlayerState };
   gather: GatherSync;
   refuel: { playerState: RpgPlayerState };
   craft: { playerState: RpgPlayerState };
+  experiment: ExperimentSync;
   build: { playerState: RpgPlayerState };
   destroyBuilding: { playerState: RpgPlayerState };
   placeItem: { playerState: RpgPlayerState };
@@ -96,4 +105,17 @@ export function dispatchRpgCommand<C extends RpgCommand>(command: C): Promise<Rp
 
 export function equipTool(itemId: string | null): Promise<RpgCommandResult<{ type: "equipTool"; itemId: string | null }>> {
   return dispatchRpgCommand({ type: "equipTool", itemId });
+}
+
+export function equipGear(
+  itemId: string | null,
+  slot: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace",
+): Promise<
+  RpgCommandResult<{
+    type: "equipGear";
+    itemId: string | null;
+    slot: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace";
+  }>
+> {
+  return dispatchRpgCommand({ type: "equipGear", itemId, slot });
 }

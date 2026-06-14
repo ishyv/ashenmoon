@@ -91,21 +91,19 @@ describe("local RPG commands", () => {
     expect(unequipped.profile.loadout.weapon).toBeNull();
   });
 
-  it("deducts build costs and records the building", () => {
+  it("consumes a structure kit and records the building", () => {
     const state = createDefaultPlayerState();
     state.inventory.slots = {
-      stick: { qty: 4 },
-      leaves: { qty: 7 },
+      storage_pile_kit: { qty: 1 },
     };
     saveLocalRpgState(state);
 
-    const next = localRpgCommands.build("storage_pile", 12, 7);
+    const next = localRpgCommands.build("storage_pile", 12, 7, "storage_pile_kit");
 
-    expect(next.inventory.slots.stick).toBeUndefined();
-    expect(next.inventory.slots.leaves).toEqual({ qty: 1 });
+    expect(next.inventory.slots.storage_pile_kit).toBeUndefined();
     expect(next.profile.stashSize).toBe(40);
     expect(next.profile.buildings).toContainEqual(
-      expect.objectContaining({ type: "storage_pile", x: 12, y: 7 }),
+      expect.objectContaining({ type: "storage_pile", x: 12, y: 7, sourceItemId: "storage_pile_kit" }),
     );
   });
 
@@ -134,5 +132,25 @@ describe("local RPG commands", () => {
     expect(next2.inventory.slots.clay).toBeUndefined();
 
     expect(() => localRpgCommands.placeItem("clay", 1)).toThrow("Insufficient clay in inventory");
+  });
+
+  it("equips, unequips, and persists gear locally using localRpgCommands", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.hide_cloak = { qty: 1 };
+    saveLocalRpgState(state);
+
+    const equipped = localRpgCommands.equipGear("hide_cloak", "chest");
+    const chestSlot = equipped.profile.loadout.chest;
+    expect(chestSlot && typeof chestSlot === "object" ? chestSlot.itemId : null).toBe("hide_cloak");
+    expect(equipped.inventory.slots.hide_cloak).toBeUndefined();
+
+    // Verify localStorage persistence
+    const loaded = getLocalRpgState();
+    const loadedChest = loaded.profile.loadout.chest;
+    expect(loadedChest && typeof loadedChest === "object" ? loadedChest.itemId : null).toBe("hide_cloak");
+
+    const unequipped = localRpgCommands.equipGear(null, "chest");
+    expect(unequipped.profile.loadout.chest).toBeNull();
+    expect(unequipped.inventory.slots.hide_cloak).toEqual({ qty: 1 });
   });
 });

@@ -1,5 +1,6 @@
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import { effectiveTemperature, type ExposureContext } from "./exposure-context";
+import type { RpgPlayerState } from "$lib/domain/rpg-types";
 
 export interface PlacedItemState {
   itemId: string;
@@ -112,4 +113,24 @@ export function tickPlacedItemExposure(
       learnedProperty: null,
     };
   }
+}
+
+export function calculatePlayerWarmth(
+  playerState: any,
+  defs = ITEM_DEFINITIONS
+): number {
+  let totalWarmth = 0;
+  const loadout = playerState.profile?.loadout;
+  if (!loadout) return 0;
+  for (const slotVal of Object.values(loadout)) {
+    if (!slotVal) continue;
+    const itemId = typeof slotVal === "string" ? slotVal : (slotVal as any).itemId;
+    const def = defs[itemId];
+    if (!def) continue;
+    const insulation = traitOf(def, "insulation_material");
+    if (insulation) {
+      totalWarmth += insulation.warmth;
+    }
+  }
+  return totalWarmth;
 }

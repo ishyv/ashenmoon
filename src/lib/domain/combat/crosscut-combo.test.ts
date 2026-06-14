@@ -15,6 +15,7 @@ describe("Crosscut combo rules", () => {
     ...DEFAULT_CROSSCUT_COMBO_CONFIG,
     minDistanceBetweenClicksPx: 8,
     minSecondClickDistancePx: 32,
+    excellentToleranceDegrees: 10,
     goodToleranceDegrees: 18,
     minimumToleranceDegrees: 22,
     maxClickDistancePx: 99999,

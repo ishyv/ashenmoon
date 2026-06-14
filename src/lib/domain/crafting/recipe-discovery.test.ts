@@ -45,9 +45,24 @@ describe("resolveExperiment", () => {
     expect(result.slots.flint_axe).toEqual({ qty: 1 });
   });
 
-  it("reports no_match for an unknown combination", () => {
+  it("reports no_match for an unknown combination and consumes materials yielding foul_sludge", () => {
     const result = resolveExperiment(slots({ ghost_lily: 1 }), { ghost_lily: 1 }, { isNearCampfire: false });
-    expect(result).toEqual({ ok: false, reason: "no_match" });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("no_match");
+    expect(result.slots).toBeDefined();
+    expect(result.slots!.ghost_lily).toBeUndefined();
+    expect(result.slots!.foul_sludge).toEqual({ qty: 1 });
+  });
+
+  it("reports no_match for an unknown combination near campfire yielding charred_ash", () => {
+    const result = resolveExperiment(slots({ ghost_lily: 1 }), { ghost_lily: 1 }, { isNearCampfire: true });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("no_match");
+    expect(result.slots).toBeDefined();
+    expect(result.slots!.ghost_lily).toBeUndefined();
+    expect(result.slots!.charred_ash).toEqual({ qty: 1 });
   });
 
   it("surfaces the campfire requirement for smelting experiments", () => {

@@ -1,0 +1,173 @@
+import { Category, Rarity, itemId, type IconSheet } from "$lib/domain/items/item-types";
+import { Item } from "$lib/domain/items/item-builder";
+import { Tool, Weapon, ReachWeapon, CuttingEdge } from "$lib/domain/items/item-traits";
+
+const SH = (col: number, row: number): IconSheet => ({ src: "/assets/shikashi-icons/icons.png", col, row, size: 32 });
+
+export const toolWeaponItems = {
+  starter_pickaxe: Item({
+    id: itemId("starter_pickaxe"),
+    name: "Starter Pickaxe",
+    description: "A tired pickaxe with a worn iron head.",
+    iconSheet: SH(8, 7),
+    rarity: Rarity.Common,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 2, stackLimit: 1 },
+  }).with(Tool({ toolKind: "mining", power: 1 })),
+  starter_axe: Item({
+    id: itemId("starter_axe"),
+    name: "Starter Axe",
+    description: "A simple hand axe with a notched blade.",
+    iconSheet: SH(7, 7),
+    rarity: Rarity.Common,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.6, stackLimit: 1 },
+  }).with(Tool({ toolKind: "chopping", power: 1 })),
+  stone_pickaxe: Item({
+    id: itemId("stone_pickaxe"),
+    name: "Stone Pickaxe",
+    description: "A stone pick lashed to a wooden haft.",
+    iconSheet: SH(8, 7),
+    rarity: Rarity.Uncommon,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
+  }).with(Tool({ toolKind: "mining", power: 2 })),
+  stone_axe: Item({
+    id: itemId("stone_axe"),
+    name: "Stone Axe",
+    description: "A stone head bound to a wooden handle. Heavy, crude, useful.",
+    iconSheet: SH(7, 7),
+    rarity: Rarity.Uncommon,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
+  }).with(
+    Tool({ toolKind: "chopping", power: 2 }),
+    Weapon({ weaponKind: "axe", damage: 12, damageType: "slash", bleedChancePct: 8 })
+  ),
+  flint_pickaxe: Item({
+    id: itemId("flint_pickaxe"),
+    name: "Flint Pickaxe",
+    description: "A knapped flint pick bound with twine.",
+    iconSheet: SH(8, 7),
+    rarity: Rarity.Uncommon,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.4, stackLimit: 1 },
+  }).with(Tool({ toolKind: "mining", power: 2 })),
+  flint_axe: Item({
+    id: itemId("flint_axe"),
+    name: "Flint Axe",
+    description: "A simple axe made of sharp flint stone and wood.",
+    iconSheet: SH(7, 7),
+    rarity: Rarity.Uncommon,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.2, stackLimit: 1 },
+  }).with(Tool({ toolKind: "chopping", power: 2 })),
+  copper_pickaxe: Item({
+    id: itemId("copper_pickaxe"),
+    name: "Copper Pickaxe",
+    description: "Malleable copper pickaxe. Gleams brightly.",
+    iconSheet: SH(8, 7),
+    rarity: Rarity.Rare,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.7, stackLimit: 1 },
+  }).with(Tool({ toolKind: "mining", power: 3 })),
+  copper_axe: Item({
+    id: itemId("copper_axe"),
+    name: "Copper Axe",
+    description: "A copper woodsman axe with a sharp edge.",
+    iconSheet: SH(7, 7),
+    rarity: Rarity.Rare,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.5, stackLimit: 1 },
+  }).with(Tool({ toolKind: "chopping", power: 3 })),
+  iron_pickaxe: Item({
+    id: itemId("iron_pickaxe"),
+    name: "Iron Pickaxe",
+    description: "A heavy, professional iron mining tool.",
+    iconSheet: SH(8, 7),
+    rarity: Rarity.Legendary,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 2.2, stackLimit: 1 },
+  }).with(Tool({ toolKind: "mining", power: 4 })),
+  iron_axe: Item({
+    id: itemId("iron_axe"),
+    name: "Iron Axe",
+    description: "Tempered iron head on a sturdy oak shaft.",
+    iconSheet: SH(7, 7),
+    rarity: Rarity.Legendary,
+    category: Category.Tool,
+    physical: { carryClass: "pack", weight: 1.9, stackLimit: 1 },
+  }).with(Tool({ toolKind: "chopping", power: 4 })),
+  crude_knife: Item({
+    id: itemId("crude_knife"),
+    name: "Crude Knife",
+    description: "A sharp flint bound to a stick with rough fiber.",
+    iconSheet: SH(6, 3),
+    rarity: Rarity.Common,
+    category: Category.Tool,
+    physical: { carryClass: "pocket", weight: 0.45, stackLimit: 1 },
+  }).with(
+    Tool({ toolKind: "cutting", power: 2 }),
+    Weapon({ weaponKind: "knife", damage: 8, damageType: "slash", bleedChancePct: 12 })
+  ),
+  stone_blade: Item({
+    id: itemId("stone_blade"),
+    name: "Stone Blade",
+    description: "A shaped stone edge. Not a knife yet, but it wants to become one.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    icon: "🔪",
+    physical: { carryClass: "pocket", weight: 0.2, stackLimit: 20 },
+  }).with(CuttingEdge(2)),
+  bone_needle: Item({
+    id: itemId("bone_needle"),
+    name: "Bone Needle",
+    description: "A small sharpened bone tool for stitching hide and wraps.",
+    rarity: Rarity.Common,
+    category: Category.Tool,
+    icon: "🪡",
+    physical: { carryClass: "pocket", weight: 0.03, stackLimit: 20 },
+  }).with(Tool({ toolKind: "sewing", power: 1 })),
+  bone_hook: Item({
+    id: itemId("bone_hook"),
+    name: "Bone Hook",
+    description: "A curved bit of bone shaped for catching or fastening.",
+    rarity: Rarity.Common,
+    category: Category.Tool,
+    icon: "🪝",
+    physical: { carryClass: "pocket", weight: 0.04, stackLimit: 20 },
+  }).with(Tool({ toolKind: "hook", power: 1 })),
+  wooden_spear: Item({
+    id: itemId("wooden_spear"),
+    name: "Wooden Spear",
+    description: "A sharpened branch meant to keep teeth farther away from your skin.",
+    rarity: Rarity.Common,
+    category: Category.Weapon,
+    icon: "🪵",
+    physical: { carryClass: "haul", weight: 2.0, stackLimit: 1 },
+  }).with(
+    Weapon({ weaponKind: "spear", damage: 10, damageType: "pierce", bleedChancePct: 10 }),
+    ReachWeapon(1)
+  ),
+  hardened_spear: Item({
+    id: itemId("hardened_spear"),
+    name: "Hardened Spear",
+    description: "A wooden spear hardened over flame. Still primitive, less pathetic.",
+    rarity: Rarity.Uncommon,
+    category: Category.Weapon,
+    icon: "🪵",
+    physical: { carryClass: "haul", weight: 2.0, stackLimit: 1 },
+  }).with(
+    Weapon({ weaponKind: "spear", damage: 12, damageType: "pierce", bleedChancePct: 12 }),
+    ReachWeapon(1)
+  ),
+  crude_torch: Item({
+    id: itemId("crude_torch"),
+    name: "Crude Torch",
+    description: "A resin-wrapped stick that gives light and makes some animals rethink things.",
+    rarity: Rarity.Common,
+    category: Category.Tool,
+    icon: "🔥",
+    physical: { carryClass: "pack", weight: 0.8, stackLimit: 4 },
+  }).with(Tool({ toolKind: "light", power: 1 })),
+};

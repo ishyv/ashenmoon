@@ -16,7 +16,7 @@ describe("tool kinds", () => {
   it("classifies tool ids, keeping pickaxe and axe distinct", () => {
     expect(toolKindOf("flint_pickaxe")).toBe("pickaxe");
     expect(toolKindOf("flint_axe")).toBe("axe");
-    expect(toolKindOf("oak_wood")).toBeNull();
+    expect(toolKindOf("wood")).toBeNull();
     expect(matchesToolKind("flint_pickaxe", "axe")).toBe(false);
   });
 });

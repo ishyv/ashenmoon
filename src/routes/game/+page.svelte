@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 import { onMount, onDestroy } from "svelte";
 import { GameEngine, type HudState } from "$lib/core/engine";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
@@ -13,6 +13,7 @@ import EquipmentPanel from "$lib/ui/panels/EquipmentPanel.svelte";
 import InventoryGrid from "$lib/ui/panels/InventoryGrid.svelte";
 import EnvironmentGauge from "$lib/ui/hud/EnvironmentGauge.svelte";
 import ConditionPanel from "$lib/ui/hud/ConditionPanel.svelte";
+import ToastLog from "$lib/ui/hud/ToastLog.svelte";
 import SkillHotbar from "$lib/ui/elements/SkillHotbar.svelte";
 import SkillTreePanel from "$lib/ui/panels/SkillTreePanel.svelte";
 import DialogueBox from "$lib/ui/elements/DialogueBox.svelte";
@@ -360,6 +361,7 @@ onDestroy(() => {
 
   <EnvironmentGauge />
   <ConditionPanel />
+  <ToastLog />
 
   <div class="bottom-hud-stack">
     {#if notify}

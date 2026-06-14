@@ -59,6 +59,7 @@ export const STATION_PROCESS_VERB: Record<ProcessType, string> = {
   assemble: "assembling",
   dry: "drying",
   store: "storing",
+  smoke: "smoking",
 };
 
 export function stationProcessVerb(processType: ProcessType): string {
@@ -176,24 +177,6 @@ export const STATION_PROCESSES: readonly StationProcess[] = [
     outputItemId: "dried_herb",
     outputQty: 1,
   },
-  {
-    id: "dry_wet_leaves",
-    stationId: "drying_rack",
-    inputs: { wet_leaves: 1 },
-    processType: "dry",
-    durationSec: 5,
-    outputItemId: "leaves",
-    outputQty: 1,
-  },
-  {
-    id: "dry_wet_fiber",
-    stationId: "drying_rack",
-    inputs: { wet_fiber: 1 },
-    processType: "dry",
-    durationSec: 5,
-    outputItemId: "grass_fiber",
-    outputQty: 1,
-  },
   // Primitive work surface processes
   {
     id: "assemble_crude_knife",
@@ -221,6 +204,34 @@ export const STATION_PROCESSES: readonly StationProcess[] = [
     durationSec: 5,
     outputItemId: "flint_pickaxe",
     outputQty: 1,
+  },
+  // Meat smoking rack processes
+  {
+    id: "smoke_meat",
+    stationId: "meat_smoking_rack",
+    inputs: { raw_meat: 1, charcoal: 1 },
+    processType: "smoke",
+    durationSec: 18,
+    outputItemId: "smoked_meat",
+    outputQty: 1,
+  },
+  {
+    id: "smoke_small_meat",
+    stationId: "meat_smoking_rack",
+    inputs: { raw_small_meat: 1, charcoal: 1 },
+    processType: "smoke",
+    durationSec: 14,
+    outputItemId: "smoked_meat",
+    outputQty: 1,
+  },
+  {
+    id: "smoke_large_meat",
+    stationId: "meat_smoking_rack",
+    inputs: { raw_large_meat: 1, charcoal: 1 },
+    processType: "smoke",
+    durationSec: 24,
+    outputItemId: "smoked_meat",
+    outputQty: 2,
   },
 ];
 

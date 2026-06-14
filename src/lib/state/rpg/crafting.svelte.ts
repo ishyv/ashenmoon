@@ -1,20 +1,19 @@
-/**
- * Reactive crafting-knowledge orchestrator: tracks which recipes the player has
- * unlocked and persists them. Pure rules (matching, known-recipe filtering) live
- * in `rpg/crafting/`; this only binds discovery to runtime state.
- *
- * Recipes unlock by being crafted, whether picked from the known list or
- * stumbled onto experimentally. This records discovery and lays the groundwork
- * for a knowledge-gated recipe list without changing what is shown today.
- */
 import { isRecipeKnown, listKnownRecipes } from "$lib/domain/crafting/experimental";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 import { StorageKeys } from "$lib/domain/game-events";
 
+export const STARTER_RECIPE_IDS = new Set([
+  "flint_axe", "flint_pickaxe", "crude_knife",
+  "binding_cord", "twist_grass_cord",
+  "tinder_bundle", "firewood_bundle", "charcoal",
+  "plank", "stone_block",
+  "campfire_kit", "primitive_work_surface_kit",
+  "fiber_wraps",
+]);
+
 export const recipeKnowledge = $state<{ known: ReadonlySet<string> }>({ known: new Set() });
 
-/** Record that a recipe is now known (idempotent; persists on change). */
 export function learnRecipe(recipeId: string): void {
   if (recipeKnowledge.known.has(recipeId)) return;
   const next = new Set(recipeKnowledge.known);
@@ -23,19 +22,18 @@ export function learnRecipe(recipeId: string): void {
   saveRecipes();
 }
 
-/** Whether a recipe id has been unlocked. */
 export function recipeKnown(recipeId: string): boolean {
   return isRecipeKnown(recipeKnowledge.known, recipeId);
 }
 
-/** Unlocked recipes, for a knowledge-gated crafting list. */
 export function knownRecipeList(): CraftRecipe[] {
   return listKnownRecipes(recipeKnowledge.known);
 }
 
 export function loadRecipes(): void {
   const ids = loadSlice<string[]>(StorageKeys.recipes, []);
-  recipeKnowledge.known = new Set(Array.isArray(ids) ? ids : []);
+  const saved = Array.isArray(ids) ? ids : [];
+  recipeKnowledge.known = new Set([...STARTER_RECIPE_IDS, ...saved]);
 }
 
 function saveRecipes(): void {

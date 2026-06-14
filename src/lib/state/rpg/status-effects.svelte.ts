@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Reactive wrapper over the pure status system (mirrors `stamina.svelte.ts`).
  * Owns the active-status list the HUD reads, persists it across refreshes,
  * and emits symptom feedback + quest events when statuses land/expire.
@@ -22,7 +22,7 @@ import {
 } from "$lib/domain/systems/status-system";
 import { GameEvent, StorageKeys } from "$lib/domain/game-events";
 import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
-import { emitPlayerFeedback } from "$lib/ui/player-feedback";
+import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 
 export const statusState = $state<{ active: ActiveStatus[] }>({ active: [] });

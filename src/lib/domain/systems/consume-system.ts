@@ -15,10 +15,11 @@ export type HolderCommand =
   | { kind: "restore_hp"; amount: number }
   | { kind: "damage"; amount: number }
   | { kind: "add_status"; status: StatusId; durationSec: number }
+  | { kind: "reduce_status"; status: StatusId; amount: number }
   | { kind: "clear_all_statuses" };
 
 export interface ConsumeOutcome {
-  verb: "drink" | "eat";
+  verb: "drink" | "eat" | "apply";
   holderCommands: HolderCommand[];
 }
 
@@ -63,6 +64,9 @@ function collectHolderCommands(
       return;
     case "add_status":
       out.push({ kind: "add_status", status: effect.status, durationSec: effect.durationSec });
+      return;
+    case "reduce_status":
+      out.push({ kind: "reduce_status", status: effect.status, amount: effect.amount });
       return;
     case "clear_all_statuses":
       out.push({ kind: "clear_all_statuses" });

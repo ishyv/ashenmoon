@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Client-side consume orchestrator: the UI's "Drink"/"Eat" button calls
  * `consumeItem()`, which rolls the outcome via the pure consume system, removes
  * one unit from the local inventory, and routes holder commands to survival/
@@ -17,7 +17,7 @@ import {
   clearStatusEffect,
   statusState,
 } from "$lib/state/rpg/status-effects.svelte";
-import { emitPlayerFeedback, emitPlayerHpDelta } from "$lib/ui/player-feedback";
+import { emitPlayerFeedback, emitPlayerHpDelta } from "$lib/ui/player-feedback.svelte";
 import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
 import { GameEvent } from "$lib/domain/game-events";
 import { playSound } from "$lib/audio/audio-engine";
@@ -33,8 +33,8 @@ export function canConsume(itemId: string): boolean {
   return !!slot && "qty" in slot && slot.qty >= 1;
 }
 
-/** The consume verb for an item ("drink"/"eat"), or null if not consumable. */
-export function getConsumeVerb(itemId: string): "drink" | "eat" | null {
+/** The consume verb for an item ("drink"/"eat"/"apply"), or null if not consumable. */
+export function getConsumeVerb(itemId: string): "drink" | "eat" | "apply" | null {
   const def = ITEM_DEFINITIONS[itemId];
   return def ? (getConsumableTrait(def)?.verb ?? null) : null;
 }
@@ -59,10 +59,8 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
   setRpgInventory(removeStackQty(gameState.rpg.inventory, itemId, 1));
 
   playSound("consume");
-  emitPlayerFeedback(
-    outcome.verb === "drink" ? `You drink the ${def.name.toLowerCase()}.` : `You eat the ${def.name.toLowerCase()}.`,
-    "info",
-  );
+  const verbPast = outcome.verb === "drink" ? "drank" : outcome.verb === "eat" ? "ate" : "applied";
+  emitPlayerFeedback(`You ${verbPast} the ${def.name.toLowerCase()}.`, "info");
 
   let harmed = false;
   let restoredThirst = false;
@@ -83,6 +81,9 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
         // source = the consumed item, so knowledge auto-memory can attribute it.
         applyStatusEffect(command.status, command.durationSec, itemId);
         harmed = true;
+        break;
+      case "reduce_status":
+        clearStatusEffect(command.status); // simplest implementation: clear it
         break;
       case "clear_all_statuses":
         clearAllStatusEffects();

@@ -4,81 +4,57 @@ import { gameState } from "$lib/state/game-state.svelte";
 import { devGiveItem } from "$lib/state/dev-rpg-actions";
 import { playSound } from "$lib/audio/audio-engine";
 import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
+import { vaneDialogueScript } from "$lib/domain/definitions/vane-dialogue";
+import type { DialogueScript, DialogueChoice } from "$lib/domain/definitions/dialogue-types";
+import { isObjectiveMatch } from "$lib/domain/quests/quest-system";
+import { GameEvent } from "$lib/domain/game-events";
 
-// Typings
-interface Objective {
-  id: string;
-  label: string;
-  current: number;
-  target: number;
-  completed: boolean;
-}
+// Registry of dialogue scripts mapped by NPC ID
+const SCRIPTS: Record<string, DialogueScript> = {
+  [vaneDialogueScript.npcId]: vaneDialogueScript,
+};
+
+// Registry of NPC meta info for styling
+const NPC_INFO: Record<string, { icon: string; title: string }> = {
+  npc_vane: { icon: "🧑‍✈️", title: "Camp Commander" },
+};
 
 let textToShow = $state("");
 let currentText = "";
 let typeInterval: ReturnType<typeof setInterval> | null = null;
 
-// Determine current dialog state based on active quests
-function getDialogText(): string {
-  if (!activeQuests.currentQuestId) {
-    return "scout... the wagon is gone and the woods are not feeling generous. find a stick, a flint shard, and grass fiber. i will show you the flint axe recipe.";
-  }
+// Derive the active script from the active NPC ID
+const activeScript = $derived(
+  dialogueState.activeNpc ? SCRIPTS[dialogueState.activeNpc.id] : null
+);
 
-  if (activeQuests.currentQuestId === "scavenger_tools") {
-    const quest = activeQuests.quests.scavenger_tools!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane")
-      .every((o) => o.completed);
+// Form the dialogue context reactively
+const dialogueContext = $derived.by(() => {
+  return {
+    currentQuestId: activeQuests.currentQuestId,
+    canClaimReward: (questId: string, talkObjectiveId: string) => {
+      const quest = activeQuests.quests[questId];
+      if (!quest) return false;
+      return (
+        quest.objectives
+          .filter((o) => o.id !== talkObjectiveId)
+          .every((o) => o.completed) && !quest.rewardClaimed
+      );
+    },
+  };
+});
 
-    if (allDoneExceptTalk) {
-      return "Incredible work! That Flint Axe will serve us well. Here, take this Copper Ingot from our salvaged stash. We must secure our camp next. We need to gather real timber from the oak trees and keep this fire burning bright.";
-    }
-    return "still missing pieces? you need one stick, one flint shard, and one grass fiber. open the stash, craft the flint axe, then equip it.";
-  }
+// Resolve the current node reactively
+const currentNode = $derived(
+  activeScript && dialogueContext
+    ? activeScript.getActiveNode(dialogueContext)
+    : null
+);
 
-  if (activeQuests.currentQuestId === "securing_perimeter") {
-    const quest = activeQuests.quests.securing_perimeter!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane_2")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      return "The campfire burns hot and bright, scout. You have proven yourself a true survivor of Ashenmoor. Next, we must establish our perimeter. Craft three Stone Blocks from raw Stone in the Crafting menu, and place three Stone Walls (shacks) around the camp. Here is an Iron Ingot for your efforts.";
-    }
-    return "Our fire is dying, and the shadow of the blight grows cold. Equip your Flint Axe, harvest an Oak Tree for thick wood logs, and refuel the campfire (requires 5x Oak Wood). Report back once the camp is secured.";
-  }
-
-  if (activeQuests.currentQuestId === "outpost_foundations") {
-    const quest = activeQuests.quests.outpost_foundations!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane_3")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      return "Excellent blockades, scout! These walls will hold back the blighted shadow. I've salvaged a Copper Axe from the ruins for you—this will make cutting down trees far easier. Next, we need real shelter and warmth.";
-    }
-    return "We need a perimeter, scout. Open your Crafting tab, refine raw Stone into three Stone Blocks, and then use the Build tab to place three Stone Walls around our camp.";
-  }
-
-  if (activeQuests.currentQuestId === "outpost_sanctuary") {
-    const quest = activeQuests.quests.outpost_sanctuary!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane_4")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      return "Incredible! The camp is now a true sanctuary, scout. With this shelter and light, we have carved a permanent outpost in the Ashenmoor blighted lands. Take this Copper Pickaxe. You've earned it. Rest well, we have survived.";
-    }
-    return "We need a warm sanctuary and a watchtower. Use refined planks and blocks to build an Outpost House and a Defense Tower. Remember, to smelt copper, iron, or silver ingots, you must stand near the Campfire's heat!";
-  }
-
-  return "Rest well, scout. Ashenmoor is a harsh country, but together, we have built a sanctuary.";
-}
-
-// Reactively start typewriter effect when active NPC or quest state changes
+// Reactively start typewriter effect when currentNode changes
 $effect(() => {
-  if (dialogueState.activeNpc) {
-    const rawText = getDialogText();
+  const rawText = currentNode?.text;
+  if (rawText) {
     if (rawText !== currentText) {
       currentText = rawText;
       textToShow = "";
@@ -86,7 +62,7 @@ $effect(() => {
       
       let i = 0;
       typeInterval = setInterval(() => {
-         if (rawText && i < rawText.length) {
+        if (rawText && i < rawText.length) {
           textToShow += rawText[i];
           i++;
         } else {
@@ -101,125 +77,92 @@ $effect(() => {
   }
 });
 
-function handleAction() {
-  if (!activeQuests.currentQuestId) {
-    // Accept scavenger_tools quest
-    activeQuests.currentQuestId = "scavenger_tools";
-    learnRecipe("flint_axe");
-    
-    // Retrospective check of inventory items
-    const slots = gameState.rpg.inventory?.slots;
-    const stickQty = slots && slots.stick && "qty" in slots.stick ? slots.stick.qty : 0;
-    const flintQty = slots && slots.flint_shard && "qty" in slots.flint_shard ? slots.flint_shard.qty : 0;
-    const fiberQty = slots && slots.grass_fiber && "qty" in slots.grass_fiber ? slots.grass_fiber.qty : 0;
-    
-    const equippedWeapon = gameState.rpg.profile?.loadout?.weapon;
-    const hasAxeEquipped = equippedWeapon && (typeof equippedWeapon === "string" ? equippedWeapon === "flint_axe" : equippedWeapon.itemId === "flint_axe");
-    const axeQty = (slots && slots.flint_axe && "qty" in slots.flint_axe ? slots.flint_axe.qty : 0) + (hasAxeEquipped ? 1 : 0);
-    
-    const quest = activeQuests.quests.scavenger_tools!;
-    const stickObj = quest.objectives.find((o) => o.id === "gather_stick");
-    if (stickObj) {
-      stickObj.current = Math.min(stickObj.target, stickQty);
-      if (stickObj.current >= stickObj.target) stickObj.completed = true;
-    }
-    const flintObj = quest.objectives.find((o) => o.id === "gather_flint");
-    if (flintObj) {
-      flintObj.current = Math.min(flintObj.target, flintQty);
-      if (flintObj.current >= flintObj.target) flintObj.completed = true;
-    }
-    const fiberObj = quest.objectives.find((o) => o.id === "gather_fiber");
-    if (fiberObj) {
-      fiberObj.current = Math.min(fiberObj.target, fiberQty);
-      if (fiberObj.current >= fiberObj.target) fiberObj.completed = true;
-    }
-    const axeObj = quest.objectives.find((o) => o.id === "craft_axe");
-    if (axeObj) {
-      axeObj.current = Math.min(axeObj.target, axeQty);
-      if (axeObj.current >= axeObj.target) axeObj.completed = true;
+/**
+ * Scans player inventory/loadout to retrospectively update objective progress
+ * for newly accepted quests.
+ */
+function runRetrospectiveCheck(questId: string) {
+  const quest = activeQuests.quests[questId];
+  if (!quest) return;
+
+  const slots = gameState.rpg.inventory?.slots || {};
+  const equippedWeapon = gameState.rpg.profile?.loadout?.weapon;
+  const equippedWeaponId = equippedWeapon
+    ? (typeof equippedWeapon === "string" ? equippedWeapon : equippedWeapon.itemId)
+    : null;
+
+  for (const obj of quest.objectives) {
+    if (obj.completed) continue;
+
+    let matchCount = 0;
+
+    // Check inventory slots for matches
+    for (const [itemId, slot] of Object.entries(slots)) {
+      if (!slot || !("qty" in slot)) continue;
+      if (
+        isObjectiveMatch(obj.id, GameEvent.Pickup, itemId) ||
+        isObjectiveMatch(obj.id, GameEvent.Craft, itemId)
+      ) {
+        matchCount += slot.qty;
+      }
     }
 
+    // Check equipped loadout for matches
+    if (equippedWeaponId) {
+      if (
+        isObjectiveMatch(obj.id, GameEvent.Pickup, equippedWeaponId) ||
+        isObjectiveMatch(obj.id, GameEvent.Craft, equippedWeaponId)
+      ) {
+        matchCount += 1;
+      }
+    }
+
+    if (matchCount > 0) {
+      obj.current = Math.min(obj.target, obj.current + matchCount);
+      if (obj.current >= obj.target) {
+        obj.completed = true;
+      }
+    }
+  }
+}
+
+function handleChoiceClick(choice: DialogueChoice) {
+  const action = choice.action;
+  if (!action) {
+    closeDialog();
+    return;
+  }
+
+  if (action.type === "accept_quest") {
+    if (action.nextQuestId) {
+      activeQuests.currentQuestId = action.nextQuestId;
+    }
+    if (action.learnRecipeId) {
+      learnRecipe(action.learnRecipeId);
+    }
+    if (action.questId) {
+      runRetrospectiveCheck(action.questId);
+    }
     playSound("pickup");
     closeDialog();
-  } else if (activeQuests.currentQuestId === "scavenger_tools") {
-    const quest = activeQuests.quests.scavenger_tools!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      // Claim reward & transition
-      quest.completed = true;
-      quest.rewardClaimed = true;
-      // Complete talk objective
-      const talkObj = quest.objectives.find((o) => o.id === "talk_vane");
-      if (talkObj) talkObj.completed = true;
-
-      // Give reward
-      devGiveItem("copper_ingot", 1);
-      playSound("craft");
-
-      // Unlock next quest
-      activeQuests.currentQuestId = "securing_perimeter";
+  } else if (action.type === "claim_reward") {
+    if (action.questId) {
+      const quest = activeQuests.quests[action.questId];
+      if (quest) {
+        quest.completed = true;
+        quest.rewardClaimed = true;
+        if (action.talkObjectiveId) {
+          const talkObj = quest.objectives.find((o) => o.id === action.talkObjectiveId);
+          if (talkObj) talkObj.completed = true;
+        }
+      }
     }
-    closeDialog();
-  } else if (activeQuests.currentQuestId === "securing_perimeter") {
-    const quest = activeQuests.quests.securing_perimeter!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane_2")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      // Claim reward & transition
-      quest.completed = true;
-      quest.rewardClaimed = true;
-      const talkObj = quest.objectives.find((o) => o.id === "talk_vane_2");
-      if (talkObj) talkObj.completed = true;
-
-      // Give reward
-      devGiveItem("iron_ingot", 1);
-      playSound("craft");
-
-      // Unlock next quest: foundations
-      activeQuests.currentQuestId = "outpost_foundations";
+    if (action.rewardItemId && action.rewardQty) {
+      devGiveItem(action.rewardItemId, action.rewardQty);
     }
-    closeDialog();
-  } else if (activeQuests.currentQuestId === "outpost_foundations") {
-    const quest = activeQuests.quests.outpost_foundations!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane_3")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      quest.completed = true;
-      quest.rewardClaimed = true;
-      const talkObj = quest.objectives.find((o) => o.id === "talk_vane_3");
-      if (talkObj) talkObj.completed = true;
-
-      // Reward Copper Axe
-      devGiveItem("copper_axe", 1);
-      playSound("craft");
-
-      activeQuests.currentQuestId = "outpost_sanctuary";
-    }
-    closeDialog();
-  } else if (activeQuests.currentQuestId === "outpost_sanctuary") {
-    const quest = activeQuests.quests.outpost_sanctuary!;
-    const allDoneExceptTalk = quest.objectives
-      .filter((o) => o.id !== "talk_vane_4")
-      .every((o) => o.completed);
-
-    if (allDoneExceptTalk) {
-      quest.completed = true;
-      quest.rewardClaimed = true;
-      const talkObj = quest.objectives.find((o) => o.id === "talk_vane_4");
-      if (talkObj) talkObj.completed = true;
-
-      // Reward Copper Pickaxe
-      devGiveItem("copper_pickaxe", 1);
-      playSound("craft");
-
-      activeQuests.currentQuestId = "completed_all";
+    playSound("craft");
+    if (action.nextQuestId) {
+      activeQuests.currentQuestId = action.nextQuestId;
     }
     closeDialog();
   } else {
@@ -231,21 +174,15 @@ function closeDialog() {
   dialogueState.activeNpc = null;
   if (typeInterval) clearInterval(typeInterval);
 }
-
-function canClaimReward(questId: string, talkObjectiveId: string): boolean {
-  const quest = activeQuests.quests[questId];
-  if (!quest) return false;
-  return quest.objectives.filter((o) => o.id !== talkObjectiveId).every((o) => o.completed) && !quest.rewardClaimed;
-}
 </script>
 
 {#if dialogueState.activeNpc}
   <div class="dialogue-backdrop">
     <div class="dialogue-box">
       <div class="npc-header">
-        <span class="npc-icon">🧑‍✈️</span>
+        <span class="npc-icon">{NPC_INFO[dialogueState.activeNpc.id]?.icon || "👤"}</span>
         <span class="npc-name">{dialogueState.activeNpc.name}</span>
-        <span class="npc-title">Camp Commander</span>
+        <span class="npc-title">{NPC_INFO[dialogueState.activeNpc.id]?.title || "NPC"}</span>
       </div>
 
       <div class="dialogue-content">
@@ -253,30 +190,16 @@ function canClaimReward(questId: string, talkObjectiveId: string): boolean {
       </div>
 
       <div class="dialogue-actions">
-        {#if !activeQuests.currentQuestId}
-          <button class="action-btn accept" onclick={handleAction}>
-            Accept Quest: Scavenger's Tools
-          </button>
-        {:else if activeQuests.currentQuestId === "scavenger_tools" && canClaimReward("scavenger_tools", "talk_vane")}
-          <button class="action-btn reward" onclick={handleAction}>
-            ✓ Claim Reward (1x Copper Ingot)
-          </button>
-        {:else if activeQuests.currentQuestId === "securing_perimeter" && canClaimReward("securing_perimeter", "talk_vane_2")}
-          <button class="action-btn reward" onclick={handleAction}>
-            ✓ Claim Reward (1x Iron Ingot)
-          </button>
-        {:else if activeQuests.currentQuestId === "outpost_foundations" && canClaimReward("outpost_foundations", "talk_vane_3")}
-          <button class="action-btn reward" onclick={handleAction}>
-            ✓ Claim Reward (1x Copper Axe)
-          </button>
-        {:else if activeQuests.currentQuestId === "outpost_sanctuary" && canClaimReward("outpost_sanctuary", "talk_vane_4")}
-          <button class="action-btn reward" onclick={handleAction}>
-            ✓ Claim Reward (1x Copper Pickaxe)
-          </button>
+        {#if currentNode}
+          {#each currentNode.choices as choice}
+            <button
+              class="action-btn {choice.action?.type === 'claim_reward' ? 'reward' : (choice.action?.type === 'accept_quest' ? 'accept' : 'close')}"
+              onclick={() => handleChoiceClick(choice)}
+            >
+              {choice.text}
+            </button>
+          {/each}
         {/if}
-        <button class="action-btn close" onclick={closeDialog}>
-          Leave
-        </button>
       </div>
     </div>
   </div>

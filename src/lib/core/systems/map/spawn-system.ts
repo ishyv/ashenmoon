@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, AnimatedSprite, Texture } from "pixi.js";
+import { Container, Sprite, AnimatedSprite, Texture } from "pixi.js";
 import { world, type Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import { computeRenderZ } from "$lib/domain/collision";
@@ -28,6 +28,7 @@ import { makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/e
 import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
 import { ANIMAL_DEFINITIONS, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import { LANDMARK_DEFS, type LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
+import { getStumpVariantTexture, getTreeVariantTexture, getRockVariantTexture } from "$lib/core/assets/assets";
 
 export function spawnEnemy(
   gx: number,
@@ -88,6 +89,8 @@ export function spawnAnimal(
       attackCooldownSec: 0,
       home: { x: ex + TILE / 2, y: ey + TILE / 2 },
       wanderTimerSec: 0,
+      facingX: 1,
+      animState: "idle",
     },
     mover: { speed: def.moveSpeed },
     knockback: { vx: 0, vy: 0, timer: 0 },
@@ -303,25 +306,20 @@ export function spawnItemDrop(
   entitySprites.set(id, sprite);
 }
 
-const LANDMARK_COLORS: Partial<Record<LandmarkKind, number>> = {
-  huge_dead_tree:    0x5a4a3a,
-  ruined_watch_post: 0x6b5a4a,
-  old_road:          0x7a6a5a,
-  burned_cart:       0x3a3330,
-  wolf_den:          0x4a3a2a,
-  river_crossing:    0x7a7a8a,
-  deer_grazing_area: 0x5a7a4a,
-  fallen_tree:       0x6a5a3a,
-  old_stump:         0x5a4a2a,
-  pond:              0x2a4a6a,
-};
+function getLandmarkTexture(kind: LandmarkKind): Texture | null {
+  switch (kind) {
+    case "old_stump":          return getStumpVariantTexture(1);
+    case "fallen_tree":        return getStumpVariantTexture(2);
+    case "huge_dead_tree":     return getTreeVariantTexture(3);
+    case "wolf_den":           return getRockVariantTexture(2);
+    case "ruined_watch_post":  return getTreeVariantTexture(4);
+    default:                   return null;
+  }
+}
 
 let landmarkSeq = 0;
 
-/**
- * Spawns a landmark entity at the given tile position.
- * Uses a colored Graphics rect as placeholder visual.
- */
+/** Spawns a landmark entity at the given tile position. */
 export function spawnLandmark(
   kind: LandmarkKind,
   gx: number,
@@ -349,12 +347,17 @@ export function spawnLandmark(
     map.solidCoords.add(coordKey(gx, gy));
   }
 
-  const color = LANDMARK_COLORS[kind] ?? 0x6a5a4a;
-  const g = new Graphics();
-  g.rect(0, 0, TILE, TILE).fill({ color, alpha: 0.85 });
-  g.x = ex;
-  g.y = ey;
-  g.zIndex = computeRenderZ(ey + TILE);
-  entityLayer.addChild(g);
-  entitySprites.set(entityId, g);
+  const tex = getLandmarkTexture(kind);
+  if (tex) {
+    const sprite = new Sprite(tex);
+    sprite.anchor.set(0.5, 1);
+    sprite.x = ex + TILE / 2;
+    sprite.y = ey + TILE;
+    const isTall = kind === "huge_dead_tree" || kind === "ruined_watch_post";
+    sprite.scale.set((TILE * (isTall ? 2 : 1)) / tex.height);
+    sprite.zIndex = computeRenderZ(sprite.y);
+    entityLayer.addChild(sprite);
+    entitySprites.set(entityId, sprite);
+  }
+  // Terrain-marker kinds (null texture): entity exists and is examineable, no visual added.
 }

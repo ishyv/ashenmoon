@@ -6,7 +6,7 @@ import {
 } from "./item-reactions";
 import type { Inventory } from "./inventory-system";
 
-// Uses real item content: ice_block (>0°C -> clean_water), oak_wood
+// Uses real item content: ice_block (>0°C -> clean_water), wood
 // (ignites >=120°C -> charcoal), ghost_lily (decays after 60s -> volatile_ash).
 
 describe("processTemperatureReactions", () => {
@@ -27,18 +27,18 @@ describe("processTemperatureReactions", () => {
 
 describe("processFlammableReactions", () => {
   it("ignites exposed wood at a hot enough effective temperature", () => {
-    const inv: Inventory = { slots: { oak_wood: { qty: 3 } } };
+    const inv: Inventory = { slots: { wood: { qty: 3 } } };
     const { inventory, reactions } = processFlammableReactions(inv, {
       location: "ground",
       ambientTemp: 20,
       radiantHeat: 600,
     });
     expect(inventory.slots.charcoal).toBeDefined();
-    expect(reactions).toEqual([{ itemId: "oak_wood", kind: "flammable" }]);
+    expect(reactions).toEqual([{ itemId: "wood", kind: "flammable" }]);
   });
 
   it("never ignites sealed items", () => {
-    const inv: Inventory = { slots: { oak_wood: { qty: 3 } } };
+    const inv: Inventory = { slots: { wood: { qty: 3 } } };
     const { inventory, reactions } = processFlammableReactions(inv, {
       location: "sealed",
       ambientTemp: 9000,
@@ -49,7 +49,7 @@ describe("processFlammableReactions", () => {
   });
 
   it("does not ignite below the ignition point", () => {
-    const inv: Inventory = { slots: { oak_wood: { qty: 1 } } };
+    const inv: Inventory = { slots: { wood: { qty: 1 } } };
     const { reactions } = processFlammableReactions(inv, {
       location: "pack",
       ambientTemp: 20,

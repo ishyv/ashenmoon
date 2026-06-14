@@ -6,11 +6,26 @@
  */
 import { fade } from "svelte/transition";
 import { statusState } from "$lib/state/rpg/status-effects.svelte";
+import { woundState } from "$lib/state/rpg/wounds.svelte";
 import { STATUS_DEFINITIONS } from "$lib/domain/systems/status-types";
+
+const WOUND_LABELS = {
+  scratch: "Scratch",
+  cut: "Cut",
+  deep_cut: "Deep Cut",
+  bite_wound: "Bite Wound",
+} as const;
 </script>
 
-{#if statusState.active.length > 0}
+{#if statusState.active.length > 0 || woundState.active.length > 0}
   <div class="status-row" transition:fade={{ duration: 200 }}>
+    {#each woundState.active as wound (wound.id)}
+      <div class="chip wound" transition:fade={{ duration: 200 }}>
+        <span class="chip-icon">{wound.infected ? "🤒" : wound.bleeding ? "🩸" : "🩹"}</span>
+        <span class="chip-label">{WOUND_LABELS[wound.severity]}</span>
+        <span class="chip-time">{wound.infected ? "infected" : wound.bleeding ? "bleeding" : wound.treatedWith.length > 0 ? "treated" : "open"}</span>
+      </div>
+    {/each}
     {#each statusState.active as status (status.id)}
       {@const def = STATUS_DEFINITIONS[status.id]}
       <div class="chip" transition:fade={{ duration: 200 }}>

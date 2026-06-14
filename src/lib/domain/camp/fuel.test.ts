@@ -3,7 +3,7 @@ import { chooseFuelOption, getFuelSummary } from "./fuel";
 
 describe("camp fuel options", () => {
   it("chooses the first available fuel option by configured priority", () => {
-    expect(chooseFuelOption({ firewood_bundle: 1, oak_wood: 99 })).toEqual({
+    expect(chooseFuelOption({ firewood_bundle: 1, wood: 99 })).toEqual({
       itemId: "firewood_bundle",
       qty: 1,
       fuelMs: 90_000,

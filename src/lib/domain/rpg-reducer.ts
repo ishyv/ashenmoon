@@ -1,8 +1,9 @@
 import { getBuildingSpec, BUILDING_SPECS } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { resolveExperiment } from "$lib/domain/crafting/experimental";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
-import { ITEM_DEFINITIONS } from "$lib/domain/items";
+import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import type {
   RpgEnvironmentTickResult,
   RpgInventorySlot,
@@ -17,11 +18,17 @@ const DEFAULT_DECAY_RESULT = "volatile_ash";
 
 export type RpgReducerCommand =
   | { type: "equipTool"; itemId: string | null }
+  | {
+      type: "equipGear";
+      itemId: string | null;
+      slot: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace";
+    }
   | { type: "pickup"; itemId: string; pickupId: string; quantity?: number }
   | { type: "gather"; action: "mine" | "forest"; locationId: string }
   | { type: "refuel" }
   | { type: "craft"; recipeId: string; context: CraftContext }
-  | { type: "build"; buildingType: string; x: number; y: number }
+  | { type: "experiment"; inputs: Record<string, number>; context: CraftContext }
+  | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number }
   | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
@@ -34,9 +41,17 @@ export interface GatherSync {
   toolBroken: boolean;
 }
 
+export interface ExperimentSync {
+  playerState: RpgPlayerState;
+  success: boolean;
+  recipeId?: string | undefined;
+  reason?: string | undefined;
+}
+
 export type RpgReducerResult =
   | { playerState: RpgPlayerState }
   | GatherSync
+  | ExperimentSync
   | RpgEnvironmentTickResult;
 
 export interface RpgReducerOptions {
@@ -98,7 +113,7 @@ function refuel(state: RpgPlayerState): GatherSync {
 function gather(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "gather" }>): GatherSync {
   const playerState = clonePlayerState(state);
   const gatherable = getGatherableBySyncLocation(command.locationId);
-  const drop = gatherable?.yieldTable[0]?.itemId ?? (command.action === "forest" ? "oak_wood" : "stone");
+  const drop = gatherable?.yieldTable[0]?.itemId ?? (command.action === "forest" ? "wood" : "stone");
   const slots = { ...playerState.inventory.slots };
   addQty(slots, drop, 1);
   playerState.inventory = { slots };
@@ -139,6 +154,69 @@ function equipTool(
   return { playerState };
 }
 
+const SLOT_MAPPING: Record<string, string> = {
+  helmet: "head",
+  chest: "body",
+  boots: "feet",
+  shield: "hands",
+  pants: "legs",
+};
+
+function getExpectedWearableSlot(slot: string): string | null {
+  return SLOT_MAPPING[slot] ?? null;
+}
+
+function equipGear(
+  state: RpgPlayerState,
+  command: Extract<RpgReducerCommand, { type: "equipGear" }>,
+  options: RpgReducerOptions,
+): { playerState: RpgPlayerState } {
+  const playerState = clonePlayerState(state);
+  const slotKey = command.slot;
+
+  // 1. Unequip current gear if present
+  const current = playerState.profile.loadout[slotKey];
+  if (current) {
+    const currentItemId = typeof current === "string" ? current : current.itemId;
+    addQty(playerState.inventory.slots, currentItemId, 1);
+    playerState.profile.loadout[slotKey] = null;
+  }
+
+  // 2. If itemId is null, we are just unequipping
+  if (!command.itemId) {
+    return { playerState };
+  }
+
+  // 3. Equip the new gear
+  const itemId = command.itemId;
+  const slotVal = playerState.inventory.slots[itemId];
+  const exists = slotVal && ("qty" in slotVal ? slotVal.qty > 0 : slotVal.instances.length > 0);
+  if (!exists) throw new Error("Item not in inventory");
+
+  const def = ITEM_DEFINITIONS[itemId];
+  if (!def) throw new Error("Unknown item");
+
+  const wearable = traitOf(def, "wearable");
+  if (!wearable) throw new Error("Item is not wearable");
+
+  const expectedSlot = getExpectedWearableSlot(slotKey);
+  if (!expectedSlot || wearable.slot !== expectedSlot) {
+    throw new Error(`Item ${itemId} cannot be equipped in slot ${slotKey}`);
+  }
+
+  // Deduct from inventory
+  removeQty(playerState.inventory.slots, itemId, 1);
+
+  // Set loadout
+  playerState.profile.loadout[slotKey] = {
+    instanceId: `gear_${itemId}_${options.now?.() ?? Date.now()}`,
+    itemId,
+    durability: 100,
+  };
+
+  return { playerState };
+}
+
 function build(
   state: RpgPlayerState,
   command: Extract<RpgReducerCommand, { type: "build" }>,
@@ -149,7 +227,17 @@ function build(
   if (!Number.isFinite(command.x) || !Number.isFinite(command.y)) throw new Error("Missing coordinates");
 
   const playerState = clonePlayerState(state);
-  if (!options.freeBuilding) {
+  if (!options.freeBuilding && command.sourceItemId) {
+    const slots = { ...playerState.inventory.slots };
+    const sourceItem = ITEM_DEFINITIONS[command.sourceItemId];
+    const placeable = traitOf(sourceItem, "placeable");
+    if (!sourceItem || placeable?.prefabId !== command.buildingType) {
+      throw new Error(`Invalid building kit for ${command.buildingType}`);
+    }
+    if (getQty(slots[command.sourceItemId]) < 1) throw new Error(`Insufficient ${command.sourceItemId}`);
+    removeQty(slots, command.sourceItemId, 1);
+    playerState.inventory = { slots };
+  } else if (!options.freeBuilding) {
     const slots = { ...playerState.inventory.slots };
     for (const [itemId, reqQty] of Object.entries(spec.cost ?? {})) {
       if (getQty(slots[itemId]) < reqQty) throw new Error(`Insufficient ${itemId}`);
@@ -167,6 +255,7 @@ function build(
       type: command.buildingType,
       x: command.x,
       y: command.y,
+      ...(command.sourceItemId ? { sourceItemId: command.sourceItemId } : {}),
     },
   ];
   return { playerState };
@@ -244,6 +333,35 @@ function placeItem(state: RpgPlayerState, command: Extract<RpgReducerCommand, { 
   return { playerState };
 }
 
+function experiment(
+  state: RpgPlayerState,
+  command: Extract<RpgReducerCommand, { type: "experiment" }>,
+): ExperimentSync {
+  const playerState = clonePlayerState(state);
+  const result = resolveExperiment(playerState.inventory.slots, command.inputs, command.context);
+  
+  if (result.slots) {
+    playerState.inventory = { slots: result.slots };
+  }
+  
+  if (result.ok) {
+    return {
+      playerState,
+      success: true,
+      recipeId: result.recipe.id,
+    };
+  } else {
+    if (result.reason === "requires_campfire" || result.reason === "insufficient_materials") {
+      throw new Error(result.reason);
+    }
+    return {
+      playerState,
+      success: false,
+      reason: result.reason,
+    };
+  }
+}
+
 /**
  * Pure RPG transaction reducer.
  *
@@ -258,6 +376,8 @@ export function reduceRpgCommand(
   switch (command.type) {
     case "equipTool":
       return equipTool(state, command, options);
+    case "equipGear":
+      return equipGear(state, command, options);
     case "pickup":
       return pickup(state, command);
     case "gather":
@@ -266,6 +386,8 @@ export function reduceRpgCommand(
       return refuel(state);
     case "craft":
       return craft(state, command);
+    case "experiment":
+      return experiment(state, command);
     case "build":
       return build(state, command, options);
     case "destroyBuilding":

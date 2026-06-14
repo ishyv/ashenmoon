@@ -13,6 +13,7 @@ import { Cell } from "$lib/core/types";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { getBuildingSpec } from "$lib/domain/building-specs";
+import { getBuildableBehavior } from "$lib/domain/building-behaviors";
 import { createCampfireState, type CampStructureType } from "$lib/domain/camp/camp-state";
 import { CollisionFootprints, computeRenderZ, resolveCollisionAabb } from "$lib/domain/collision";
 import {
@@ -27,6 +28,7 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 export class BuildingResource {
   public isPlacementMode = false;
   public currentPlacementType: string | null = null;
+  public currentPlacementSourceItemId: string | null = null;
   public previewSprite: Sprite | null = null;
   public previewIndicator: Graphics | null = null;
   public onPlacementCancelCb?: (() => void) | undefined;
@@ -39,17 +41,23 @@ const CAMP_STRUCTURE_TYPES = new Set<string>([
   "drying_rack",
   "crude_shelter",
   "marker_sign",
+  "storage_pile",
+  "spike_barrier",
+  "rain_catcher",
+  "meat_smoking_rack",
+  "simple_bedroll",
 ]);
 
 function campStructureFor(type: string): Entity["campStructure"] | undefined {
   if (!CAMP_STRUCTURE_TYPES.has(type)) return undefined;
   const campType = type as CampStructureType;
-  if (campType === "crude_shelter") {
+  const behavior = getBuildableBehavior(type);
+  if (behavior?.kind === "shelter") {
     return {
       type: campType,
       protectionRadiusPx: TILE * 2.5,
-      coldResistanceBonus: 0.45,
-      rainProtection: 0.5,
+      coldResistanceBonus: behavior.coldResistanceBonus,
+      rainProtection: behavior.rainProtection,
     };
   }
   return { type: campType };
@@ -114,7 +122,7 @@ export function spawnBuildingSystem(
   const campStructure = campStructureFor(type);
   const interactable = spec.stationId
     ? { name: spec.displayName, action: "process" as const }
-    : type === "crude_shelter" || type === "marker_sign"
+    : getBuildableBehavior(type)
       ? { name: spec.displayName, action: "process" as const }
       : undefined;
 
@@ -154,6 +162,7 @@ export function spawnBuildingSystem(
 
 export async function placeBuildingSystem(
   type: string,
+  sourceItemId: string | null,
   gx: number,
   gy: number,
   world: World<Entity>,
@@ -166,7 +175,7 @@ export async function placeBuildingSystem(
   cancelPlacement: () => void,
   onCompleteCb: (() => void) | undefined,
 ): Promise<void> {
-  const result = await syncBuild(type, gx, gy);
+  const result = await syncBuild(type, gx, gy, sourceItemId ?? undefined);
   const player = getPlayerEntity();
 
   if (!result.ok) {

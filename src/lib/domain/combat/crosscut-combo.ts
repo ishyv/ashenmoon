@@ -98,9 +98,9 @@ export const DEFAULT_CROSSCUT_COMBO_CONFIG: CrosscutComboConfig = {
   minDistanceBetweenClicksPx: 128,
   maxClickDistancePx: 300,
   perfectAngleDegrees: 90,
-  excellentToleranceDegrees: 10,
-  goodToleranceDegrees: 15,
-  minimumToleranceDegrees: 18,
+  excellentToleranceDegrees: 7,
+  goodToleranceDegrees: 12,
+  minimumToleranceDegrees: 16,
   staminaCosts: {
     weak: 10,
     good: 5,

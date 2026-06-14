@@ -22,7 +22,7 @@ describe("M3 carcass processing", () => {
     const rabbit = M3_CARCASS_DEFINITIONS.rabbit;
 
     expect(rabbit.actions.harvest_meat.yields).toContainEqual({ itemId: "raw_small_meat", qty: 1 });
-    expect(rabbit.actions.remove_hide.yields).toContainEqual({ itemId: "small_hide", qty: 1 });
+    expect(rabbit.actions.remove_hide.yields).toContainEqual({ itemId: "rabbit_pelt", qty: 1 });
     expect(rabbit.actions.extract_bone.yields).toContainEqual({ itemId: "small_bone", qty: 1 });
   });
 

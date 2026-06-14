@@ -14,6 +14,7 @@ export type InventoryEffect = TransformEffect | DestroyEffect | ChanceInventoryE
 export type VitalsEffect =
   | DamageHolderEffect
   | AddStatusEffect
+  | ReduceStatusEffect
   | RestoreThirstEffect
   | RestoreHpEffect
   | ClearAllStatusesEffect
@@ -73,6 +74,15 @@ export interface RestoreHpEffect {
  */
 export interface ClearAllStatusesEffect {
   kind: "clear_all_statuses";
+}
+
+/**
+ * Reduces the severity or duration of a specific status effect.
+ */
+export interface ReduceStatusEffect {
+  kind: "reduce_status";
+  status: StatusId;
+  amount: number;
 }
 
 /**
@@ -163,6 +173,17 @@ export function RestoreHp(amount: number): RestoreHpEffect {
 export function ClearAllStatuses(): ClearAllStatusesEffect {
   return {
     kind: "clear_all_statuses",
+  };
+}
+
+/**
+ * DSL Helper: Define a status reduction effect.
+ */
+export function ReduceStatus(status: StatusId, amount: number): ReduceStatusEffect {
+  return {
+    kind: "reduce_status",
+    status,
+    amount,
   };
 }
 

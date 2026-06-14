@@ -134,6 +134,12 @@ import {
   isValidPlacement,
 } from "$lib/core/systems/building/building-system";
 import { createStationProcessRuntime, stationProcessVerb, STATION_PROCESSES } from "$lib/domain/systems/station-process";
+import {
+  actionsForCarcass,
+  actionsForPlacedStructure,
+  type WorldActionOption,
+} from "$lib/domain/world-actions";
+import { createWorldActionRuntime } from "$lib/domain/world-action-runtime";
 import { chooseFuelOption } from "$lib/domain/camp/fuel";
 import { shelterExposureMitigation } from "$lib/domain/camp/camp-state";
 import type { StationId } from "$lib/domain/stations";
@@ -158,7 +164,8 @@ import {
   loadStatuses,
   applyStatusEffect,
 } from "$lib/state/rpg/status-effects.svelte";
-import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$lib/ui/player-feedback";
+import { loadWounds, tickWounds } from "$lib/state/rpg/wounds.svelte";
+import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { setEnvironment } from "$lib/state/environment-state.svelte";
 import { tickWetnessState, wetnessState } from "$lib/state/rpg/wetness.svelte";
 import { setColdAccumulator } from "$lib/state/rpg/cold-exposure.svelte";
@@ -206,6 +213,7 @@ import {
 import { syncHudCooldownsSystem } from "$lib/core/systems/hud-sync-system";
 import { spawnResourceEntity, spawnCampSystem, spawnEnemy, spawnLandmark } from "$lib/core/systems/map/spawn-system";
 import { FogSystem } from "$lib/core/systems/atmosphere/fog-system";
+import { VisionSystem } from "$lib/core/systems/atmosphere/vision-system";
 import { handleEnemyDeathSystem } from "$lib/core/systems/combat/enemy-death-system";
 import {
   CollisionFootprints,
@@ -238,6 +246,7 @@ export class GameEngine {
   public combatResource = new CombatResource();
   public weatherResource = new WeatherResource();
   public fogSystem = new FogSystem();
+  private visionSystem = new VisionSystem();
 
   // Facing vector
   private playerFacing: { x: number; y: number } = { x: 0, y: 1 };
@@ -404,6 +413,9 @@ export class GameEngine {
       this.nightOverlay.alpha = 0;
       this.app.stage.addChild(this.nightOverlay);
 
+      this.visionSystem.init();
+      this.app.stage.addChild(this.visionSystem.layer);
+
       // Draw map tiles
       drawTerrainSystem(this.mapResource, this.tileLayer);
 
@@ -414,6 +426,7 @@ export class GameEngine {
       // feedback + hp sinks so state modules can reach the canvas/player.
       loadSurvival();
       loadStatuses();
+      loadWounds();
       loadKnowledge();
       loadRecipes();
       loadAudioSettings();
@@ -638,6 +651,7 @@ export class GameEngine {
           if (isValidPlacement(mx, my, type, this.mapResource, this.playerEntity.position!)) {
             placeBuildingSystem(
               type,
+              this.buildingResource.currentPlacementSourceItemId,
               mx,
               my,
               world,
@@ -916,6 +930,7 @@ export class GameEngine {
       }
 
       tickExposureSystem(world, this.mapResource, dt, this.vfxResource, this.entityLayer);
+      tickWounds(dt);
 
       const statusTick = tickStatusEffects(dt);
       if (statusTick.hpDelta !== 0) {
@@ -1072,6 +1087,15 @@ export class GameEngine {
         }
       }
       this.fogSystem.tick(dt, this.weatherResource.state.timeOfDay, this.weatherResource.state.raining, campfirePositions);
+      if (this.playerEntity.position) {
+        this.visionSystem.tick(
+          dt,
+          { width: this.app.screen.width, height: this.app.screen.height },
+          this.playerEntity.position,
+          this.weatherResource.state.timeOfDay,
+          this.zoom,
+        );
+      }
       setColdAccumulator(this.weatherResource.coldAccumulator);
 
       this.updateRenderOrder();
@@ -1539,6 +1563,42 @@ export class GameEngine {
     this.inputResource.pendingInteract = true;
   }
 
+  public getWorldActionOptions(targetId: string): WorldActionOption[] {
+    const entity = world.entities.find((e) => e.id === targetId);
+    if (entity?.carcass) {
+      return actionsForCarcass({ targetId: entity.id, carcass: entity.carcass });
+    }
+
+    const building = gameState.rpg.profile?.buildings?.find((b: { id: string }) => b.id === targetId);
+    if (building) {
+      return actionsForPlacedStructure({ buildingId: building.id, buildableId: building.type });
+    }
+
+    return [];
+  }
+
+  public executeWorldAction(action: WorldActionOption): void {
+    const target = world.entities.find((e) => e.id === action.executeIntent.targetId);
+    const playerPos = this.playerEntity?.position;
+
+    if (action.executeIntent.kind === "open_station" && target) {
+      this.onStationInteract?.(target);
+      return;
+    }
+
+    if (action.executeIntent.kind === "carcass.process") {
+      if (!target?.carcass || !playerPos) return;
+      this.interactionResource.activeWorldAction = createWorldActionRuntime(action);
+      spawnEnvFloatingText(this.vfxResource, action.feedback.start, Colors.ui.muted, playerPos, this.entityLayer);
+      return;
+    }
+
+    if (playerPos) {
+      const text = action.executeIntent.kind === "carcass.inspect" ? action.feedback.success : action.feedback.start;
+      spawnEnvFloatingText(this.vfxResource, text, Colors.ui.muted, playerPos, this.entityLayer);
+    }
+  }
+
   public async execute(command: GameCommand, source: CommandSource = "player"): Promise<GameCommandResult> {
     return executeGameCommand(createEngineCommandContext(this, source), command);
   }
@@ -1727,9 +1787,11 @@ export class GameEngine {
   public startBuildingPlacement(
     type: string,
     onCancel?: () => void,
-    onComplete?: () => void
+    onComplete?: () => void,
+    sourceItemId?: string
   ): void {
     this.buildingResource.currentPlacementType = type;
+    this.buildingResource.currentPlacementSourceItemId = sourceItemId ?? null;
     this.buildingResource.isPlacementMode = true;
     this.buildingResource.onPlacementCancelCb = onCancel ?? undefined;
     this.buildingResource.onPlacementCompleteCb = onComplete ?? undefined;
@@ -1760,6 +1822,7 @@ export class GameEngine {
   public cancelBuildingPlacement(): void {
     this.buildingResource.isPlacementMode = false;
     this.buildingResource.currentPlacementType = null;
+    this.buildingResource.currentPlacementSourceItemId = null;
     if (this.buildingResource.previewIndicator) {
       this.entityLayer.removeChild(this.buildingResource.previewIndicator);
       this.buildingResource.previewIndicator.destroy();
@@ -1865,7 +1928,7 @@ export class GameEngine {
   public async refuelCampfire(entityId: string): Promise<boolean> {
     const fuel = chooseFuelOption({
       firewood_bundle: getItemQty("firewood_bundle"),
-      oak_wood: getItemQty("oak_wood"),
+      wood: getItemQty("wood"),
       branch: getItemQty("branch"),
       stick: getItemQty("stick"),
     });

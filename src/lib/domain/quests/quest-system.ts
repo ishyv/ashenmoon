@@ -27,7 +27,7 @@ export function isObjectiveMatch(
       if (objectiveId === "craft_block" && itemId === "stone_block") return true;
       return false;
     case GameEvent.Harvest:
-      return objectiveId === "harvest_oak" && itemId === "oak_wood";
+      return objectiveId === "harvest_oak" && itemId === "wood";
     case GameEvent.Build:
       if (objectiveId === "build_wall" && itemId === "wall") return true;
       if (objectiveId === "build_house" && itemId === "house1") return true;

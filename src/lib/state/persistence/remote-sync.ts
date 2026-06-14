@@ -50,9 +50,16 @@ export function syncBuild(
   type: string,
   x: number,
   y: number,
+  sourceItemId?: string,
 ): Promise<SyncResult<RpgPlayerState>> {
   return syncLocal(async () => {
-    const result = await dispatchRpgCommand({ type: "build", buildingType: type, x, y });
+    const result = await dispatchRpgCommand({
+      type: "build",
+      buildingType: type,
+      x,
+      y,
+      ...(sourceItemId ? { sourceItemId } : {}),
+    });
     if (!result.ok) throw new Error(result.error);
     return result.data.playerState;
   });

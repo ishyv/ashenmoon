@@ -1,8 +1,11 @@
 import type { Graphics, Container } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import { calculatePlayerWarmth } from "$lib/domain/exposure/placed-exposure";
+import { gameState } from "$lib/state/game-state.svelte";
 import {
   createWorldEventState,
+  isNight,
   nightEnvironmentModifiers,
   putWorldEventOnCooldown,
   scheduleWorldEvent,
@@ -21,18 +24,83 @@ import type { MapResource } from "$lib/core/systems/map/map";
 import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { ANIMAL_DEFINITIONS } from "$lib/domain/animals/animal-behavior";
+import {
+  resolveWolfCampThreat,
+  type WolfCampThreatFactors,
+  type WolfCampThreatOutcome,
+} from "$lib/domain/threats/wolf-camp-threat";
+
+const RAW_MEAT_IDS = new Set(["raw_meat", "raw_small_meat", "raw_large_meat", "fatty_meat"]);
+const SPOILED_MEAT_IDS = new Set(["spoiled_meat", "rotten_meat"]);
+
+const WOLF_THREAT_FEEDBACK: Record<Exclude<WolfCampThreatOutcome, "none">, WorldEventFeedback> = {
+  howl: { message: "a distant howl answers the scent of camp.", tone: "warning", sound: "ambient.wind" },
+  circle_camp: { message: "something circles beyond the firelight.", tone: "warning", sound: "ambient.wind" },
+  approach_exposed_meat: { message: "brush snaps near the exposed meat.", tone: "warning", sound: "ambient.wind" },
+  warning_silhouette: { message: "a lean silhouette pauses between the trees.", tone: "warning", sound: "ambient.wind" },
+};
 
 export class WeatherResource {
   public state: WeatherState = { raining: false, rainRemainingSec: 0, timeOfDay: 0.28 };
-  public worldEventState: WorldEventState = createWorldEventState();
   public rainCooldownSec: number = ENGINE_CONFIG.RAIN.INITIAL_COOLDOWN_SEC;
   public rainFeedbackTimer = 0;
-  public forestEventTimer = 0;
+  
+  public worldEventState: WorldEventState = createWorldEventState();
+  public forestEventTimer: number = ENGINE_CONFIG.FOREST_EVENT.MIN_INTERVAL_SEC;
+  
   public nightOverlayAlpha = 0;
   public rainOverlayTint = 0xffffff;
+  
   public coldAccumulator = 0;
   public hypothermiaRefreshTimer = 0;
+  
   public feedbackEvents: WorldEventFeedback[] = [];
+}
+
+export function collectWolfCampThreatFactors(input: {
+  readonly world: World<Entity>;
+  readonly map: MapResource;
+  readonly playerEntity: Entity;
+  readonly timeOfDay: number;
+  readonly nearWolfZone: boolean;
+}): WolfCampThreatFactors {
+  const playerPosition = input.playerEntity.position;
+  const playerTile = playerPosition
+    ? { x: Math.round(playerPosition.x / TILE), y: Math.round(playerPosition.y / TILE) }
+    : null;
+
+  const nearWolfDen = !!playerTile && input.map.forestMetadata.landmarks.some((landmark) => {
+    if (landmark.kind !== "wolf_den") return false;
+    return Math.hypot(landmark.x - playerTile.x, landmark.y - playerTile.y) <= ENGINE_CONFIG.FOREST_EVENT.ANIMAL_ZONE_RADIUS_TILES;
+  });
+
+  let litFireStrength = 0;
+  for (const entity of input.world.with("campfire").entities) {
+    if (!entity.campfire?.isLit) continue;
+    litFireStrength = Math.max(litFireStrength, Math.min(1, entity.campfire.heatRadiusPx / (TILE * 4.5)));
+  }
+
+  let exposedRawMeat = 0;
+  let exposedSpoiledMeat = 0;
+  for (const entity of input.world.with("pickup").entities) {
+    const itemId = entity.pickup!.itemId;
+    if (RAW_MEAT_IDS.has(itemId)) exposedRawMeat += entity.pickup!.qty;
+    if (SPOILED_MEAT_IDS.has(itemId)) exposedSpoiledMeat += entity.pickup!.qty;
+  }
+
+  return {
+    isNight: isNight(input.timeOfDay),
+    nearWolfZone: input.nearWolfZone,
+    nearWolfDen,
+    litFireStrength,
+    spikeBarrierCount: input.world.with("campStructure").entities
+      .filter((entity) => entity.campStructure!.type === "spike_barrier").length,
+    freshCarcassCount: input.world.with("carcass").entities
+      .filter((entity) => entity.carcass!.state === "fresh" || entity.carcass!.state === "partially_processed").length,
+    exposedRawMeat,
+    exposedSpoiledMeat,
+    recentKillSites: input.map.forestMetadata.eventPoints.filter((point) => point.kind === "corpse_site").length,
+  };
 }
 
 export function weatherTickSystem(
@@ -82,11 +150,32 @@ export function weatherTickSystem(
       ENGINE_CONFIG.FOREST_EVENT.MIN_INTERVAL_SEC +
       Math.random() * ENGINE_CONFIG.FOREST_EVENT.RANDOM_EXTRA_SEC;
     
+    const nearWolfZone = isNearForestAnimalZone(
+      "wolf_territory",
+      ENGINE_CONFIG.FOREST_EVENT.ANIMAL_ZONE_RADIUS_TILES
+    );
+    const wolfThreat = resolveWolfCampThreat(collectWolfCampThreatFactors({
+      world,
+      map,
+      playerEntity,
+      timeOfDay: weather.state.timeOfDay,
+      nearWolfZone,
+    }));
+
+    if (wolfThreat.outcome !== "none" && weather.worldEventState.cooldowns.wolf_howl <= 0) {
+      weather.feedbackEvents.push(WOLF_THREAT_FEEDBACK[wolfThreat.outcome]);
+      weather.worldEventState = putWorldEventOnCooldown(weather.worldEventState, "wolf_howl");
+
+      for (const entity of world.with("animal", "position").entities) {
+        const def = ANIMAL_DEFINITIONS[entity.animal!.speciesId];
+        if (def.temperament === "fearful" || def.temperament === "timid") {
+          entity.animal!.scareSec = 4 + Math.random() * 3;
+        }
+      }
+    }
+
     const event = scheduleWorldEvent(weather.worldEventState, {
-      nearWolfTerritory: isNearForestAnimalZone(
-        "wolf_territory",
-        ENGINE_CONFIG.FOREST_EVENT.ANIMAL_ZONE_RADIUS_TILES
-      ),
+      nearWolfTerritory: false,
       hasCorpseOrFoodPoi: map.forestMetadata.eventPoints.length > 0,
       hasPredatorAndPrey: hasPredatorAndPreyAnimals(),
       timeOfDay: worldEventTimeOfDay(),
@@ -140,7 +229,9 @@ export function weatherOverlaySystem(
 
     const { temperatureDelta } = nightMods;
     if (temperatureDelta < 0) {
-      weather.coldAccumulator = Math.min(100, weather.coldAccumulator + (-temperatureDelta * 0.08 * dt * coldBuildRateMult));
+      const warmth = gameState.rpg ? calculatePlayerWarmth(gameState.rpg) : 0;
+      const effectiveCold = Math.max(0, -temperatureDelta - warmth);
+      weather.coldAccumulator = Math.min(100, weather.coldAccumulator + (effectiveCold * 0.08 * dt * coldBuildRateMult));
     } else {
       weather.coldAccumulator = Math.max(0, weather.coldAccumulator - (temperatureDelta * 0.2 * dt));
     }

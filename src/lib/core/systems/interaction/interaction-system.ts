@@ -1,4 +1,4 @@
-﻿import { AnimatedSprite, Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -28,8 +28,9 @@ import { getStationDefinition, type StationId } from "$lib/domain/stations";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
 import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
 import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
+import { applyWound } from "$lib/state/rpg/wounds.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
-import { emitPlayerHpDelta } from "$lib/ui/player-feedback";
+import { emitPlayerHpDelta } from "$lib/ui/player-feedback.svelte";
 import {
   createTreeFallHazard,
   fallDirectionAwayFromPlayer,
@@ -39,11 +40,10 @@ import { LANDMARK_DEFS } from "$lib/domain/worldgen/landmark-definitions";
 import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
 import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
 import {
-  M3_CARCASS_DEFINITIONS,
-  resolveCarcassProcessing,
-  resolveCarcassToolQuality,
-  type CarcassProcessAction,
-} from "$lib/domain/animals/carcass-processing";
+  completeCarcassWorldAction,
+  startCarcassWorldAction,
+} from "$lib/core/systems/animals/carcass-interactions";
+import { tickWorldActionRuntime, type WorldActionRuntime } from "$lib/domain/world-action-runtime";
 import {
   findProcessForStation,
   resolveStationProcessCompletion,
@@ -61,12 +61,6 @@ interface DialogueStateRef {
 
 const INTERACT_RANGE = 2;
 const CAMPFIRE_STATION = getStationDefinition("campfire");
-const CARCASS_ACTION_ORDER: readonly Exclude<CarcassProcessAction, "inspect">[] = [
-  "harvest_meat",
-  "remove_hide",
-  "extract_bone",
-  "collect_sinew",
-];
 
 interface ImmediateInteractionDeps {
   interaction: InteractionResource;
@@ -124,7 +118,16 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
             )
           : null;
         if (gatherRisk) {
-          applyStatusEffect(gatherRisk.status, gatherRisk.durationSec, "hazard:gather");
+          if (gatherRisk.status === StatusId.Cut || gatherRisk.status === StatusId.Bleeding) {
+            applyWound({
+              severity: gatherRisk.status === StatusId.Bleeding ? "deep_cut" : "cut",
+              contamination: 0.2,
+              toolQuality: getEquippedWeaponId() ? 0.6 : 0,
+              source: "hazard:gather",
+            });
+          } else {
+            applyStatusEffect(gatherRisk.status, gatherRisk.durationSec, "hazard:gather");
+          }
           if (gatherRisk.knowledgeItemId && gatherRisk.status === StatusId.Cut) {
             learnAbout(gatherRisk.knowledgeItemId, "sharp");
           }
@@ -166,7 +169,7 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
     handle: ({ target, resources }) => {
       const { onStationInteract, vfx, entityLayer } = resources.deps;
       if (target.carcass) {
-        processCarcassInteraction(target, vfx, entityLayer);
+        resources.deps.interaction.activeWorldAction = startCarcassWorldAction(target, vfx, entityLayer);
         return;
       }
       if (onStationInteract) {
@@ -229,76 +232,8 @@ export class InteractionResource {
   public requestCrafting = false;
   /** Active item process (boiling, smelting); null when nothing is processing. */
   public activeProcess: StationProcessRuntime | null = null;
-}
-
-function nextCarcassAction(target: Entity): Exclude<CarcassProcessAction, "inspect"> | null {
-  if (!target.carcass) return null;
-  const definition = M3_CARCASS_DEFINITIONS[target.carcass.speciesId];
-  for (const action of CARCASS_ACTION_ORDER) {
-    if (target.carcass.processedActions.includes(action)) continue;
-    if (definition.actions[action].yields.length === 0) continue;
-    return action;
-  }
-  return null;
-}
-
-function processCarcassInteraction(target: Entity, vfx: VFXResource, entityLayer: Container): void {
-  const carcass = target.carcass;
-  const player = getPlayerEntity();
-  if (!carcass || !player.position) return;
-
-  const action = nextCarcassAction(target);
-  if (!action) {
-    spawnEnvFloatingText(vfx, "nothing useful remains", Colors.ui.muted, player.position, entityLayer);
-    return;
-  }
-
-  const toolQuality = resolveCarcassToolQuality({
-    equippedItemId: getEquippedWeaponId(),
-    hasSharpFlint: getItemQty("flint_shard") > 0 || getItemQty("bone_shard") > 0,
-  });
-  const result = resolveCarcassProcessing({
-    carcass,
-    action,
-    toolQuality,
-  });
-
-  if (!result.ok) {
-    spawnEnvFloatingText(vfx, result.feedback, Colors.ui.error, player.position, entityLayer);
-    return;
-  }
-
-  // INVARIANT: mark the carcass before async inventory writes so repeated
-  // interaction cannot duplicate yields while persistence is still resolving.
-  carcass.processedActions = [...carcass.processedActions, result.action];
-  carcass.state = result.nextState;
-
-  void (async () => {
-    for (const yieldItem of result.yields) {
-      const sync = await syncPickup(yieldItem.itemId, `${target.id}:${result.action}:${yieldItem.itemId}`, yieldItem.qty);
-      if (sync.ok) applyRpgState(sync.data.playerState);
-    }
-  })();
-
-  for (const risk of result.risks) {
-    if (Math.random() < risk.chance) {
-      applyStatusEffect(risk.status, risk.durationSec, "hazard:carcass");
-      spawnEnvFloatingText(
-        vfx,
-        risk.status === StatusId.Cut ? "cut" : "sickened",
-        Colors.ui.error,
-        player.position,
-        entityLayer,
-      );
-    }
-  }
-
-  const yieldText = result.yields
-    .map((yieldItem) => `+${yieldItem.qty} ${getItemDef(yieldItem.itemId)?.name.toLowerCase() ?? yieldItem.itemId}`)
-    .join(", ");
-  spawnEnvFloatingText(vfx, yieldText || result.feedback, Colors.resource.gold, player.position, entityLayer);
-  spawnEnvParticles(vfx, Colors.combat.enemyDeath, 5, "sizzle", player.position, entityLayer);
-  playSound("node.deplete");
+  /** Active timed world-object action; null when no object action is running. */
+  public activeWorldAction: WorldActionRuntime | null = null;
 }
 
 
@@ -674,7 +609,7 @@ export function depleteNodeSystem(
         };
         if (isPointInTreeFallZone(latestCenter, hazard)) {
           emitPlayerHpDelta(-hazard.damage);
-          applyStatusEffect(StatusId.Cut, 25, "hazard:tree_fall");
+          applyWound({ severity: "deep_cut", contamination: 0.35, source: "hazard:tree_fall" });
           spawnEnvFloatingText(vfx, "tree hit", Colors.ui.error, latestPlayer.position, entityLayer);
         }
       }
@@ -849,6 +784,39 @@ export function runInteractionSystem(
         interaction.activeProcess = null;
       }
     }
+  }
+
+  // Advance active world-object actions. These are explicit domain actions
+  // (carcass processing now, more object panels later) and complete once.
+  if (interaction.activeWorldAction) {
+    const playerEntity = getPlayerEntity();
+    const runtime = interaction.activeWorldAction;
+    const target = world.with("position").entities.find((e) => e.id === runtime.action.executeIntent.targetId);
+
+    const inRange = !!target?.position && !!playerEntity.position && Math.hypot(
+      (target.position.x - playerEntity.position.x) / TILE,
+      (target.position.y - playerEntity.position.y) / TILE,
+    ) <= INTERACT_RANGE;
+
+    if (!target || !inRange) {
+      if (playerEntity.position) {
+        spawnEnvFloatingText(vfx, "action interrupted.", Colors.ui.muted, playerEntity.position, entityLayer);
+      }
+      interaction.activeWorldAction = null;
+      return;
+    }
+
+    const tickedAction = tickWorldActionRuntime(runtime, dt);
+    interaction.activeWorldAction = tickedAction;
+
+    if (tickedAction.completed) {
+      interaction.activeWorldAction = null;
+      if (tickedAction.action.executeIntent.kind === "carcass.process") {
+        completeCarcassWorldAction(target, tickedAction, vfx, entityLayer);
+      }
+    }
+
+    return;
   }
 
 
@@ -1035,7 +1003,16 @@ export function runInteractionSystem(
           }
         : null;
       if (wound) {
-        applyStatusEffect(wound.status, wound.durationSec, "hazard:gather");
+        if (wound.status === StatusId.Cut || wound.status === StatusId.Bleeding) {
+          applyWound({
+            severity: wound.status === StatusId.Bleeding ? "deep_cut" : "cut",
+            contamination: 0.2,
+            toolQuality: getEquippedWeaponId() ? 0.6 : 0,
+            source: "hazard:gather",
+          });
+        } else {
+          applyStatusEffect(wound.status, wound.durationSec, "hazard:gather");
+        }
         spawnEnvFloatingText(
           vfx,
           wound.status === StatusId.Cut ? "cut" : "bleeding",

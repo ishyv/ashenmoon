@@ -1,42 +1,98 @@
 import { AnimatedSprite, Container, Graphics } from "pixi.js";
 import { TILE } from "$lib/core/systems/map/map";
-import type { AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import { computeRenderZ } from "$lib/domain/collision";
 import { getAnimalFrames } from "$lib/core/assets/assets";
+import type { EntityAnimSpec } from "$lib/core/systems/animation/entity-animator";
 
-const ANIMAL_RENDER_SPECS: Record<AnimalSpeciesId, { color: number; w: number; h: number }> = {
-  rabbit: { color: 0xd8d1bd, w: 20, h: 12 },
-  deer: { color: 0x9b6b3e, w: 34, h: 22 },
-  boar: { color: 0x5b463a, w: 32, h: 20 },
-  wolf: { color: 0x87919a, w: 34, h: 18 },
-};
+interface AnimalRenderSpec {
+  readonly fallbackColor: number;
+  readonly fallbackWidthPx: number;
+  readonly fallbackHeightPx: number;
+  readonly spriteScale: number;
+}
+
+const ANIMAL_RENDER_SPECS = {
+  rabbit: { fallbackColor: 0xd8d1bd, fallbackWidthPx: 20, fallbackHeightPx: 12, spriteScale: 1.5 },
+  deer: { fallbackColor: 0x9b6b3e, fallbackWidthPx: 34, fallbackHeightPx: 22, spriteScale: 1.75 },
+  boar: { fallbackColor: 0x5b463a, fallbackWidthPx: 32, fallbackHeightPx: 20, spriteScale: 2 },
+  wolf: { fallbackColor: 0x87919a, fallbackWidthPx: 34, fallbackHeightPx: 18, spriteScale: 2 },
+} as const satisfies Record<AnimalSpeciesId, AnimalRenderSpec>;
+
+function positionAnimalSprite(sprite: Container, x: number, y: number): void {
+  sprite.x = x + TILE / 2;
+  sprite.y = y + TILE;
+  sprite.zIndex = computeRenderZ(sprite.y);
+}
+
+function createFallbackSilhouette(spec: AnimalRenderSpec): Graphics {
+  const sprite = new Graphics();
+  sprite.ellipse(0, 0, spec.fallbackWidthPx, spec.fallbackHeightPx).fill(spec.fallbackColor);
+  sprite
+    .circle(
+      spec.fallbackWidthPx * 0.55,
+      -spec.fallbackHeightPx * 0.15,
+      Math.max(4, spec.fallbackHeightPx * 0.25),
+    )
+    .fill(spec.fallbackColor);
+  return sprite;
+}
 
 export function createAnimalSprite(speciesId: AnimalSpeciesId, x: number, y: number): Container {
   const frames = getAnimalFrames(speciesId, "idle");
-  if (frames && frames.length > 0) {
+  const spec = ANIMAL_RENDER_SPECS[speciesId];
+
+  if (frames.length > 0) {
     const sprite = new AnimatedSprite(frames);
     sprite.animationSpeed = 0.12;
     sprite.play();
     sprite.anchor.set(0.5, 1);
-    
-    // Scale 16x16 anim sheets to look natural on 16px grid
-    let scale = 1.5;
-    if (speciesId === "deer") scale = 1.75;
-    else if (speciesId === "boar" || speciesId === "wolf") scale = 2.0;
-    sprite.scale.set(scale);
-
-    sprite.x = x + TILE / 2;
-    sprite.y = y + TILE;
-    sprite.zIndex = computeRenderZ(sprite.y);
+    sprite.scale.set(spec.spriteScale);
+    positionAnimalSprite(sprite, x, y);
     return sprite;
   }
 
-  const spec = ANIMAL_RENDER_SPECS[speciesId];
-  const sprite = new Graphics();
-  sprite.ellipse(0, 0, spec.w, spec.h).fill(spec.color);
-  sprite.circle(spec.w * 0.55, -spec.h * 0.15, Math.max(4, spec.h * 0.25)).fill(spec.color);
-  sprite.x = x + TILE / 2;
-  sprite.y = y + TILE;
-  sprite.zIndex = computeRenderZ(sprite.y);
+  const sprite = createFallbackSilhouette(spec);
+  positionAnimalSprite(sprite, x, y);
   return sprite;
 }
+
+// ---------------------------------------------------------------------------
+// Animation specs — one per species, used by animal-ecology-system each tick
+// ---------------------------------------------------------------------------
+
+export type AnimalAnimState = "idle" | "walk" | "eat";
+
+/** Maps behavior state to the animation key the spec should play. */
+export function behaviorToAnimState(b: AnimalBehaviorState): AnimalAnimState {
+  if (b === "graze" || b === "eat") return "eat";
+  if (b === "wander" || b === "flee" || b === "attack" || b === "hunt") return "walk";
+  return "idle";
+}
+
+export const ANIMAL_ANIM_SPECS: Record<AnimalSpeciesId, EntityAnimSpec<AnimalAnimState>> = {
+  rabbit: {
+    getFrames: (s) => getAnimalFrames("rabbit", s),
+    speed: () => 0.14,
+    loop: () => true,
+    naturalFacing: -1,
+  },
+  deer: {
+    getFrames: (s) => getAnimalFrames("deer", s),
+    speed: (s) => s === "walk" ? 0.16 : 0.10,
+    loop: () => true,
+    naturalFacing: -1,
+  },
+  boar: {
+    getFrames: (s) => getAnimalFrames("boar", s),
+    speed: (s) => s === "walk" ? 0.20 : 0.10,
+    loop: () => true,
+    naturalFacing: -1,
+  },
+  wolf: {
+    getFrames: (s) => getAnimalFrames("wolf", s),
+    speed: (s) => s === "walk" ? 0.22 : 0.10,
+    loop: () => true,
+    naturalFacing: -1,
+  },
+};

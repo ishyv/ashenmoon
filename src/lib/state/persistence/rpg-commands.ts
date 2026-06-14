@@ -1,11 +1,13 @@
 import { BUILDING_SPECS, getBuildingSpec } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { resolveExperiment } from "$lib/domain/crafting/experimental";
 import { StorageKeys } from "$lib/domain/game-events";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
-import { ITEM_DEFINITIONS } from "$lib/domain/items";
+import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import type {
   RpgEnvironmentTickResult,
+  RpgEquipmentSlot,
   RpgGatherResult,
   RpgInventorySlot,
   RpgPlayerState,
@@ -114,6 +116,17 @@ function normalizeWeapon(value: unknown): RpgPlayerState["profile"]["loadout"]["
   };
 }
 
+function normalizeEquipmentSlot(value: unknown): RpgEquipmentSlot {
+  if (value === null || typeof value === "string") return value;
+  if (!isRecord(value)) return null;
+  if (typeof value.itemId !== "string") return null;
+  return {
+    instanceId: typeof value.instanceId === "string" ? value.instanceId : `repaired_${value.itemId}`,
+    itemId: value.itemId,
+    durability: typeof value.durability === "number" && Number.isFinite(value.durability) ? value.durability : 100,
+  };
+}
+
 export function createDefaultProfile(): RpgPlayerState["profile"] {
   return {
     hpCurrent: 100,
@@ -145,7 +158,13 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
           typeof building.x === "number" &&
           typeof building.y === "number"
         ) {
-          return [{ id: building.id, type: building.type, x: building.x, y: building.y }];
+          return [{
+            id: building.id,
+            type: building.type,
+            x: building.x,
+            y: building.y,
+            ...(typeof building.sourceItemId === "string" ? { sourceItemId: building.sourceItemId } : {}),
+          }];
         }
         return [];
       })
@@ -159,13 +178,13 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
     stashSize: typeof value.stashSize === "number" && Number.isFinite(value.stashSize) ? value.stashSize : defaults.stashSize,
     loadout: {
       weapon: normalizeWeapon(loadout.weapon),
-      shield: null,
-      helmet: null,
-      chest: null,
-      pants: null,
-      boots: null,
-      ring: null,
-      necklace: null,
+      shield: normalizeEquipmentSlot(loadout.shield),
+      helmet: normalizeEquipmentSlot(loadout.helmet),
+      chest: normalizeEquipmentSlot(loadout.chest),
+      pants: normalizeEquipmentSlot(loadout.pants),
+      boots: normalizeEquipmentSlot(loadout.boots),
+      ring: normalizeEquipmentSlot(loadout.ring),
+      necklace: normalizeEquipmentSlot(loadout.necklace),
     },
     ...(buildings !== undefined ? { buildings } : {}),
     ...(gatheredPickups !== undefined ? { gatheredPickups } : {}),
@@ -260,7 +279,7 @@ function gather(action: "mine" | "forest", locationId: string): GatherSync {
   let toolBroken = false;
   const playerState = mutateAndSave((state) => {
     const gatherable = getGatherableBySyncLocation(locationId);
-    const drop = gatherable?.yieldTable[0]?.itemId ?? (action === "forest" ? "oak_wood" : "stone");
+    const drop = gatherable?.yieldTable[0]?.itemId ?? (action === "forest" ? "wood" : "stone");
     const slots = { ...state.inventory.slots };
     addQty(slots, drop, 1);
     state.inventory = { slots };
@@ -300,7 +319,60 @@ function equipTool(itemId: string | null): RpgPlayerState {
   });
 }
 
-function build(type: string, x: number, y: number): RpgPlayerState {
+function equipGear(
+  itemId: string | null,
+  slot: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace",
+): RpgPlayerState {
+  const SLOT_MAPPING_LOCAL: Record<string, string> = {
+    helmet: "head",
+    chest: "body",
+    boots: "feet",
+    shield: "hands",
+    pants: "legs",
+  };
+  return mutateAndSave((state) => {
+    // 1. Unequip current gear if present
+    const current = state.profile.loadout[slot];
+    if (current) {
+      const currentItemId = typeof current === "string" ? current : current.itemId;
+      addQty(state.inventory.slots, currentItemId, 1);
+      state.profile.loadout[slot] = null;
+    }
+
+    // 2. If itemId is null, we are just unequipping
+    if (!itemId) {
+      return;
+    }
+
+    // 3. Equip the new gear
+    const slotVal = state.inventory.slots[itemId];
+    const exists = slotVal && ("qty" in slotVal ? slotVal.qty > 0 : slotVal.instances.length > 0);
+    if (!exists) throw new Error("Item not in inventory");
+
+    const def = ITEM_DEFINITIONS[itemId];
+    if (!def) throw new Error("Unknown item");
+
+    const wearable = traitOf(def, "wearable");
+    if (!wearable) throw new Error("Item is not wearable");
+
+    const expectedSlot = SLOT_MAPPING_LOCAL[slot];
+    if (!expectedSlot || wearable.slot !== expectedSlot) {
+      throw new Error(`Item ${itemId} cannot be equipped in slot ${slot}`);
+    }
+
+    // Deduct from inventory
+    removeQty(state.inventory.slots, itemId, 1);
+
+    // Set loadout
+    state.profile.loadout[slot] = {
+      instanceId: `gear_${itemId}_${Date.now()}`,
+      itemId,
+      durability: 100,
+    };
+  });
+}
+
+function build(type: string, x: number, y: number, sourceItemId?: string): RpgPlayerState {
   const spec = getBuildingSpec(type);
   if (!isKnownBuildable(type) || !spec.cost) {
     throw new Error("Invalid building type");
@@ -310,7 +382,19 @@ function build(type: string, x: number, y: number): RpgPlayerState {
   }
 
   return mutateAndSave((state) => {
-    if (!devFlags.freeBuildingEnabled) {
+    if (!devFlags.freeBuildingEnabled && sourceItemId) {
+      const slots = { ...state.inventory.slots };
+      const sourceItem = ITEM_DEFINITIONS[sourceItemId];
+      const placeable = traitOf(sourceItem, "placeable");
+      if (!sourceItem || placeable?.prefabId !== type) {
+        throw new Error(`Invalid building kit for ${type}`);
+      }
+      if (getQty(slots[sourceItemId]) < 1) {
+        throw new Error(`Insufficient ${sourceItemId}`);
+      }
+      removeQty(slots, sourceItemId, 1);
+      state.inventory = { slots };
+    } else if (!devFlags.freeBuildingEnabled) {
       const slots = { ...state.inventory.slots };
       for (const [itemId, reqQty] of Object.entries(spec.cost ?? {})) {
         if (getQty(slots[itemId]) < reqQty) {
@@ -327,7 +411,7 @@ function build(type: string, x: number, y: number): RpgPlayerState {
     }
     state.profile.buildings = [
       ...(state.profile.buildings ?? []),
-      { id: `building_${type}_${Date.now()}`, type, x, y },
+      { id: `building_${type}_${Date.now()}`, type, x, y, ...(sourceItemId ? { sourceItemId } : {}) },
     ];
   });
 }
@@ -416,6 +500,38 @@ function placeItem(itemId: string, qty = 1): RpgPlayerState {
   });
 }
 
+export interface ExperimentSync {
+  playerState: RpgPlayerState;
+  success: boolean;
+  recipeId?: string | undefined;
+  reason?: string | undefined;
+}
+
+function experiment(inputs: Record<string, number>, ctx: CraftContext): ExperimentSync {
+  let success = false;
+  let recipeId: string | undefined;
+  let reason: string | undefined;
+
+  const playerState = mutateAndSave((state) => {
+    const result = resolveExperiment(state.inventory.slots, inputs, ctx);
+    if (result.slots) {
+      state.inventory = { slots: result.slots };
+    }
+    if (result.ok) {
+      success = true;
+      recipeId = result.recipe.id;
+    } else {
+      if (result.reason === "requires_campfire" || result.reason === "insufficient_materials") {
+        throw new Error(result.reason);
+      }
+      success = false;
+      reason = result.reason;
+    }
+  });
+
+  return { playerState, success, recipeId, reason };
+}
+
 export const localRpgCommands = {
   getPlayerState: getLocalRpgState,
   savePlayerState: saveLocalRpgState,
@@ -423,9 +539,11 @@ export const localRpgCommands = {
   refuel,
   gather,
   equipTool,
+  equipGear,
   build,
   destroyBuilding,
   craft,
+  experiment,
   environmentTick,
   placeItem,
 };

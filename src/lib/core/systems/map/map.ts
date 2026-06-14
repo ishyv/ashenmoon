@@ -1,7 +1,21 @@
 import { Container, Graphics, Sprite, TilingSprite } from "pixi.js";
 import { Cell, type AABB } from "$lib/core/types";
 import { SeededNoise } from "$lib/utils/noise";
-import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
+import {
+  createEmptyForestMetadata,
+  FIRST_CAMP_RELATIVE_LAYOUT,
+  materializeFirstCampLayout,
+  type ForestAnimalZone,
+  type ForestAnimalZoneKind,
+  type ForestEventPoint,
+  type ForestEventPointKind,
+  type ForestMetadata,
+  type ForestPoint,
+  type ForestResourceCluster,
+  type ForestResourceClusterKind,
+  type ForestWaterKind,
+  type ForestWaterSource,
+} from "$lib/domain/worldgen/first-camp-layout";
 import {
   getBiomeTileTexture,
   getWaterBackgroundTexture,
@@ -28,130 +42,31 @@ export interface SpawnNode {
   gatherableId: string;
 }
 
-export type ForestWaterKind = "river" | "pond" | "muddy_pool";
-export type ForestResourceClusterKind =
-  | "starter_materials"
-  | "rocky_patch"
-  | "clearing"
-  | "water_edge"
-  | "dense_forest";
-export type ForestAnimalZoneKind =
-  | "rabbit_burrow"
-  | "deer_grazing"
-  | "boar_rooting"
-  | "wolf_territory";
-export type ForestEventPointKind = "corpse_site" | "berry_patch" | "water_sign" | "wolf_howl";
-
-export interface ForestPoint {
-  x: number;
-  y: number;
-}
-
-export interface ForestWaterSource extends ForestPoint {
-  kind: ForestWaterKind;
-  radiusTiles: number;
-}
-
-export interface ForestResourceCluster extends ForestPoint {
-  kind: ForestResourceClusterKind;
-  radiusTiles: number;
-}
-
-export interface ForestAnimalZone extends ForestPoint {
-  kind: ForestAnimalZoneKind;
-  radiusTiles: number;
-}
-
-export interface ForestEventPoint extends ForestPoint {
-  kind: ForestEventPointKind;
-}
-
-export interface ForestMetadata {
-  waterSources: ForestWaterSource[];
-  resourceClusters: ForestResourceCluster[];
-  animalZones: ForestAnimalZone[];
-  landmarks: (ForestPoint & { kind: LandmarkKind; label: string })[];
-  campCandidates: (ForestPoint & { radiusTiles: number })[];
-  eventPoints: ForestEventPoint[];
-}
-
-function createEmptyForestMetadata(): ForestMetadata {
-  return {
-    waterSources: [],
-    resourceClusters: [],
-    animalZones: [],
-    landmarks: [],
-    campCandidates: [],
-    eventPoints: [],
-  };
-}
+export type {
+  ForestAnimalZone,
+  ForestAnimalZoneKind,
+  ForestEventPoint,
+  ForestEventPointKind,
+  ForestMetadata,
+  ForestPoint,
+  ForestResourceCluster,
+  ForestResourceClusterKind,
+  ForestWaterKind,
+  ForestWaterSource,
+};
 
 type SpawnAdder = (gatherableId: string, x: number, y: number, prefix?: string) => void;
 
-const FIRST_CAMP_RELATIVE_LAYOUT = {
-  water: { kind: "pond", dx: 10, dy: 2, radiusTiles: 3 },
-  resourceClusters: [
-    { kind: "starter_materials", dx: 0, dy: 6, radiusTiles: 7 },
-    { kind: "water_edge", dx: 8, dy: 2, radiusTiles: 4 },
-    { kind: "rocky_patch", dx: -9, dy: 4, radiusTiles: 4 },
-    { kind: "clearing", dx: 3, dy: 7, radiusTiles: 5 },
-    { kind: "dense_forest", dx: -8, dy: -8, radiusTiles: 6 },
-  ] satisfies readonly (Omit<ForestResourceCluster, "x" | "y"> & { dx: number; dy: number })[],
-  animalZones: [
-    { kind: "rabbit_burrow", dx: 5, dy: 8, radiusTiles: 5 },
-    { kind: "deer_grazing", dx: 8, dy: 6, radiusTiles: 6 },
-    { kind: "boar_rooting", dx: -10, dy: -4, radiusTiles: 6 },
-    { kind: "wolf_territory", dx: 18, dy: -12, radiusTiles: 9 },
-  ] satisfies readonly (Omit<ForestAnimalZone, "x" | "y"> & { dx: number; dy: number })[],
-  landmarks: [
-    { kind: "fallen_tree",       label: "fallen tree",    dx: -6,  dy:  8 },
-    { kind: "old_stump",         label: "old stump",      dx:  7,  dy: -5 },
-    { kind: "pond",              label: "dark pond",       dx: 10,  dy:  2 },
-    { kind: "huge_dead_tree",    label: "dead tree",       dx: -14, dy: -10 },
-    { kind: "ruined_watch_post", label: "watch post",      dx:  16, dy:  8  },
-    { kind: "old_road",          label: "old road",        dx: -12, dy:  12 },
-    { kind: "burned_cart",       label: "burned cart",     dx:  12, dy: -14 },
-    { kind: "wolf_den",          label: "wolf den",        dx:  18, dy: -14 },
-    { kind: "river_crossing",    label: "river crossing",  dx:  9,  dy:  0  },
-    { kind: "deer_grazing_area", label: "grazing ground",  dx:  8,  dy:  8  },
-  ],
-  campCandidates: [
-    { dx: 4, dy: 5, radiusTiles: 3 },
-    { dx: -4, dy: 6, radiusTiles: 3 },
-  ],
-  eventPoints: [
-    { kind: "water_sign", dx: 7, dy: 2 },
-    { kind: "berry_patch", dx: 4, dy: 8 },
-    { kind: "corpse_site", dx: 15, dy: -9 },
-    { kind: "wolf_howl", dx: 18, dy: -12 },
-  ] satisfies readonly (Omit<ForestEventPoint, "x" | "y"> & { dx: number; dy: number })[],
-  guaranteedSpawns: [
-    { gatherableId: "water_source", dx: 8, dy: 2, prefix: "water" },
-    { gatherableId: "clay_deposit", dx: 7, dy: 3, prefix: "clay" },
-    { gatherableId: "clay_deposit", dx: 13, dy: 2, prefix: "clay" },
-    { gatherableId: "loose_stone_pickup", dx: -9, dy: 4, prefix: "rocky" },
-    { gatherableId: "flint_shard_pickup", dx: -8, dy: 5, prefix: "rocky" },
-    { gatherableId: "flint_shard_pickup", dx: -10, dy: 3, prefix: "rocky" },
-    { gatherableId: "berry_bush", dx: 4, dy: 8, prefix: "clearing" },
-    { gatherableId: "grass_patch", dx: 3, dy: 6, prefix: "clearing" },
-    { gatherableId: "moss_patch", dx: -7, dy: -6, prefix: "forest" },
-    { gatherableId: "bark_strip", dx: -8, dy: -7, prefix: "forest" },
-  ],
-} as const;
-
-function rel(spawnX: number, spawnY: number, p: { dx: number; dy: number }): ForestPoint {
-  return { x: spawnX + p.dx, y: spawnY + p.dy };
-}
-
 function applyFirstCampForestPass(map: MapResource, addSpawn: SpawnAdder, spawnX: number, spawnY: number): void {
   const { mapW: W, mapH: H } = map;
-  const pondX = Math.min(W - 6, spawnX + FIRST_CAMP_RELATIVE_LAYOUT.water.dx);
-  const pondY = Math.min(H - 6, spawnY + FIRST_CAMP_RELATIVE_LAYOUT.water.dy);
+  const metadata = materializeFirstCampLayout(FIRST_CAMP_RELATIVE_LAYOUT, { mapW: W, mapH: H, spawnX, spawnY });
+  const pond = metadata.waterSources[0];
+  if (!pond) return;
 
   // WHY: Milestone 2 needs a guaranteed reachable water source. The procedural
   // noise can still create water elsewhere, but this pond anchors the first loop.
-  for (let y = pondY - 1; y <= pondY + 1; y++) {
-    for (let x = pondX - 1; x <= pondX + 1; x++) {
+  for (let y = pond.y - 1; y <= pond.y + 1; y++) {
+    for (let x = pond.x - 1; x <= pond.x + 1; x++) {
       const idx = y * W + x;
       if (idx >= 0 && idx < map.cells.length) {
         map.cells[idx] = Cell.Water;
@@ -160,45 +75,12 @@ function applyFirstCampForestPass(map: MapResource, addSpawn: SpawnAdder, spawnX
     }
   }
 
-  map.forestMetadata.waterSources.push({
-    kind: FIRST_CAMP_RELATIVE_LAYOUT.water.kind,
-    x: pondX,
-    y: pondY,
-    radiusTiles: FIRST_CAMP_RELATIVE_LAYOUT.water.radiusTiles,
-  });
-  map.forestMetadata.resourceClusters.push(
-    ...FIRST_CAMP_RELATIVE_LAYOUT.resourceClusters.map((cluster) => ({
-      kind: cluster.kind,
-      ...rel(spawnX, spawnY, cluster),
-      radiusTiles: cluster.radiusTiles,
-    })),
-  );
-  map.forestMetadata.animalZones.push(
-    ...FIRST_CAMP_RELATIVE_LAYOUT.animalZones.map((zone) => ({
-      kind: zone.kind,
-      ...rel(spawnX, spawnY, zone),
-      radiusTiles: zone.radiusTiles,
-    })),
-  );
-  map.forestMetadata.landmarks.push(
-    ...FIRST_CAMP_RELATIVE_LAYOUT.landmarks.map((landmark) => ({
-      kind: landmark.kind,
-      label: landmark.label,
-      ...rel(spawnX, spawnY, landmark),
-    })),
-  );
-  map.forestMetadata.campCandidates.push(
-    ...FIRST_CAMP_RELATIVE_LAYOUT.campCandidates.map((candidate) => ({
-      ...rel(spawnX, spawnY, candidate),
-      radiusTiles: candidate.radiusTiles,
-    })),
-  );
-  map.forestMetadata.eventPoints.push(
-    ...FIRST_CAMP_RELATIVE_LAYOUT.eventPoints.map((point) => ({
-      kind: point.kind,
-      ...rel(spawnX, spawnY, point),
-    })),
-  );
+  map.forestMetadata.waterSources.push(...metadata.waterSources);
+  map.forestMetadata.resourceClusters.push(...metadata.resourceClusters);
+  map.forestMetadata.animalZones.push(...metadata.animalZones);
+  map.forestMetadata.landmarks.push(...metadata.landmarks);
+  map.forestMetadata.campCandidates.push(...metadata.campCandidates);
+  map.forestMetadata.eventPoints.push(...metadata.eventPoints);
 
   for (const spawn of FIRST_CAMP_RELATIVE_LAYOUT.guaranteedSpawns) {
     addSpawn(spawn.gatherableId, spawnX + spawn.dx, spawnY + spawn.dy, spawn.prefix);
@@ -589,6 +471,7 @@ export function spawnDecorationsSystem(
 
       const hash = (gx * 1031 + gy * 2053) & 0xffff;
       if (hash > 0xffff * 0.06) continue;
+
       const variant = ((hash % 4) + 1) as 1 | 2 | 3 | 4;
       const bush = new Sprite(getBushTexture(variant));
       bush.anchor.set(0.5, 1);

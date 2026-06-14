@@ -10,21 +10,21 @@ import {
 
 describe("transformStackItem", () => {
   it("converts the whole stack and merges into an existing target", () => {
-    const inv: Inventory = { slots: { oak_wood: { qty: 4 }, charcoal: { qty: 1 } } };
-    const next = transformStackItem(inv, "oak_wood", "charcoal");
-    expect(next.slots.oak_wood).toBeUndefined();
+    const inv: Inventory = { slots: { wood: { qty: 4 }, charcoal: { qty: 1 } } };
+    const next = transformStackItem(inv, "wood", "charcoal");
+    expect(next.slots.wood).toBeUndefined();
     expect(next.slots.charcoal).toEqual({ qty: 5 });
-    expect(inv.slots.oak_wood).toEqual({ qty: 4 }); // input untouched
+    expect(inv.slots.wood).toEqual({ qty: 4 }); // input untouched
   });
 
   it("creates the target slot when absent", () => {
-    const inv: Inventory = { slots: { oak_wood: { qty: 2 } } };
-    expect(transformStackItem(inv, "oak_wood", "charcoal").slots.charcoal).toEqual({ qty: 2 });
+    const inv: Inventory = { slots: { wood: { qty: 2 } } };
+    expect(transformStackItem(inv, "wood", "charcoal").slots.charcoal).toEqual({ qty: 2 });
   });
 
   it("is a no-op when the source is missing", () => {
     const inv: Inventory = { slots: { charcoal: { qty: 1 } } };
-    expect(transformStackItem(inv, "oak_wood", "charcoal")).toBe(inv);
+    expect(transformStackItem(inv, "wood", "charcoal")).toBe(inv);
   });
 });
 

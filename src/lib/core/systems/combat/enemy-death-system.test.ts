@@ -39,6 +39,8 @@ describe("enemy death system", () => {
         attackCooldownSec: 0,
         home: { x: 160, y: 224 },
         wanderTimerSec: 0,
+        facingX: 1,
+        animState: "idle",
       },
       health: { current: 0, max: 8, faction: "hostile", invulnTimer: 0 },
       loot: { xpReward: 4, drops: [{ itemId: "raw_meat", qty: 1 }] },

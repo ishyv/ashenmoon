@@ -1,6 +1,8 @@
 <script lang="ts">
 import { getItemDef } from "$lib/domain/items";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
+import { CRAFT_RECIPES } from "$lib/domain/crafting/recipes";
+import { analyzeResonance } from "$lib/domain/crafting/experimental";
 import type { InventoryItemView } from "./types";
 
 let {
@@ -82,6 +84,19 @@ const runicSymbols = ["🜂", "🜄", "🜁", "🜃", "🜍", "🜔"];
 function isRecipeReady(recipe: CraftRecipe): boolean {
   return canCraft(recipe);
 }
+
+const resonance = $derived(
+  selectedRecipeId === "experiment" ? analyzeResonance(experimentInputs, CRAFT_RECIPES) : null
+);
+
+const lockedRecipes = $derived(
+  CRAFT_RECIPES.filter((r) => !recipes.some((k) => k.id === r.id)).filter((r) => {
+    const def = getItemDef(r.output.itemId);
+    if (categoryFilter === "tool") return def?.category === "tool";
+    if (categoryFilter === "resource") return def?.category !== "tool";
+    return true;
+  })
+);
 </script>
 
 <div class="crafting-dual-pane">
@@ -134,15 +149,15 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
     <div class="sidebar-divider"></div>
     
     <div class="grimoire-scroll">
-      {#if filteredRecipes.length === 0}
+      {#if filteredRecipes.length === 0 && lockedRecipes.length === 0}
         <div class="sidebar-empty">no formulae discovered here.</div>
       {:else}
         <div class="medallion-grid">
           {#each filteredRecipes as recipe}
             {@const meta = getItemDef(recipe.output.itemId)}
             {@const craftable = isRecipeReady(recipe)}
-            <button 
-              class="recipe-medallion" 
+            <button
+              class="recipe-medallion"
               class:selected={selectedRecipeId === recipe.id}
               class:craftable={craftable}
               onclick={() => (selectedRecipeId = recipe.id)}
@@ -162,6 +177,14 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
               {/if}
             </button>
           {/each}
+          {#each lockedRecipes as locked (locked.id)}
+            <div class="recipe-medallion locked" title="undiscovered. experiment to reveal.">
+              <div class="medallion-inner">
+                <span class="locked-glyph">???</span>
+              </div>
+              <span class="locked-dots">{"·".repeat(locked.costs.length)}</span>
+            </div>
+          {/each}
         </div>
       {/if}
     </div>
@@ -171,7 +194,7 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   <main class="recipe-detail-pane">
     <!-- Section 1: The Alchemical Resonance Circle -->
     <div class="alchemy-workspace">
-      <div class="circle-wrapper" style="width: {centerCoord * 2}px; height: {centerCoord * 2}px; margin: 0 auto; position: relative; display: block;">
+      <div class="circle-wrapper" data-resonance={resonance?.level ?? 0} style="width: {centerCoord * 2}px; height: {centerCoord * 2}px; margin: 0 auto; position: relative; display: block;">
         
         <!-- Rotating runic boundaries -->
         <div class="runic-ring outer-ring"></div>
@@ -238,8 +261,9 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
               {@const qty = experimentInputs[itemId]}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div 
-                class="orbiting-slot experiment-slot added lift" 
+              <div
+                class="orbiting-slot experiment-slot added lift"
+                class:resonant={resonance?.relevantItemIds.has(itemId) ?? false}
                 style="left: {slotX}px; top: {slotY}px;"
                 onclick={() => removeExperimentIngredient(itemId)}
                 title="Click to remove 1 unit of {meta?.name.toLowerCase() ?? itemId}"
@@ -372,17 +396,25 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
             </button>
           </div>
 
-          <!-- Experimentation Message Display -->
+          <!-- Live Resonance Feedback -->
           {#if experimentMessage}
             {@const isSuccess = experimentMessage.toLowerCase().includes("success") || experimentMessage.toLowerCase().includes("learned") || experimentMessage.toLowerCase().includes("discovered")}
             <div class="resonance-message" class:success={isSuccess}>
               <span class="rune-sparkle">✦</span>
               <span class="message-text">{experimentMessage.toLowerCase()}</span>
             </div>
+          {:else if resonance && resonance.level > 0}
+            <div class="resonance-message" data-level={resonance.level}>
+              <span class="rune-sparkle">✦</span>
+              <span class="message-text">{resonance.hint}</span>
+            </div>
+            {#if resonance.outputCategory}
+              <p class="category-hint">feels like a {resonance.outputCategory}.</p>
+            {/if}
           {:else}
             <div class="resonance-message idle">
               <span class="rune-sparkle">✦</span>
-              <span class="message-text">crucible empty. add reagents to test mixtures.</span>
+              <span class="message-text">{experimentUniqueIds.length > 0 ? resonance?.hint ?? "the mixture is inert." : "crucible empty. add reagents to test mixtures."}</span>
             </div>
           {/if}
 
@@ -431,8 +463,8 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   /* Base Container Split */
   .crafting-dual-pane {
     display: flex;
-    width: 100%;
-    height: 22rem;
+    width: 44rem;
+    height: 26rem;
     background: rgba(8, 6, 5, 0.4);
     border-radius: 4px;
     overflow: hidden;
@@ -670,6 +702,29 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
     box-shadow: 0 0 6px var(--inv-good);
   }
 
+  .recipe-medallion.locked {
+    opacity: 0.28;
+    cursor: default;
+    border-style: dashed;
+    pointer-events: none;
+  }
+
+  .locked-glyph {
+    font-family: var(--font-mono, "IBM Plex Mono", monospace);
+    font-size: 0.6rem;
+    color: var(--inv-text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .locked-dots {
+    position: absolute;
+    bottom: -12px;
+    font-size: 0.62rem;
+    color: var(--inv-text-muted);
+    letter-spacing: 0.18em;
+    opacity: 0.6;
+  }
+
   /* Right Pane: Alchemical Circle workspace */
   .recipe-detail-pane {
     flex: 1;
@@ -695,6 +750,20 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   .circle-wrapper {
     position: relative;
     margin: 0 auto;
+    border-radius: 50%;
+    transition: box-shadow 0.4s ease;
+  }
+
+  .circle-wrapper[data-resonance="1"] {
+    box-shadow: 0 0 14px color-mix(in srgb, var(--inv-accent) 18%, transparent);
+  }
+
+  .circle-wrapper[data-resonance="2"] {
+    box-shadow: 0 0 28px color-mix(in srgb, var(--inv-accent) 40%, transparent);
+  }
+
+  .circle-wrapper[data-resonance="3"] {
+    box-shadow: 0 0 46px color-mix(in srgb, var(--inv-accent) 65%, transparent);
   }
 
   /* Runic Rings */
@@ -782,6 +851,11 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   .orbiting-slot.added:hover {
     border-color: var(--inv-danger);
     transform: scale(1.05);
+  }
+
+  .orbiting-slot.resonant {
+    border-color: var(--inv-accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--inv-accent) 35%, transparent), 0 4px 10px rgba(0, 0, 0, 0.4);
   }
 
   .orbiting-slot.empty {
@@ -1125,6 +1199,40 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
     opacity: 0.6;
   }
 
+  .resonance-message[data-level="1"] {
+    border-color: rgba(186, 157, 108, 0.15);
+  }
+
+  .resonance-message[data-level="2"] {
+    background: rgba(186, 157, 108, 0.04);
+    border-color: rgba(186, 157, 108, 0.3);
+  }
+
+  .resonance-message[data-level="2"] .message-text,
+  .resonance-message[data-level="2"] .rune-sparkle {
+    color: var(--inv-accent);
+  }
+
+  .resonance-message[data-level="3"] {
+    background: rgba(186, 157, 108, 0.07);
+    border-color: var(--inv-accent);
+  }
+
+  .resonance-message[data-level="3"] .message-text,
+  .resonance-message[data-level="3"] .rune-sparkle {
+    color: var(--inv-accent);
+  }
+
+  .category-hint {
+    font-family: "Cardo", serif;
+    font-style: italic;
+    font-size: 0.68rem;
+    color: var(--inv-text-muted);
+    opacity: 0.75;
+    margin: 0;
+    padding-left: 0.1rem;
+  }
+
   .rune-sparkle {
     font-size: 0.65rem;
     color: var(--inv-accent);
@@ -1173,15 +1281,15 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
 
   .reagents-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, 38px);
+    grid-template-columns: repeat(auto-fill, calc(38px + 1.2em));
     justify-content: start;
     gap: 0.35rem;
   }
 
   .reagent-cell {
     position: relative;
-    width: 38px;
-    height: 38px;
+    width: calc(38px + 1.2em);
+    height: calc(38px + 1.2em);
     border-radius: 4px;
     border: 1px solid var(--inv-border-muted);
     background: rgba(18, 14, 12, 0.5);

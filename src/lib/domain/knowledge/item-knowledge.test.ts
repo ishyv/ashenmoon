@@ -43,8 +43,8 @@ describe("discoverableProperties", () => {
     expect(props).not.toContain("toxicity");
   });
 
-  it("marks oak wood flammable and ghost lily perishable", () => {
-    expect(discoverableProperties(ITEM_DEFINITIONS.oak_wood!)).toContain("flammable");
+  it("marks wood flammable and ghost lily perishable", () => {
+    expect(discoverableProperties(ITEM_DEFINITIONS.wood!)).toContain("flammable");
     expect(discoverableProperties(ITEM_DEFINITIONS.ghost_lily!)).toContain("perishable");
   });
 });
@@ -73,12 +73,12 @@ describe("unlock rules", () => {
 
 describe("serialization round-trip", () => {
   it("survives serialize -> deserialize", () => {
-    const k = learn(learn(EMPTY_KNOWLEDGE, "dirty_water", "edible", "toxicity"), "oak_wood", "flammable");
+    const k = learn(learn(EMPTY_KNOWLEDGE, "dirty_water", "edible", "toxicity"), "wood", "flammable");
     const snap = serializeKnowledge(k);
-    expect(snap).toEqual({ dirty_water: ["edible", "toxicity"], oak_wood: ["flammable"] });
+    expect(snap).toEqual({ dirty_water: ["edible", "toxicity"], wood: ["flammable"] });
 
     const restored = deserializeKnowledge(snap);
     expect(hasLearned(restored, "dirty_water", "toxicity")).toBe(true);
-    expect(hasLearned(restored, "oak_wood", "flammable")).toBe(true);
+    expect(hasLearned(restored, "wood", "flammable")).toBe(true);
   });
 });

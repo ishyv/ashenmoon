@@ -22,6 +22,7 @@ import { collidesWithSolid } from "$lib/core/systems/movement/movement";
 import { type VFXResource, spawnEnvFloatingText } from "$lib/core/vfx/vfx";
 import { applyDamage, type CombatConfig, type CombatResource } from "$lib/core/systems/combat/combat";
 import { Colors } from "$lib/utils/colors";
+import { applyEntityAnim, type EntityAnimSpec } from "$lib/core/systems/animation/entity-animator";
 
 const ENEMY_HX = TILE * 0.3;
 const ENEMY_HY = TILE * 0.26;
@@ -94,20 +95,6 @@ export function makeEnemyEntity(id: string, x: number, y: number, arch: EnemyArc
   };
 }
 
-function applyEnemyAnim(
-  sprite: AnimatedSprite,
-  entity: Entity,
-  state: AnimState,
-  getEnemyFrames: (entity: Entity, state: AnimState) => Texture[]
-): void {
-  const ai = entity.ai!;
-  if (ai.animState === state) return;
-  ai.animState = state;
-  sprite.textures = getEnemyFrames(entity, state);
-  sprite.loop = state !== "attack";
-  sprite.animationSpeed = state === "attack" ? 0.22 : 0.12;
-  sprite.play();
-}
 
 /**
  * Ticks every hostile. The player is the only target. Strikes land on the player
@@ -239,8 +226,12 @@ export function enemyAiSystem(
 
     // --- render ---
     if (sprite) {
-      applyEnemyAnim(sprite, e, desiredAnim, getEnemyFrames);
-      sprite.scale.x = ai.facingX * Math.abs(sprite.scale.x);
+      const enemySpec: EntityAnimSpec<AnimState> = {
+        getFrames: (s) => getEnemyFrames(e, s),
+        speed: (s) => s === "attack" ? 0.22 : 0.12,
+        loop: (s) => s !== "attack",
+      };
+      ai.animState = applyEntityAnim(sprite, desiredAnim, ai.facingX, ai.animState, enemySpec);
       // Telegraph tint while winding up; otherwise show hit-flash i-frame tint.
       sprite.tint =
         ai.state === "windup"

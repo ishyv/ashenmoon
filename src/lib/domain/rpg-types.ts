@@ -57,6 +57,7 @@ export interface RpgPlayerState {
       type: string;
       x: number;
       y: number;
+      sourceItemId?: string;
     }[];
     gatheredPickups?: string[];
   };

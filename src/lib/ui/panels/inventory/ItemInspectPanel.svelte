@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-actions";
 import { getItemDef, reactsInto, traitOf } from "$lib/domain/items";
 import type { KnowledgeProperty } from "$lib/domain/knowledge/item-knowledge";
@@ -89,7 +89,7 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
     </section>
 
     <div class="inspect-actions">
-      {#if meta.category === "tool"}
+      {#if meta.category === "tool" || traitOf(meta, "wearable")}
         <button class="action-btn" disabled={isEquipped(itemId)} onclick={() => onEquip(itemId)}>
           {isEquipped(itemId) ? "equipped" : "equip"}
         </button>

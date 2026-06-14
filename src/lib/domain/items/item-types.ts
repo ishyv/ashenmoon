@@ -17,9 +17,16 @@ export enum Category {
   Mineral = "mineral",
   Timber = "timber",
   Tool = "tool",
+  Weapon = "weapon",
   Component = "component",
   Herb = "herb",
   Reagent = "reagent",
+  Food = "food",
+  Medicine = "medicine",
+  Fuel = "fuel_fire",
+  Container = "container",
+  Clothing = "clothing",
+  Structure = "structure",
 }
 
 /**

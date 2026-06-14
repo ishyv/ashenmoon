@@ -22,9 +22,8 @@ import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { SkillKey } from "$lib/domain/game-events";
-import { StatusId } from "$lib/domain/systems/status-types";
 import { awardSkillXp } from "$lib/state/rpg/skill-xp";
-import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
+import { applyWound } from "$lib/state/rpg/wounds.svelte";
 import { syncPickup } from "$lib/state/persistence/remote-sync";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import type { FocusedGatherSession } from "$lib/domain/gathering/focused-gather/focused-gather-types";
@@ -296,9 +295,9 @@ function finalizeAndReward(
     // Botched runs wound the gatherer (the reliably-persisted penalty;
     // tool-durability loss is deferred until a profile-save path exists).
     if (result.grade === "ruined") {
-      applyStatusEffect(StatusId.Bleeding, 15, "focused-gather");
+      applyWound({ severity: "deep_cut", contamination: 0.2, toolQuality: getEquippedWeaponId() ? 0.6 : 0, source: "focused-gather" });
     } else if (result.grade === "poor") {
-      applyStatusEffect(StatusId.Cut, 12, "focused-gather");
+      applyWound({ severity: "cut", contamination: 0.15, toolQuality: getEquippedWeaponId() ? 0.6 : 0, source: "focused-gather" });
     }
 
     const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);

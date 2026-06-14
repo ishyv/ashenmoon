@@ -1,6 +1,6 @@
-export type StationId = "campfire" | "primitive_work_surface" | "drying_rack" | "storage_pile";
+export type StationId = "campfire" | "primitive_work_surface" | "drying_rack" | "storage_pile" | "meat_smoking_rack";
 
-export type ProcessType = "heat" | "boil" | "burn" | "assemble" | "dry" | "store";
+export type ProcessType = "heat" | "boil" | "burn" | "assemble" | "dry" | "store" | "smoke";
 
 export interface StationDefinition {
   id: StationId;
@@ -37,6 +37,13 @@ export const STATION_DEFINITIONS: Record<StationId, StationDefinition> = {
     name: "Storage Pile",
     processTypes: ["store"],
     inputSlots: 0,
+  },
+  meat_smoking_rack: {
+    id: "meat_smoking_rack",
+    name: "Meat Smoking Rack",
+    processTypes: ["smoke"],
+    inputSlots: 2,
+    fuelRequired: true,
   },
 };
 

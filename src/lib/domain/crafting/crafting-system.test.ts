@@ -54,7 +54,7 @@ describe("checkCraft", () => {
   });
 
   it("enforces station context for work-surface recipes", () => {
-    const inv = slots({ stick: 1, flint_shard: 1, grass_fiber: 1 });
+    const inv = slots({ stick: 1, flint_shard: 1, grass_cord: 2 });
     expect(checkCraft(inv, "crude_knife", away)).toEqual({
       ok: false,
       reason: "requires_station",
@@ -93,11 +93,11 @@ describe("resolveCraft", () => {
   });
 
   it("stacks onto an existing output stack", () => {
-    const result = resolveCraft(slots({ oak_wood: 5, charcoal: 2 }), "charcoal", near);
+    const result = resolveCraft(slots({ wood: 5, charcoal: 2 }), "charcoal", near);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // 5 - 2 = 3 oak_wood, charcoal 2 + 1 = 3
-    expect(result.slots).toEqual({ oak_wood: { qty: 3 }, charcoal: { qty: 3 } });
+    // 5 - 2 = 3 wood, charcoal 2 + 1 = 3
+    expect(result.slots).toEqual({ wood: { qty: 3 }, charcoal: { qty: 3 } });
   });
 
   it("returns the failure unchanged when the craft is impossible", () => {

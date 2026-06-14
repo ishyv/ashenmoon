@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Thirst: the primary survival pressure. Reactive ($state) so the HUD bar
  * tracks it without polling â€” the engine ticks drain each frame (faster while
  * moving or laboring) and drinking calls `restoreThirst()`. Rates live in
@@ -16,7 +16,7 @@ import {
 } from "$lib/domain/systems/thirst-logic";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
-import { emitPlayerFeedback } from "$lib/ui/player-feedback";
+import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 
 export const thirstConfig = $state<ThirstConfig>({ ...DEFAULT_THIRST_CONFIG });

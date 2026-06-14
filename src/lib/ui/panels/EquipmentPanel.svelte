@@ -2,7 +2,7 @@
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
-import { getItemDef } from "$lib/domain/items";
+import { getItemDef, traitOf } from "$lib/domain/items";
 
 let hoveredSlot = $state<string | null>(null);
 
@@ -26,7 +26,16 @@ async function unequipTool() {
     const result = await dispatchRpgCommand({ type: "equipTool", itemId: null });
     if (!result.ok) throw new Error(result.error);
   } catch (err) {
-    console.error("Failed to unequip:", err);
+    console.error("Failed to unequip tool:", err);
+  }
+}
+
+async function unequipGear(slot: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace") {
+  try {
+    const result = await dispatchRpgCommand({ type: "equipGear", itemId: null, slot });
+    if (!result.ok) throw new Error(result.error);
+  } catch (err) {
+    console.error(`Failed to unequip ${slot}:`, err);
   }
 }
 
@@ -43,6 +52,104 @@ const weaponMeta = $derived(() => {
   const w = weapon();
   return w ? getItemDef(w.itemId) ?? null : null;
 });
+
+const helmet = $derived(() => {
+  const h = gameState.rpg.profile?.loadout?.helmet;
+  if (!h) return null;
+  if (typeof h === "string") {
+    return { itemId: h, durability: getMaxDurability(h) };
+  }
+  return h;
+});
+
+const helmetMeta = $derived(() => {
+  const h = helmet();
+  return h ? getItemDef(h.itemId) ?? null : null;
+});
+
+const chest = $derived(() => {
+  const c = gameState.rpg.profile?.loadout?.chest;
+  if (!c) return null;
+  if (typeof c === "string") {
+    return { itemId: c, durability: getMaxDurability(c) };
+  }
+  return c;
+});
+
+const chestMeta = $derived(() => {
+  const c = chest();
+  return c ? getItemDef(c.itemId) ?? null : null;
+});
+
+const boots = $derived(() => {
+  const b = gameState.rpg.profile?.loadout?.boots;
+  if (!b) return null;
+  if (typeof b === "string") {
+    return { itemId: b, durability: getMaxDurability(b) };
+  }
+  return b;
+});
+
+const bootsMeta = $derived(() => {
+  const b = boots();
+  return b ? getItemDef(b.itemId) ?? null : null;
+});
+
+const shield = $derived(() => {
+  const s = gameState.rpg.profile?.loadout?.shield;
+  if (!s) return null;
+  if (typeof s === "string") {
+    return { itemId: s, durability: getMaxDurability(s) };
+  }
+  return s;
+});
+
+const shieldMeta = $derived(() => {
+  const s = shield();
+  return s ? getItemDef(s.itemId) ?? null : null;
+});
+
+const pants = $derived(() => {
+  const p = gameState.rpg.profile?.loadout?.pants;
+  if (!p) return null;
+  if (typeof p === "string") {
+    return { itemId: p, durability: getMaxDurability(p) };
+  }
+  return p;
+});
+
+const pantsMeta = $derived(() => {
+  const p = pants();
+  return p ? getItemDef(p.itemId) ?? null : null;
+});
+
+function getActiveSlotInfo(slot: string | null) {
+  if (slot === "weapon") return { item: weapon(), meta: weaponMeta() };
+  if (slot === "helmet") return { item: helmet(), meta: helmetMeta() };
+  if (slot === "chest") return { item: chest(), meta: chestMeta() };
+  if (slot === "boots") return { item: boots(), meta: bootsMeta() };
+  if (slot === "shield") return { item: shield(), meta: shieldMeta() };
+  if (slot === "pants") return { item: pants(), meta: pantsMeta() };
+  return null;
+}
+
+const activeHoverDetail = $derived(() => {
+  if (!hoveredSlot) return null;
+  const info = getActiveSlotInfo(hoveredSlot);
+  if (!info || !info.item) return null;
+  const maxDur = getMaxDurability(info.item.itemId);
+  const pct = getDurabilityPercent(info.item.durability, maxDur);
+  const insulation = traitOf(info.meta ?? undefined, "insulation_material");
+  const armor = traitOf(info.meta ?? undefined, "armor_material");
+  return {
+    name: info.meta?.name ?? info.item.itemId,
+    durability: info.item.durability,
+    maxDurability: maxDur,
+    pct,
+    insulation: insulation?.warmth ?? 0,
+    armor: armor?.protection ?? 0,
+  };
+});
 </script>
 
 <GamePanel id="loadout" title="loadout">
@@ -50,13 +157,33 @@ const weaponMeta = $derived(() => {
     <div class="gear-slots">
       <!-- Row 1: Helmet -->
       <div class="slot-row">
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div 
-          class="slot empty" 
+          class="slot {helmet() ? 'filled' : 'empty'}" 
           role="presentation"
-          onmouseenter={() => (hoveredSlot = "head")} 
+          onclick={helmet() ? () => unequipGear("helmet") : undefined}
+          onmouseenter={() => (hoveredSlot = "helmet")} 
           onmouseleave={() => (hoveredSlot = null)}
+          title={helmet() ? "Click to unequip headgear" : ""}
         >
-          <span class="slot-placeholder">head</span>
+          {#if helmet()}
+            {@const meta = helmetMeta()}
+            {#if meta}
+              {#if meta.iconSheet}
+                {@const s = meta.iconSheet}
+                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
+              {:else if meta.iconUrl}
+                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+              {:else if meta.icon}
+                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
+              {:else}
+                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
+              {/if}
+            {/if}
+          {:else}
+            <span class="slot-placeholder">head</span>
+          {/if}
         </div>
       </div>
 
@@ -91,72 +218,159 @@ const weaponMeta = $derived(() => {
           {/if}
         </div>
 
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div 
-          class="slot empty" 
+          class="slot {chest() ? 'filled' : 'empty'}" 
           role="presentation"
+          onclick={chest() ? () => unequipGear("chest") : undefined}
           onmouseenter={() => (hoveredSlot = "chest")} 
           onmouseleave={() => (hoveredSlot = null)}
+          title={chest() ? "Click to unequip chestwear" : ""}
         >
-          <span class="slot-placeholder">body</span>
+          {#if chest()}
+            {@const meta = chestMeta()}
+            {#if meta}
+              {#if meta.iconSheet}
+                {@const s = meta.iconSheet}
+                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
+              {:else if meta.iconUrl}
+                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+              {:else if meta.icon}
+                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
+              {:else}
+                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
+              {/if}
+            {/if}
+          {:else}
+            <span class="slot-placeholder">body</span>
+          {/if}
         </div>
 
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div 
-          class="slot empty" 
+          class="slot {shield() ? 'filled' : 'empty'}" 
           role="presentation"
+          onclick={shield() ? () => unequipGear("shield") : undefined}
           onmouseenter={() => (hoveredSlot = "shield")} 
           onmouseleave={() => (hoveredSlot = null)}
+          title={shield() ? "Click to unequip guard" : ""}
         >
-          <span class="slot-placeholder">guard</span>
+          {#if shield()}
+            {@const meta = shieldMeta()}
+            {#if meta}
+              {#if meta.iconSheet}
+                {@const s = meta.iconSheet}
+                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
+              {:else if meta.iconUrl}
+                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+              {:else if meta.icon}
+                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
+              {:else}
+                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
+              {/if}
+            {/if}
+          {:else}
+            <span class="slot-placeholder">guard</span>
+          {/if}
         </div>
       </div>
 
       <!-- Row 3: Pants -->
       <div class="slot-row">
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div 
-          class="slot empty" 
+          class="slot {pants() ? 'filled' : 'empty'}" 
           role="presentation"
-          onmouseenter={() => (hoveredSlot = "legs")} 
+          onclick={pants() ? () => unequipGear("pants") : undefined}
+          onmouseenter={() => (hoveredSlot = "pants")} 
           onmouseleave={() => (hoveredSlot = null)}
+          title={pants() ? "Click to unequip legwear" : ""}
         >
-          <span class="slot-placeholder">legs</span>
+          {#if pants()}
+            {@const meta = pantsMeta()}
+            {#if meta}
+              {#if meta.iconSheet}
+                {@const s = meta.iconSheet}
+                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
+              {:else if meta.iconUrl}
+                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+              {:else if meta.icon}
+                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
+              {:else}
+                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
+              {/if}
+            {/if}
+          {:else}
+            <span class="slot-placeholder">legs</span>
+          {/if}
         </div>
       </div>
 
       <!-- Row 4: Boots -->
       <div class="slot-row">
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div 
-          class="slot empty" 
+          class="slot {boots() ? 'filled' : 'empty'}" 
           role="presentation"
-          onmouseenter={() => (hoveredSlot = "feet")} 
+          onclick={boots() ? () => unequipGear("boots") : undefined}
+          onmouseenter={() => (hoveredSlot = "boots")} 
           onmouseleave={() => (hoveredSlot = null)}
+          title={boots() ? "Click to unequip footwear" : ""}
         >
-          <span class="slot-placeholder">feet</span>
+          {#if boots()}
+            {@const meta = bootsMeta()}
+            {#if meta}
+              {#if meta.iconSheet}
+                {@const s = meta.iconSheet}
+                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
+              {:else if meta.iconUrl}
+                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
+              {:else if meta.icon}
+                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
+              {:else}
+                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
+              {/if}
+            {/if}
+          {:else}
+            <span class="slot-placeholder">feet</span>
+          {/if}
         </div>
       </div>
     </div>
 
     <!-- Durability bar & tooltip details -->
     <div class="slot-details">
-      {#if hoveredSlot === "weapon" && weapon()}
-        {@const maxDur = getMaxDurability(weapon()!.itemId)}
-        {@const pct = getDurabilityPercent(weapon()!.durability, maxDur)}
+      {#if activeHoverDetail()}
+        {@const details = activeHoverDetail()!}
         <div class="details-active">
-          <div class="item-name">{weaponMeta()?.name ?? weapon()!.itemId}</div>
+          <div class="item-name">{details.name}</div>
           <div class="durability-info">
-            <span>Durability: {weapon()!.durability} / {maxDur}</span>
-            <span style="color: {getDurabilityColor(pct)}">{Math.round(pct)}%</span>
+            <span>Durability: {details.durability} / {details.maxDurability}</span>
+            <span style="color: {getDurabilityColor(details.pct)}">{Math.round(details.pct)}%</span>
           </div>
           <div class="durability-track">
             <div 
               class="durability-fill" 
-              style="width: {pct}%; background-color: {getDurabilityColor(pct)};"
+              style="width: {details.pct}%; background-color: {getDurabilityColor(details.pct)};"
             ></div>
+          </div>
+          <div class="extra-stats" style="font-size: 0.6rem; color: rgba(255, 255, 255, 0.7); display: flex; gap: 0.8rem; margin-top: 0.2rem;">
+            {#if details.armor > 0}
+              <span>Armor: +{details.armor}</span>
+            {/if}
+            {#if details.insulation > 0}
+              <span>Warmth: +{details.insulation}</span>
+            {/if}
           </div>
           <div class="action-hint">Click slot to unequip</div>
         </div>
       {:else if hoveredSlot}
-        <div class="details-locked">
-          <span class="lock-icon">locked</span> tier 2 shelter required
+        <div class="details-locked" style="color: rgba(255, 255, 255, 0.45); font-size: 0.65rem; text-align: center;">
+          {hoveredSlot} slot is empty. equip gear from your stash.
         </div>
       {:else if weapon()}
         {@const maxDur = getMaxDurability(weapon()!.itemId)}
@@ -232,9 +446,10 @@ const weaponMeta = $derived(() => {
   }
 
   .slot.filled {
-    border-color: rgba(255, 220, 120, 0.7);
+    border-color: var(--color-primary, rgba(255, 220, 120, 0.7));
     background: rgba(255, 220, 120, 0.05);
     cursor: pointer;
+    opacity: 1;
   }
 
   .slot.filled:hover {
@@ -244,7 +459,9 @@ const weaponMeta = $derived(() => {
   }
 
   .slot-placeholder {
-    font-size: 1.3rem;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .slot-icon {
@@ -279,10 +496,6 @@ const weaponMeta = $derived(() => {
     font-size: 0.65rem;
     color: rgba(255, 255, 255, 0.35);
     text-align: center;
-  }
-
-  .lock-icon {
-    margin-right: 0.2rem;
   }
 
   .details-active {

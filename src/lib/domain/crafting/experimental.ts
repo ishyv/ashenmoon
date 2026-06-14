@@ -55,9 +55,13 @@ export function matchExperiment(
   return { recipe: exact, partial };
 }
 
+import type { RpgInventorySlot } from "$lib/domain/rpg-types";
+import { getMaterialQty } from "./crafting-system";
+
 export type ExperimentResult =
   | { readonly ok: true; readonly recipe: CraftRecipe; readonly slots: CraftSlots }
-  | { readonly ok: false; readonly reason: "no_match" | "requires_campfire" | "insufficient_materials" };
+  | { readonly ok: false; readonly reason: "no_match"; readonly slots: CraftSlots }
+  | { readonly ok: false; readonly reason: "requires_campfire" | "insufficient_materials"; readonly slots?: CraftSlots };
 
 /**
  * Attempt an experimental craft from `inputs`, drawing the actual materials from
@@ -71,7 +75,34 @@ export function resolveExperiment(
   recipes: readonly CraftRecipe[] = CRAFT_RECIPES,
 ): ExperimentResult {
   const { recipe } = matchExperiment(inputs, recipes);
-  if (!recipe) return { ok: false, reason: "no_match" };
+  if (!recipe) {
+    // Verify player actually has the ingredients in slots
+    const missing = Object.entries(inputs)
+      .map(([itemId, required]) => ({ itemId, required, have: getMaterialQty(slots, itemId) }))
+      .filter((c) => c.have < c.required);
+
+    if (missing.length > 0) {
+      return { ok: false, reason: "insufficient_materials" };
+    }
+
+    // Mismatch penalty: consume materials
+    const next: Record<string, RpgInventorySlot> = { ...slots };
+    for (const [itemId, required] of Object.entries(inputs)) {
+      const remaining = getMaterialQty(next, itemId) - required;
+      if (remaining <= 0) {
+        delete next[itemId];
+      } else {
+        next[itemId] = { qty: remaining };
+      }
+    }
+
+    // Add byproduct
+    const byproductId = ctx.isNearCampfire ? "charred_ash" : "foul_sludge";
+    const currentQty = getMaterialQty(next, byproductId);
+    next[byproductId] = { qty: currentQty + 1 };
+
+    return { ok: false, reason: "no_match", slots: next };
+  }
 
   const result = resolveCraft(slots, recipe.id, ctx);
   if (!result.ok) {
@@ -144,3 +175,107 @@ export function getExperimentHint(
   return "something is close, but the mix is wrong.";
 }
 
+export interface ResonanceAnalysis {
+  readonly level: 0 | 1 | 2 | 3;
+  readonly relevantItemIds: ReadonlySet<string>;
+  readonly partialCount: number;
+  readonly hint: string;
+  readonly outputCategory?: string;
+}
+
+const CATEGORY_LABELS: Partial<Record<string, string>> = {
+  tools: "tool",
+  structures: "structure",
+  clothing: "clothing",
+  medicine: "medicine",
+  food: "food",
+  fuel_fire: "fuel",
+  material_processing: "material",
+  survival: "survival",
+};
+
+export function analyzeResonance(
+  inputs: CraftInputs,
+  recipes: readonly CraftRecipe[] = CRAFT_RECIPES,
+): ResonanceAnalysis {
+  const inputIds = presentIds(inputs);
+
+  if (inputIds.length === 0) {
+    return { level: 0, relevantItemIds: new Set(), partialCount: 0, hint: "the mixture is inert." };
+  }
+
+  // Find all recipes that share at least one ingredient with the current inputs.
+  const partials: CraftRecipe[] = [];
+  for (const recipe of recipes) {
+    const costIds = recipe.costs.map((c) => c.itemId);
+    if (inputIds.some((id) => costIds.includes(id))) {
+      partials.push(recipe);
+    }
+  }
+
+  if (partials.length === 0) {
+    return { level: 0, relevantItemIds: new Set(), partialCount: 0, hint: "the mixture is inert." };
+  }
+
+  // Build the set of ingredient IDs that appear in any partial match.
+  const relevantItemIds = new Set<string>();
+  for (const recipe of partials) {
+    for (const c of recipe.costs) relevantItemIds.add(c.itemId);
+  }
+
+  // Find best partial: fewest extra + missing ingredients.
+  let bestRecipe: CraftRecipe | null = null;
+  let bestScore = Infinity;
+  for (const recipe of partials) {
+    const costIds = recipe.costs.map((c) => c.itemId);
+    const extra = inputIds.filter((id) => !costIds.includes(id)).length;
+    const missing = costIds.filter((id) => !inputIds.includes(id)).length;
+    const score = extra + missing;
+    if (score < bestScore) {
+      bestScore = score;
+      bestRecipe = recipe;
+    }
+  }
+
+  if (!bestRecipe) {
+    return { level: 1, relevantItemIds, partialCount: partials.length, hint: "something stirs." };
+  }
+
+  const costIds = bestRecipe.costs.map((c) => c.itemId);
+  const extra = inputIds.filter((id) => !costIds.includes(id)).length;
+  const missing = costIds.filter((id) => !inputIds.includes(id)).length;
+  const wrongQty = bestRecipe.costs.some((c) => (inputs[c.itemId] ?? 0) < c.required);
+
+  // Level 3: right ingredient IDs, only quantities off.
+  if (extra === 0 && missing === 0 && wrongQty) {
+    const cat = CATEGORY_LABELS[bestRecipe.category ?? ""] ?? bestRecipe.category;
+    return {
+      level: 3 as const,
+      relevantItemIds,
+      partialCount: partials.length,
+      hint: "the pattern is clear. add more to complete it.",
+      ...(cat !== undefined ? { outputCategory: cat } : {}),
+    };
+  }
+
+  // Level 2: no extra items, all placed belong to a recipe — just need more.
+  if (extra === 0 && missing > 0) {
+    const n = missing;
+    const cat = CATEGORY_LABELS[bestRecipe.category ?? ""] ?? bestRecipe.category;
+    return {
+      level: 2 as const,
+      relevantItemIds,
+      partialCount: partials.length,
+      hint: `you feel resonance. ${n} more ingredient${n > 1 ? "s" : ""} needed.`,
+      ...(cat !== undefined ? { outputCategory: cat } : {}),
+    };
+  }
+
+  // Level 1: has extra or mismatched items.
+  return {
+    level: 1,
+    relevantItemIds,
+    partialCount: partials.length,
+    hint: "something stirs. not all ingredients belong together.",
+  };
+}

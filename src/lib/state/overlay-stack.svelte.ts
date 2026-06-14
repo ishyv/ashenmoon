@@ -62,6 +62,7 @@ export const OverlayId = {
   Settings:  "settings",
   Scenario:  "scenario",
   Station:   "station",
+  ObjectActions: "object-actions",
 } as const;
 
 export type OverlayId = (typeof OverlayId)[keyof typeof OverlayId];

@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 import { onDestroy, onMount } from "svelte";
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
@@ -7,12 +7,12 @@ import { devFlags } from "$lib/state/dev-flags.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
 import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
 import { playSound } from "$lib/audio/audio-engine";
-import type { CraftRecipe } from "$lib/domain/crafting/recipes";
+import { type CraftRecipe, CRAFT_RECIPES } from "$lib/domain/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system";
 import { getExperimentHint, matchExperiment } from "$lib/domain/crafting/experimental";
 import { inspect as inspectKnowledge } from "$lib/state/rpg/knowledge.svelte";
 import { knownRecipeList, learnRecipe } from "$lib/state/rpg/crafting.svelte";
-import { BUILDING_SPECS } from "$lib/domain/building-specs";
+import { buildOptionsFromInventory } from "$lib/domain/building-options";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 import ItemGrid from "./inventory/ItemGrid.svelte";
 import ItemInspectPanel from "./inventory/ItemInspectPanel.svelte";
@@ -42,26 +42,21 @@ const recipes = $derived(knownRecipeList());
 const inspectNotes = $derived(selectedItem ? inspectKnowledge(selectedItem) : null);
 const stashLimit = $derived(gameState.rpg.profile?.stashSize ?? 20);
 
-const buildRecipes: BuildRecipeView[] = [
-  "campfire",
-  "storage_pile",
-  "drying_rack",
-  "primitive_work_surface",
-  "crude_shelter",
-  "marker_sign",
-].map((id) => {
-  const spec = BUILDING_SPECS[id];
-  return {
-    id,
-    name: spec?.displayName ?? id,
-    description: spec?.description ?? "",
-    costs: Object.entries(spec?.cost ?? {}).map(([itemId, required]) => ({
-      itemId,
-      name: getItemDef(itemId)?.name ?? itemId,
-      required,
+const buildRecipes = $derived<BuildRecipeView[]>(
+  buildOptionsFromInventory((gameState.rpg.inventory?.slots ?? {}) as Record<string, RpgInventorySlot>)
+    .map((option) => ({
+      id: option.buildableId,
+      sourceItemId: option.sourceItemId,
+      available: option.available,
+      name: option.name,
+      description: option.description,
+      costs: [{
+        itemId: option.sourceItemId,
+        name: option.sourceItemName,
+        required: 1,
+      }],
     })),
-  };
-});
+);
 
 $effect(() => {
   activeTab = initialTab;
@@ -92,18 +87,47 @@ function slotQty(slot: RpgInventorySlot): number {
 
 async function equipTool(itemId: string) {
   try {
-    const result = await dispatchRpgCommand({ type: "equipTool", itemId });
-    if (!result.ok) throw new Error(result.error);
-    playSound("pickup");
+    const def = getItemDef(itemId);
+    if (!def) return;
+
+    if (def.category === "tool") {
+      const result = await dispatchRpgCommand({ type: "equipTool", itemId });
+      if (!result.ok) throw new Error(result.error);
+      playSound("pickup");
+      return;
+    }
+
+    const wearable = traitOf(def, "wearable");
+    if (wearable) {
+      let slotKey: "helmet" | "chest" | "shield" | "pants" | "boots" | "ring" | "necklace" | null = null;
+      if (wearable.slot === "head") slotKey = "helmet";
+      else if (wearable.slot === "body") slotKey = "chest";
+      else if (wearable.slot === "feet") slotKey = "boots";
+      else if (wearable.slot === "hands") slotKey = "shield";
+
+      if (slotKey) {
+        const result = await dispatchRpgCommand({ type: "equipGear", itemId, slot: slotKey });
+        if (!result.ok) throw new Error(result.error);
+        playSound("pickup");
+      }
+    }
   } catch (err) {
     console.error("equip error:", err instanceof Error ? err.message : String(err));
   }
 }
 
 function isEquipped(itemId: string): boolean {
-  const weapon = gameState.rpg.profile?.loadout?.weapon;
-  if (!weapon) return false;
-  return typeof weapon === "string" ? weapon === itemId : weapon.itemId === itemId;
+  const loadout = gameState.rpg.profile?.loadout;
+  if (!loadout) return false;
+  for (const slot of Object.values(loadout)) {
+    if (!slot) continue;
+    if (typeof slot === "string") {
+      if (slot === itemId) return true;
+    } else if (slot.itemId === itemId) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const itemsList = $derived<InventoryItemView[]>(
@@ -174,7 +198,7 @@ function canCraft(recipe: CraftRecipe): boolean {
 }
 
 function canBuild(recipe: BuildRecipeView): boolean {
-  return devFlags.freeBuildingEnabled || recipe.costs.every((cost) => getMaterialQty(cost.itemId) >= cost.required);
+  return devFlags.freeBuildingEnabled || recipe.available > 0;
 }
 
 async function craftItem(recipe: CraftRecipe): Promise<void> {
@@ -199,7 +223,7 @@ async function craftItem(recipe: CraftRecipe): Promise<void> {
 
 function startBuildPlacement(recipe: BuildRecipeView): void {
   if (!canBuild(recipe)) return;
-  engine?.startBuildingPlacement(recipe.id, () => {}, onClose);
+  engine?.startBuildingPlacement(recipe.id, () => {}, onClose, recipe.sourceItemId);
 }
 
 async function runExperiment() {
@@ -209,21 +233,46 @@ async function runExperiment() {
     return;
   }
 
-  const { recipe, partial } = matchExperiment(experimentInputs);
-  if (!recipe) {
-    experimentMessage = getExperimentHint(experimentInputs, partial);
-    playSound("node.deplete");
-    return;
-  }
+  try {
+    const result = await dispatchRpgCommand({
+      type: "experiment",
+      inputs: experimentInputs,
+      context: {
+        isNearCampfire: engine?.isNearCampfire() ?? false,
+        availableStations: engine?.nearbyStationIds?.() ?? [],
+      },
+    });
 
-  if (!canCraft(recipe)) {
-    experimentMessage = recipe.requiresCampfire ? "this needs campfire heat." : "you do not have enough material.";
-    playSound("node.deplete");
-    return;
+    if (result.ok) {
+      const sync = result.data;
+      if (sync.success) {
+        playSound("craft");
+        experimentInputs = {};
+        const recipe = CRAFT_RECIPES.find((r) => r.id === sync.recipeId);
+        const name = recipe ? recipe.name.toLowerCase() : "new pattern";
+        experimentMessage = `learned ${name}.`;
+        if (sync.recipeId) {
+          learnRecipe(sync.recipeId);
+          triggerQuestEvent("craft", sync.recipeId);
+        }
+      } else {
+        playSound("node.deplete");
+        const { partial } = matchExperiment(experimentInputs);
+        experimentMessage = getExperimentHint(experimentInputs, partial);
+      }
+    } else {
+      playSound("node.deplete");
+      if (result.error === "requires_campfire") {
+        experimentMessage = "this needs campfire heat.";
+      } else if (result.error === "insufficient_materials") {
+        experimentMessage = "you do not have enough material.";
+      } else {
+        experimentMessage = result.error;
+      }
+    }
+  } catch (err) {
+    console.error("experiment error:", err);
   }
-
-  await craftItem(recipe);
-  experimentMessage = `learned ${recipe.name.toLowerCase()}.`;
 }
 </script>
 
@@ -438,4 +487,3 @@ async function runExperiment() {
     }
   }
 </style>
-

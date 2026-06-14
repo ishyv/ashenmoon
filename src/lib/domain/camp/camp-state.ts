@@ -23,7 +23,12 @@ export type CampStructureType =
   | "primitive_work_surface"
   | "drying_rack"
   | "crude_shelter"
-  | "marker_sign";
+  | "marker_sign"
+  | "storage_pile"
+  | "spike_barrier"
+  | "rain_catcher"
+  | "meat_smoking_rack"
+  | "simple_bedroll";
 
 export interface CampStructure {
   id: string;

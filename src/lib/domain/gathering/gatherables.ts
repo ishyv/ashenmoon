@@ -21,9 +21,7 @@ export type GatherableRenderKind =
   | "moss"
   | "rock_cursed"
   | "rock_cursed2"
-  | "rock_cursed3"
-  | "tree_forgotten"
-  | "prop_forgotten";
+  | "rock_cursed3";
 export type GatherableSolidKind = "none" | "tree" | "rock";
 export type GatherableSyncAction = "forest" | "mine";
 
@@ -209,7 +207,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "oak_wood", quantity: 1 }],
+    yieldTable: [{ itemId: "wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree",
     solidKind: "tree",
@@ -226,7 +224,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "spruce_wood", quantity: 1 }],
+    yieldTable: [{ itemId: "wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree_crimson",
     solidKind: "tree",
@@ -243,7 +241,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "palm_wood", quantity: 1 }],
+    yieldTable: [{ itemId: "wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree_fungal",
     solidKind: "tree",
@@ -260,7 +258,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "pine_wood", quantity: 1 }],
+    yieldTable: [{ itemId: "wood", quantity: 1 }],
     depletion: { hp: 15 },
     renderKind: "tree_frost",
     solidKind: "tree",

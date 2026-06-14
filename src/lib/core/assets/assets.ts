@@ -1,8 +1,9 @@
 /**
- * Asset manifest and loader for the Tiny Swords Free Pack.
+ * Asset manifest and loader for imported pixel-art packs.
  *
- * Single source of truth for every sprite path and frame-slicing geometry in
- * the pack. Nothing outside this module should hard-code paths or frame counts.
+ * Single source of truth for bundle composition and texture slicing. Pack-level
+ * manifests live beside this file; runtime systems should use accessors instead
+ * of hard-coding paths or frame counts.
  *
  * Usage pattern
  * -------------
@@ -30,6 +31,11 @@
 import { Assets, Rectangle, Texture } from "pixi.js";
 import type { AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import type { IconSheet } from "$lib/domain/items/item-types";
+import {
+  ANIMAL_SPRITE_SHEETS,
+  BUNDLE_NEW_ANIMALS,
+  type BasicAnimalSpriteKey,
+} from "$lib/core/assets/animal-pack-assets";
 
 const BASE = "/assets/tiny-swords";
 
@@ -49,9 +55,6 @@ export type BuildingType =
   | "house3"
   | "monastery"
   | "tower";
-
-/** Five directional pairs exposed by the Lancer (mirrored to get the other side). */
-export type LancerDir = "up" | "upRight" | "right" | "downRight" | "down";
 
 /** Tool carried by a Pawn. `null` = bare pawn with no tool. */
 export type PawnTool = "axe" | "gold" | "hammer" | "knife" | "meat" | "pickaxe" | "wood" | null;
@@ -120,14 +123,6 @@ const PAWN_TOOL_LABEL: Record<NonNullable<PawnTool>, string> = {
   meat: "Meat",
   pickaxe: "Pickaxe",
   wood: "Wood",
-};
-
-const LANCER_DIR_LABEL: Record<LancerDir, string> = {
-  up: "Up",
-  upRight: "UpRight",
-  right: "Right",
-  downRight: "DownRight",
-  down: "Down",
 };
 
 function unitDir(color: UnitColor, unitType: string, file: string): string {
@@ -287,85 +282,6 @@ export const ASSET_PATHS = {
   },
 } as const;
 
-const FARM_BASE = "/assets/farm-rpg";
-
-export const FARM_ASSET_PATHS = {
-  character: {
-    idle: `${FARM_BASE}/character/idle.png`,
-    walk: `${FARM_BASE}/character/walk.png`,
-  },
-  objects: {
-    fence: `${FARM_BASE}/objects/fence.png`,
-    house: `${FARM_BASE}/objects/house.png`,
-    interior: `${FARM_BASE}/objects/interior.png`,
-    mapleTree: `${FARM_BASE}/objects/maple-tree.png`,
-    road: `${FARM_BASE}/objects/road.png`,
-    springCrops: `${FARM_BASE}/objects/spring-crops.png`,
-    chest: `${FARM_BASE}/objects/chest.png`,
-  },
-  tilesets: {
-    spring: `${FARM_BASE}/tilesets/spring.png`,
-  },
-  animals: {
-    babyChickenYellow: `${FARM_BASE}/animals/baby-chicken-yellow.png`,
-    chickenBlondeGreen: `${FARM_BASE}/animals/chicken-blonde-green.png`,
-    chickenRed: `${FARM_BASE}/animals/chicken-red.png`,
-    cowBrownFemale: `${FARM_BASE}/animals/cow-brown-female.png`,
-    cowBrownMale: `${FARM_BASE}/animals/cow-brown-male.png`,
-  },
-} as const;
-
-export const BUNDLE_FARM_RPG: string[] = [
-  FARM_ASSET_PATHS.character.idle,
-  FARM_ASSET_PATHS.character.walk,
-  FARM_ASSET_PATHS.objects.fence,
-  FARM_ASSET_PATHS.objects.house,
-  FARM_ASSET_PATHS.objects.interior,
-  FARM_ASSET_PATHS.objects.mapleTree,
-  FARM_ASSET_PATHS.objects.road,
-  FARM_ASSET_PATHS.objects.springCrops,
-  FARM_ASSET_PATHS.objects.chest,
-  FARM_ASSET_PATHS.tilesets.spring,
-  FARM_ASSET_PATHS.animals.babyChickenYellow,
-  FARM_ASSET_PATHS.animals.chickenBlondeGreen,
-  FARM_ASSET_PATHS.animals.chickenRed,
-  FARM_ASSET_PATHS.animals.cowBrownFemale,
-  FARM_ASSET_PATHS.animals.cowBrownMale,
-];
-
-const FORGOTTEN_BASE = "/assets/forgotten-memories";
-
-export const FORGOTTEN_ASSET_PATHS = {
-  props: `${FORGOTTEN_BASE}/props.png`,
-  tileset: `${FORGOTTEN_BASE}/tileset.png`,
-  trees: `${FORGOTTEN_BASE}/trees.png`,
-  treesSeparated: `${FORGOTTEN_BASE}/trees-separated.png`,
-  waterTiles: `${FORGOTTEN_BASE}/water-tiles.png`,
-} as const;
-
-export const BUNDLE_FORGOTTEN_MEMORIES: string[] = Object.values(FORGOTTEN_ASSET_PATHS);
-
-const ANIMAL_BASE = "/assets/animals";
-
-export const NEW_ANIMAL_PATHS = {
-  chicken: `${ANIMAL_BASE}/chicken.png`,
-  crab: `${ANIMAL_BASE}/crab.png`,
-  toad: `${ANIMAL_BASE}/toad.png`,
-  pig: `${ANIMAL_BASE}/pig.png`,
-  goose: `${ANIMAL_BASE}/goose.png`,
-  frog: `${ANIMAL_BASE}/frog.png`,
-  boar: `${ANIMAL_BASE}/boar.png`,
-  cat: `${ANIMAL_BASE}/cat.png`,
-  sheep: `${ANIMAL_BASE}/sheep.png`,
-  turtle: `${ANIMAL_BASE}/turtle.png`,
-  fox: `${ANIMAL_BASE}/fox.png`,
-  porcupine: `${ANIMAL_BASE}/porcupine.png`,
-  skunk: `${ANIMAL_BASE}/skunk.png`,
-  wolf: `${ANIMAL_BASE}/wolf.png`,
-  chick: `${ANIMAL_BASE}/chick.png`,
-} as const;
-
-export const BUNDLE_NEW_ANIMALS: string[] = Object.values(NEW_ANIMAL_PATHS);
 
 const ICONS32_PATH = "/assets/icons-32/icons.png";
 export const BUNDLE_ICONS32 = [ICONS32_PATH];
@@ -392,9 +308,7 @@ export const BUNDLE_CORE = [
   ...ASSET_PATHS.decorations.rocks,
   ASSET_PATHS.particles.fire1,
   ASSET_PATHS.decorations.rubberDuck,
-  ...BUNDLE_FARM_RPG,
   ...BUNDLE_NEW_ANIMALS,
-  ...BUNDLE_FORGOTTEN_MEMORIES,
   ...BUNDLE_ICONS32,
 ];
 
@@ -407,46 +321,6 @@ export const BUNDLE_WARRIORS: string[] = (
   unitDir(c, "Warrior", "Warrior_Attack1.png"),
   unitDir(c, "Warrior", "Warrior_Attack2.png"),
   unitDir(c, "Warrior", "Warrior_Guard.png"),
-]);
-
-/** All archer sprites for every color. */
-export const BUNDLE_ARCHERS: string[] = (
-  ["blue", "black", "red", "purple", "yellow"] as UnitColor[]
-).flatMap((c) => [
-  unitDir(c, "Archer", "Archer_Idle.png"),
-  unitDir(c, "Archer", "Archer_Run.png"),
-  unitDir(c, "Archer", "Archer_Shoot.png"),
-  unitDir(c, "Archer", "Arrow.png"),
-]);
-
-/** All lancer sprites for every color and direction. */
-export const BUNDLE_LANCERS: string[] = (
-  ["blue", "black", "red", "purple", "yellow"] as UnitColor[]
-).flatMap((c) =>
-  [
-    "Lancer_Idle.png",
-    "Lancer_Run.png",
-    "Lancer_Up_Attack.png",
-    "Lancer_Up_Defence.png",
-    "Lancer_UpRight_Attack.png",
-    "Lancer_UpRight_Defence.png",
-    "Lancer_Right_Attack.png",
-    "Lancer_Right_Defence.png",
-    "Lancer_DownRight_Attack.png",
-    "Lancer_DownRight_Defence.png",
-    "Lancer_Down_Attack.png",
-    "Lancer_Down_Defence.png",
-  ].map((f) => unitDir(c, "Lancer", f)),
-);
-
-/** All monk sprites for every color. */
-export const BUNDLE_MONKS: string[] = (
-  ["blue", "black", "red", "purple", "yellow"] as UnitColor[]
-).flatMap((c) => [
-  unitDir(c, "Monk", "Idle.png"),
-  unitDir(c, "Monk", "Run.png"),
-  unitDir(c, "Monk", "Heal.png"),
-  unitDir(c, "Monk", "Heal_Effect.png"),
 ]);
 
 /** All buildings for every color and type. */
@@ -782,86 +656,6 @@ export function getWarriorFrames(anim: WarriorAnimKey, color: UnitColor = "blue"
 }
 
 // ---------------------------------------------------------------------------
-// Archers — all colors
-// ---------------------------------------------------------------------------
-
-/**
- * Archer animation frames. Require `await loadAssets(BUNDLE_ARCHERS)`.
- */
-export function getArcherFrames(
-  anim: "idle" | "run" | "shoot",
-  color: UnitColor = "blue",
-): Texture[] {
-  const file = {
-    idle: "Archer_Idle.png",
-    run: "Archer_Run.png",
-    shoot: "Archer_Shoot.png",
-  }[anim];
-  return cachedSheet(unitDir(color, "Archer", file), UNIT_FRAME, UNIT_FRAME);
-}
-
-/** Single-frame arrow projectile sprite. */
-export function getArrowTexture(color: UnitColor = "blue"): Texture {
-  return cachedTexture(unitDir(color, "Archer", "Arrow.png"));
-}
-
-// ---------------------------------------------------------------------------
-// Lancers — all colors and directions
-// ---------------------------------------------------------------------------
-
-function lancerFile(anim: "idle" | "run"): string;
-function lancerFile(anim: "attack" | "defence", dir: LancerDir): string;
-function lancerFile(anim: "idle" | "run" | "attack" | "defence", dir?: LancerDir): string {
-  if (anim === "idle") return "Lancer_Idle.png";
-  if (anim === "run") return "Lancer_Run.png";
-  const dirLabel = LANCER_DIR_LABEL[dir!];
-  const actionLabel = anim === "attack" ? "Attack" : "Defence";
-  return `Lancer_${dirLabel}_${actionLabel}.png`;
-}
-
-/** Lancer idle/run animation frames. Require `await loadAssets(BUNDLE_LANCERS)`. */
-export function getLancerFrames(anim: "idle" | "run", color?: UnitColor): Texture[];
-/** Lancer directional attack or defence frames. */
-export function getLancerFrames(
-  anim: "attack" | "defence",
-  color: UnitColor,
-  dir: LancerDir,
-): Texture[];
-export function getLancerFrames(
-  anim: "idle" | "run" | "attack" | "defence",
-  color: UnitColor = "blue",
-  dir?: LancerDir,
-): Texture[] {
-  const file =
-    anim === "idle" || anim === "run"
-      ? lancerFile(anim)
-      : lancerFile(anim as "attack" | "defence", dir!);
-  return cachedSheet(unitDir(color, "Lancer", file), UNIT_FRAME, UNIT_FRAME);
-}
-
-// ---------------------------------------------------------------------------
-// Monks — all colors
-// ---------------------------------------------------------------------------
-
-/**
- * Monk animation frames.
- * Note: Monk files lack the "Monk_" prefix (Idle.png, Run.png, Heal.png).
- * Require `await loadAssets(BUNDLE_MONKS)`.
- */
-export function getMonkFrames(
-  anim: "idle" | "run" | "heal",
-  color: UnitColor = "blue",
-): Texture[] {
-  const file = { idle: "Idle.png", run: "Run.png", heal: "Heal.png" }[anim];
-  return cachedSheet(unitDir(color, "Monk", file), UNIT_FRAME, UNIT_FRAME);
-}
-
-/** Heal effect overlay frames (the healing sparkle, not the monk itself). */
-export function getMonkHealEffectFrames(color: UnitColor = "blue"): Texture[] {
-  return cachedSheet(unitDir(color, "Monk", "Heal_Effect.png"), UNIT_FRAME, UNIT_FRAME);
-}
-
-// ---------------------------------------------------------------------------
 // Pawns — all colors and tool variants
 // ---------------------------------------------------------------------------
 
@@ -1046,102 +840,21 @@ export function getSheepFrames(anim: "idle" | "move" | "grass"): Texture[] {
   return cachedSheet(path, SHEEP_FRAME, SHEEP_FRAME);
 }
 
-/**
- * Unified getter for all animal frames (new 16x16 anim sheets).
- */
-export function getAnimalFrames(
-  speciesId: AnimalSpeciesId | "sheep",
-  anim: "idle" | "walk" | "eat",
-): Texture[] | null {
-  if (speciesId === "sheep") {
-    return cachedSheet(NEW_ANIMAL_PATHS.sheep, 16, 16);
-  }
+type AnimalFrameSource = { readonly kind: "basic-animal"; readonly key: BasicAnimalSpriteKey } | null;
 
-  if (speciesId === "rabbit") {
-    // mapped to Yellow Chick
-    return getFarmAnimalFrames("babyChickenYellow", anim);
-  }
+export const ANIMAL_FRAME_SOURCES: Record<AnimalSpeciesId, AnimalFrameSource> = {
+  rabbit: { kind: "basic-animal", key: "chick" },
+  deer: null, // no sprite yet; falls back to silhouette in createAnimalSprite
+  boar: { kind: "basic-animal", key: "boar" },
+  wolf: { kind: "basic-animal", key: "wolf" },
+};
 
-  if (speciesId === "deer") {
-    // mapped to Female Brown Cow
-    return getFarmAnimalFrames("cowBrownFemale", anim);
-  }
-
-  if (speciesId === "boar") {
-    // mapped to Mad Boar (4 frames, 16x16)
-    return cachedSheet(NEW_ANIMAL_PATHS.boar, 16, 16);
-  }
-
-  if (speciesId === "wolf") {
-    // mapped to Timber Wolf (4 frames, 16x16)
-    return cachedSheet(NEW_ANIMAL_PATHS.wolf, 16, 16);
-  }
-
-  return null;
-}
-
-export function getFarmAnimalFrames(
-  key: keyof typeof FARM_ASSET_PATHS.animals,
-  anim: "idle" | "walk" | "eat",
-): Texture[] {
-  const path = FARM_ASSET_PATHS.animals[key];
-  const isCow = key.startsWith("cow");
-  const size = isCow ? 32 : 16;
-  // Row 0 is standard down/facing idle animation
-  return cachedGridSheet(path, size, size, 0, 4);
-}
-
-export function getForgottenTreeTexture(col = 0, row = 0): Texture {
-  return cachedGridSheet(FORGOTTEN_ASSET_PATHS.trees, 256, 256, row, 4)[col]!;
-}
-
-export function getForgottenPropTexture(col = 0, row = 0): Texture {
-  return cachedGridSheet(FORGOTTEN_ASSET_PATHS.props, 64, 64, row, 16)[col]!;
-}
-
-export function getForgottenTileTexture(col = 0, row = 0): Texture {
-  return cachedGridSheet(FORGOTTEN_ASSET_PATHS.tileset, 64, 64, row, 32)[col]!;
-}
-
-export function getForgottenWaterFrames(): Texture[] {
-  const path = FORGOTTEN_ASSET_PATHS.waterTiles;
-  const frames: Texture[] = [];
-  const frameW = 341;
-  const frameH = 341;
-  for (let r = 0; r < 2; r++) {
-    for (let c = 0; c < 3; c++) {
-      if (frames.length < 6) {
-        frames.push(cachedGridSheet(path, frameW, frameH, r, 3)[c]!);
-      }
-    }
-  }
-  return frames;
-}
-
-/**
- * Character animation frames sliced from the 2D grid spritesheets.
- * Idle sheet is 4x3 (32x32 tiles, columns=4, rows=3).
- * Walk sheet is 6x3 (32x32 tiles, columns=6, rows=3).
- * Directions: row 0 = down, row 1 = right, row 2 = up.
- */
-export function getFarmCharacterFrames(
-  anim: "idle" | "walk",
-  dir: "down" | "right" | "up",
-): Texture[] {
-  const isWalk = anim === "walk";
-  const path = isWalk ? FARM_ASSET_PATHS.character.walk : FARM_ASSET_PATHS.character.idle;
-  const frameSize = 32;
-  const cols = isWalk ? 6 : 4;
-  const row = dir === "right" ? 1 : dir === "up" ? 2 : 0;
-  return cachedGridSheet(path, frameSize, frameSize, row, cols);
-}
-
-export function getFarmObjectTexture(name: keyof typeof FARM_ASSET_PATHS.objects): Texture {
-  return cachedTexture(FARM_ASSET_PATHS.objects[name]);
-}
-
-export function getFarmTilesetTexture(): Texture {
-  return cachedTexture(FARM_ASSET_PATHS.tilesets.spring);
+/** Unified getter for animal animation frames. Returns [] when no sprite is mapped (silhouette fallback). */
+export function getAnimalFrames(speciesId: AnimalSpeciesId, _anim: string): Texture[] {
+  const source = ANIMAL_FRAME_SOURCES[speciesId];
+  if (!source) return [];
+  const sheet = ANIMAL_SPRITE_SHEETS[source.key];
+  return cachedGridSheet(sheet.path, sheet.frameSize, sheet.frameSize, 0, sheet.columns);
 }
 
 /** Tool icon sprite (icon, not a spritesheet). Tool 1–4. Require BUNDLE_RESOURCES. */
