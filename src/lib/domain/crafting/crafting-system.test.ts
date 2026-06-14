@@ -19,7 +19,7 @@ describe("recipe definitions", () => {
   it("flag unknown item ids", () => {
     const bad = [
       { id: "ghost", name: "Ghost", description: "", costs: [{ itemId: "nope", name: "Nope", required: 1 }], output: { itemId: "ghost", qty: 1 } },
-    ];
+    ] as any;
     const problems = validateCraftRecipes(bad, new Set(["ghost"]));
     expect(problems).toContain("recipe ghost cost references unknown item: nope");
   });

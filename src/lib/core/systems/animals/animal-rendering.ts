@@ -12,7 +12,7 @@ interface AnimalRenderSpec {
   readonly spriteScale: number;
 }
 
-const ANIMAL_RENDER_SPECS = {
+export const ANIMAL_RENDER_SPECS = {
   rabbit: { fallbackColor: 0xd8d1bd, fallbackWidthPx: 20, fallbackHeightPx: 12, spriteScale: 1.5 },
   deer: { fallbackColor: 0x9b6b3e, fallbackWidthPx: 34, fallbackHeightPx: 22, spriteScale: 1.75 },
   boar: { fallbackColor: 0x5b463a, fallbackWidthPx: 32, fallbackHeightPx: 20, spriteScale: 2 },
@@ -61,38 +61,37 @@ export function createAnimalSprite(speciesId: AnimalSpeciesId, x: number, y: num
 // Animation specs — one per species, used by animal-ecology-system each tick
 // ---------------------------------------------------------------------------
 
-export type AnimalAnimState = "idle" | "walk" | "eat";
+export type AnimalAnimState = "idle" | "walk" | "eat" | "attack";
 
 /** Maps behavior state to the animation key the spec should play. */
 export function behaviorToAnimState(b: AnimalBehaviorState): AnimalAnimState {
   if (b === "graze" || b === "eat") return "eat";
-  if (b === "wander" || b === "flee" || b === "attack" || b === "hunt") return "walk";
+  if (b === "attack" || b === "hunt" || b === "charge") return "attack";
+  if (b === "alert" || b === "rest") return "idle";
+  if (b === "wander" || b === "flee" || b === "curious") return "walk";
   return "idle";
 }
 
 export const ANIMAL_ANIM_SPECS: Record<AnimalSpeciesId, EntityAnimSpec<AnimalAnimState>> = {
   rabbit: {
-    getFrames: (s) => getAnimalFrames("rabbit", s),
-    speed: () => 0.14,
+    // "attack" reuses walk frames at higher speed (no separate attack sheet)
+    getFrames: (s) => getAnimalFrames("rabbit", s === "attack" ? "walk" : s),
+    speed: (s) => s === "attack" ? 0.22 : 0.14,
     loop: () => true,
-    naturalFacing: -1,
   },
   deer: {
-    getFrames: (s) => getAnimalFrames("deer", s),
-    speed: (s) => s === "walk" ? 0.16 : 0.10,
+    getFrames: (s) => getAnimalFrames("deer", s === "attack" ? "walk" : s),
+    speed: (s) => s === "attack" ? 0.26 : s === "walk" ? 0.16 : 0.10,
     loop: () => true,
-    naturalFacing: -1,
   },
   boar: {
-    getFrames: (s) => getAnimalFrames("boar", s),
-    speed: (s) => s === "walk" ? 0.20 : 0.10,
+    getFrames: (s) => getAnimalFrames("boar", s === "attack" ? "walk" : s),
+    speed: (s) => s === "attack" ? 0.30 : s === "walk" ? 0.20 : 0.10,
     loop: () => true,
-    naturalFacing: -1,
   },
   wolf: {
-    getFrames: (s) => getAnimalFrames("wolf", s),
-    speed: (s) => s === "walk" ? 0.22 : 0.10,
+    getFrames: (s) => getAnimalFrames("wolf", s === "attack" ? "walk" : s),
+    speed: (s) => s === "attack" ? 0.35 : s === "walk" ? 0.22 : 0.10,
     loop: () => true,
-    naturalFacing: -1,
   },
 };

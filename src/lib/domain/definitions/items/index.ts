@@ -6,11 +6,13 @@ import { toolWeaponItems } from "./tools-weapons";
 import { clothingItems } from "./clothing";
 import { structureItems } from "./structures";
 
-export const allItemDefinitions: Record<string, ItemDefinition> = {
+export const allItemDefinitions = {
   ...materialItems,
   ...foodWaterItems,
   ...medicineItems,
   ...toolWeaponItems,
   ...clothingItems,
   ...structureItems,
-};
+} satisfies Record<string, ItemDefinition>;
+
+export type ValidItemId = keyof typeof allItemDefinitions;

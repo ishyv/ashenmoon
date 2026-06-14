@@ -1,3 +1,5 @@
+// TODO: I've never seem this working while manually testing, likely this doesn't works.
+ 
 export type TreeFallDirection = "north" | "south" | "east" | "west";
 
 export interface Point {

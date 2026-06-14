@@ -74,7 +74,12 @@ describe("weatherOverlaySystem warmth integration", () => {
     weather.state.timeOfDay = 0.9; // Nighttime
     weather.coldAccumulator = 0;
 
-    const dummyOverlay = { alpha: 0 } as any;
+    const dummyOverlay = {
+      alpha: 0,
+      clear: function() { return this; },
+      rect: function() { return this; },
+      fill: function() { return this; },
+    } as any;
     const dummyContainer = { tint: 0xffffff } as any;
     const shelterColdMult = () => 1.0;
 

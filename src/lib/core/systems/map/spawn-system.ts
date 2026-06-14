@@ -91,6 +91,8 @@ export function spawnAnimal(
       wanderTimerSec: 0,
       facingX: 1,
       animState: "idle",
+      awarenessLevel: "unaware",
+      awarenessDecaySec: 0,
     },
     mover: { speed: def.moveSpeed },
     knockback: { vx: 0, vy: 0, timer: 0 },

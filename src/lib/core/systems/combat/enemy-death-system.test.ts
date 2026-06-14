@@ -20,6 +20,14 @@ vi.mock("$lib/state/rpg/stats.svelte", () => ({
   awardCharacterXp: vi.fn(() => 0),
 }));
 
+vi.mock("$lib/core/assets/assets", async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>;
+  return {
+    ...actual,
+    getAnimalFrames: vi.fn(() => []),
+  };
+});
+
 function clearWorld(): void {
   for (const entity of [...world.entities]) world.remove(entity);
 }
@@ -27,7 +35,7 @@ function clearWorld(): void {
 describe("enemy death system", () => {
   beforeEach(clearWorld);
 
-  it("turns dead animals into carcass entities instead of instant material drops", () => {
+  it("begins death-fade on animals instead of instantly spawning a carcass", () => {
     const animal: Entity = {
       id: "animal_rabbit_1",
       position: { x: 128, y: 192, targetX: 128, targetY: 192 },
@@ -41,11 +49,12 @@ describe("enemy death system", () => {
         wanderTimerSec: 0,
         facingX: 1,
         animState: "idle",
+        awarenessLevel: "unaware",
+        awarenessDecaySec: 0,
       },
       health: { current: 0, max: 8, faction: "hostile", invulnTimer: 0 },
       loot: { xpReward: 4, drops: [{ itemId: "raw_meat", qty: 1 }] },
     };
-    const removedSprite = { destroy: vi.fn() };
     world.add(animal);
 
     const vfx = {
@@ -59,19 +68,18 @@ describe("enemy death system", () => {
       animal,
       vfx as any,
       { addChild: vi.fn(), removeChild: vi.fn() } as any,
-      new Map([["animal_rabbit_1", removedSprite as any]]),
+      new Map([["animal_rabbit_1", { destroy: vi.fn() } as any]]),
       new Map(),
       { x: 0, y: 0 },
     );
 
-    expect(world.entities.some((entity) => entity.id === "animal_rabbit_1")).toBe(false);
-    const carcasses = world.with("carcass", "interactable").entities;
-    expect(carcasses).toHaveLength(1);
-    expect(carcasses[0]?.carcass).toMatchObject({
-      speciesId: "rabbit",
-      state: "fresh",
-      processedActions: [],
-    });
+    // Entity must stay alive — ecology system fades and despawns it.
+    expect(world.entities.some((entity) => entity.id === "animal_rabbit_1")).toBe(true);
+    // dyingSec is set — sprite sync lerps alpha to 0 over this window.
+    expect(animal.animal?.dyingSec).toBeCloseTo(0.8);
+    // No carcass yet — ecology system spawns it when dyingSec reaches 0.
+    expect(world.with("carcass", "interactable").entities).toHaveLength(0);
+    // No item drops — animals never drop loot directly.
     expect(world.with("pickup").entities).toHaveLength(0);
   });
 });

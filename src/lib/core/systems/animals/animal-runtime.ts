@@ -8,15 +8,20 @@ export function animalCenter(entity: Entity): { x: number; y: number } {
 }
 
 export function animalCenterRuntime(entity: Entity): AnimalRuntime {
-  return {
+  const animal = entity.animal!;
+  const center = animalCenter(entity);
+  const runtime: AnimalRuntime = {
     id: entity.id,
-    speciesId: entity.animal!.speciesId,
-    x: animalCenter(entity).x,
-    y: animalCenter(entity).y,
-    behavior: entity.animal!.behavior,
-    hunger: entity.animal!.hunger,
-    threatened: entity.animal!.threatened,
-    attackCooldownSec: entity.animal!.attackCooldownSec,
-    health: entity.health?.current ?? ANIMAL_DEFINITIONS[entity.animal!.speciesId].maxHealth,
+    speciesId: animal.speciesId,
+    x: center.x,
+    y: center.y,
+    behavior: animal.behavior,
+    hunger: animal.hunger,
+    threatened: animal.threatened,
+    attackCooldownSec: animal.attackCooldownSec,
+    health: entity.health?.current ?? ANIMAL_DEFINITIONS[animal.speciesId].maxHealth,
+    awarenessLevel: animal.awarenessLevel,
   };
+  if (animal.huntTargetId !== undefined) runtime.huntTargetId = animal.huntTargetId;
+  return runtime;
 }

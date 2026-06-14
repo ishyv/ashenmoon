@@ -14,7 +14,6 @@ import { playSound } from "$lib/audio/audio-engine";
 import { despawnEntity } from "$lib/core/systems/combat/combat";
 import { TILE } from "$lib/core/systems/map/map";
 import { spawnItemDrop } from "$lib/core/systems/map/spawn-system";
-import { spawnCarcassEntity } from "$lib/core/systems/animals/carcass-runtime";
 
 /**
  * Handles kill resolution after shared combat reports an entity dead.
@@ -55,14 +54,10 @@ export function handleEnemyDeathSystem(
   playSound("enemy.death", pos ? { position: { x: pos.x + TILE / 2, y: pos.y + TILE / 2 } } : {});
 
   if (pos && enemy.animal) {
-    spawnCarcassEntity({
-      sourceEntityId: enemy.id,
-      speciesId: enemy.animal.speciesId,
-      x: pos.x,
-      y: pos.y,
-      entityLayer,
-      entitySprites,
-    });
+    // Begin death-fade — ecology system ticks dyingSec, spawns carcass, and despawns.
+    enemy.animal.dyingSec = 0.8;
+    enemyColors.delete(enemy.id);
+    return;
   } else if (pos && enemy.loot?.drops) {
     for (const drop of enemy.loot.drops) {
       spawnItemDrop(drop.itemId, drop.qty, pos.x, pos.y, entityLayer, entitySprites);

@@ -47,7 +47,7 @@ export function matchExperiment(
       exact = recipe;
       break;
     }
-    if (inputIds.some((id) => costIds.includes(id))) {
+    if (inputIds.some((id) => (costIds as readonly string[]).includes(id))) {
       partial.push(recipe);
     }
   }
@@ -152,7 +152,7 @@ export function getExperimentHint(
 
   if (bestRecipe && maxShared > 0) {
     const costIds = bestRecipe.costs.map((c) => c.itemId);
-    const extraItems = inputKeys.filter((id) => !costIds.includes(id));
+    const extraItems = inputKeys.filter((id) => !(costIds as readonly string[]).includes(id));
     const missingItems = costIds.filter((id) => !inputKeys.includes(id));
 
     if (extraItems.length > 0 && missingItems.length === 0) {
@@ -208,7 +208,7 @@ export function analyzeResonance(
   const partials: CraftRecipe[] = [];
   for (const recipe of recipes) {
     const costIds = recipe.costs.map((c) => c.itemId);
-    if (inputIds.some((id) => costIds.includes(id))) {
+    if (inputIds.some((id) => (costIds as readonly string[]).includes(id))) {
       partials.push(recipe);
     }
   }
@@ -228,7 +228,7 @@ export function analyzeResonance(
   let bestScore = Infinity;
   for (const recipe of partials) {
     const costIds = recipe.costs.map((c) => c.itemId);
-    const extra = inputIds.filter((id) => !costIds.includes(id)).length;
+    const extra = inputIds.filter((id) => !(costIds as readonly string[]).includes(id)).length;
     const missing = costIds.filter((id) => !inputIds.includes(id)).length;
     const score = extra + missing;
     if (score < bestScore) {
@@ -242,7 +242,7 @@ export function analyzeResonance(
   }
 
   const costIds = bestRecipe.costs.map((c) => c.itemId);
-  const extra = inputIds.filter((id) => !costIds.includes(id)).length;
+  const extra = inputIds.filter((id) => !(costIds as readonly string[]).includes(id)).length;
   const missing = costIds.filter((id) => !inputIds.includes(id)).length;
   const wrongQty = bestRecipe.costs.some((c) => (inputs[c.itemId] ?? 0) < c.required);
 

@@ -1,4 +1,5 @@
 import type { ProcessType, StationId } from "$lib/domain/stations";
+import type { ValidItemId } from "$lib/domain/definitions/items";
 
 export type CraftingCategory =
   | "survival"
@@ -16,7 +17,7 @@ export type CraftingContextId = "hand" | "campfire" | "placement" | "meat_smokin
 
 /** A single material requirement for a recipe. `itemId` is an inventory slot key. */
 export interface RecipeCost {
-  readonly itemId: string;
+  readonly itemId: ValidItemId;
   /** Display label for the cost line (HUD copy). */
   readonly name: string;
   readonly required: number;
@@ -38,7 +39,7 @@ export interface CraftRecipe {
   readonly requiresCampfire?: boolean;
   readonly costs: readonly RecipeCost[];
   /** What the craft yields. Defaults to one unit of an item sharing the recipe id. */
-  readonly output: { readonly itemId: string; readonly qty: number };
+  readonly output: { readonly itemId: ValidItemId; readonly qty: number };
 }
 
 /** Recipe input shape before defaults are applied. */
@@ -46,5 +47,5 @@ export type RecipeInput = Omit<CraftRecipe, "category" | "discoverable" | "feedb
   readonly category?: CraftingCategory;
   readonly discoverable?: boolean;
   readonly feedbackTags?: readonly string[];
-  readonly output?: { readonly itemId: string; readonly qty: number };
+  readonly output?: { readonly itemId: ValidItemId; readonly qty: number };
 };

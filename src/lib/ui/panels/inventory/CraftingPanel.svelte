@@ -36,6 +36,7 @@ let {
 // Grimoire recipe book state
 let selectedRecipeId = $state<string>("experiment");
 let categoryFilter = $state<"all" | "tool" | "resource">("all");
+let craftingSearchQuery = $state("");
 
 const selectedRecipe = $derived(
   selectedRecipeId === "experiment"
@@ -47,6 +48,9 @@ const selectedRecipe = $derived(
 const filteredRecipes = $derived(
   recipes.filter((r) => {
     const def = getItemDef(r.output.itemId);
+    const matchesSearch = r.name.toLowerCase().includes(craftingSearchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
     if (categoryFilter === "tool") return def?.category === "tool";
     if (categoryFilter === "resource") return def?.category !== "tool";
     return true;
@@ -92,6 +96,9 @@ const resonance = $derived(
 const lockedRecipes = $derived(
   CRAFT_RECIPES.filter((r) => !recipes.some((k) => k.id === r.id)).filter((r) => {
     const def = getItemDef(r.output.itemId);
+    const matchesSearch = r.name.toLowerCase().includes(craftingSearchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
     if (categoryFilter === "tool") return def?.category === "tool";
     if (categoryFilter === "resource") return def?.category !== "tool";
     return true;
@@ -130,6 +137,15 @@ const lockedRecipes = $derived(
           mats
         </button>
       </div>
+    </div>
+
+    <div class="crafting-search-container">
+      <input
+        type="text"
+        bind:value={craftingSearchQuery}
+        placeholder="filter formulae..."
+        class="crafting-search-input"
+      />
     </div>
 
     <!-- Switch to experimentation mode (Crucible) -->
@@ -1349,5 +1365,27 @@ const lockedRecipes = $derived(
     border-radius: 2px;
     border: 1px solid var(--inv-border-muted);
     text-shadow: 0 1px 1px black;
+  }
+
+  .crafting-search-container {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--medallion-border-muted, rgba(255, 255, 255, 0.08));
+  }
+
+  .crafting-search-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--medallion-border-muted, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.45rem;
+    outline: none;
+    transition: border-color 0.1s;
+  }
+
+  .crafting-search-input:focus {
+    border-color: var(--inv-border, #d9c5b2);
   }
 </style>

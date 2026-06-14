@@ -136,6 +136,16 @@ const itemsList = $derived<InventoryItemView[]>(
     .filter((item) => item.qty > 0),
 );
 
+let searchQuery = $state("");
+
+const filteredItemsList = $derived<InventoryItemView[]>(
+  itemsList.filter((item) => {
+    const def = getItemDef(item.itemId);
+    if (!def) return false;
+    return def.name.toLowerCase().includes(searchQuery.toLowerCase());
+  })
+);
+
 $effect(() => {
   for (const item of itemsList) {
     if (traitOf(getItemDef(item.itemId), "decayable") && decayProgress[item.itemId] === undefined) {
@@ -314,8 +324,16 @@ async function runExperiment() {
             <div class="progress-fill" style="width: {Math.min(100, (getStashUsage() / stashLimit) * 100)}%"></div>
           </div>
         </div>
+        <div class="search-container">
+          <input
+            type="text"
+            bind:value={searchQuery}
+            placeholder="filter stash by name..."
+            class="search-input"
+          />
+        </div>
         <ItemGrid
-          items={itemsList}
+          items={filteredItemsList}
           {selectedItem}
           {decayProgress}
           {isEquipped}
@@ -432,6 +450,28 @@ async function runExperiment() {
   .stash-usage {
     padding: 0.65rem var(--inv-space);
     border-bottom: 1px solid var(--inv-border-muted);
+  }
+
+  .search-container {
+    padding: 0.35rem var(--inv-space) 0.65rem;
+    border-bottom: 1px solid var(--inv-border-muted);
+  }
+
+  .search-input {
+    width: 100%;
+    background: var(--inv-surface-soft);
+    border: 1px solid var(--inv-border-muted);
+    border-radius: var(--inv-radius-sm);
+    color: var(--inv-text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.5rem;
+    outline: none;
+    transition: border-color 0.1s;
+  }
+
+  .search-input:focus {
+    border-color: var(--inv-border);
   }
 
   .bar-labels {

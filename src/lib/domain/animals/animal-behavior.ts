@@ -2,9 +2,12 @@ export type AnimalBehaviorState =
   | "idle"
   | "wander"
   | "graze"
+  | "curious"
+  | "alert"
   | "flee"
   | "threaten"
   | "attack"
+  | "charge"
   | "hunt"
   | "eat"
   | "rest";
@@ -46,6 +49,8 @@ export interface AnimalRuntime {
   threatened: boolean;
   attackCooldownSec: number;
   health: number;
+  awarenessLevel: "unaware" | "curious" | "alert" | "fleeing";
+  huntTargetId?: string;
 }
 
 export interface AnimalDecision {
@@ -133,6 +138,11 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+/** Outer "curiosity" ring — 1.5× the alert/detection radius. */
+export function curiousRadiusPx(def: AnimalDefinition): number {
+  return def.detectionRadiusPx * 1.5;
+}
+
 export function shouldAvoidFire(
   def: AnimalDefinition,
   position: { x: number; y: number },
@@ -148,6 +158,7 @@ export function chooseAnimalBehavior(
     litCampfires: readonly { x: number; y: number; radiusPx: number }[];
     nearbyAnimals: readonly AnimalRuntime[];
     timeOfDay: "day" | "dusk" | "night";
+    isRaining: boolean;
   },
 ): AnimalDecision {
   const def = ANIMAL_DEFINITIONS[animal.speciesId];
@@ -158,10 +169,31 @@ export function chooseAnimalBehavior(
   }
 
   const playerDistance = distance(position, context.player);
-  if ((def.temperament === "fearful" || def.temperament === "timid") && playerDistance <= def.detectionRadiusPx) {
-    return { behavior: "flee", targetKind: "player" };
+
+  // Rain: herbivores shelter in place if unaware (rain masks approach noise).
+  if (context.isRaining && def.diet === "herbivore" && animal.awarenessLevel === "unaware") {
+    return { behavior: "rest", targetKind: "zone" };
   }
 
+  // Two-ring awareness for fearful/timid animals.
+  if (def.temperament === "fearful" || def.temperament === "timid") {
+    const alertR = context.isRaining ? def.detectionRadiusPx * 0.8 : def.detectionRadiusPx;
+    const curiousR = curiousRadiusPx(def) * (context.isRaining ? 0.8 : 1);
+
+    if (playerDistance <= alertR) {
+      if (animal.awarenessLevel === "alert" || animal.awarenessLevel === "fleeing") {
+        return { behavior: "flee", targetKind: "player" };
+      }
+      return { behavior: "alert", targetKind: "player" };
+    }
+    if (playerDistance <= curiousR) {
+      if (animal.awarenessLevel === "curious" || animal.awarenessLevel === "alert") {
+        return { behavior: "curious", targetKind: "player" };
+      }
+    }
+  }
+
+  // Territorial boar — threaten → attack on re-entry; charge when player retreats.
   if (def.temperament === "territorial" && playerDistance <= (def.threatRadiusPx ?? 0)) {
     if (animal.threatened || playerDistance <= (def.attackRadiusPx ?? 0)) {
       return { behavior: "attack", targetKind: "player" };
@@ -169,15 +201,35 @@ export function chooseAnimalBehavior(
     return { behavior: "threaten", targetKind: "player" };
   }
 
-  if (def.temperament === "predator" && animal.hunger >= 60) {
-    const prey = context.nearbyAnimals
-      .filter((candidate) => def.preySpecies?.includes(candidate.speciesId))
-      .sort((a, b) => distance(position, a) - distance(position, b))[0];
-    if (prey && distance(position, prey) <= def.detectionRadiusPx) {
-      return { behavior: "hunt", targetKind: "animal", targetId: prey.id };
-    }
-    if (context.timeOfDay !== "day" && playerDistance <= (def.attackRadiusPx ?? def.detectionRadiusPx)) {
-      return { behavior: "attack", targetKind: "player" };
+  // Boar charge: player backed off while boar still has wanderTimerSec (charge window open).
+  if (def.id === "boar" && animal.behavior === "threaten" && playerDistance > (def.attackRadiusPx ?? 0)) {
+    return { behavior: "charge", targetKind: "player" };
+  }
+
+  // Wolf predator — hunger threshold lowered during rain (prey easier to catch).
+  if (def.temperament === "predator") {
+    const huntThreshold = context.isRaining ? 45 : 60;
+    if (animal.hunger >= huntThreshold) {
+      // Pack coordination: join a nearby hunting wolf even before personal hunger is high.
+      const packLeader = context.nearbyAnimals.find(
+        (candidate) =>
+          candidate.speciesId === "wolf" &&
+          candidate.huntTargetId !== undefined &&
+          distance(position, candidate) <= 320,
+      );
+      if (packLeader?.huntTargetId) {
+        return { behavior: "hunt", targetKind: "animal", targetId: packLeader.huntTargetId };
+      }
+
+      const prey = context.nearbyAnimals
+        .filter((candidate) => def.preySpecies?.includes(candidate.speciesId))
+        .sort((a, b) => distance(position, a) - distance(position, b))[0];
+      if (prey && distance(position, prey) <= def.detectionRadiusPx) {
+        return { behavior: "hunt", targetKind: "animal", targetId: prey.id };
+      }
+      if (context.timeOfDay !== "day" && playerDistance <= (def.attackRadiusPx ?? def.detectionRadiusPx)) {
+        return { behavior: "attack", targetKind: "player" };
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import type { SoundId } from "$lib/audio/sound-manifest";
+import { TIME_WEATHER_CONFIG } from "./time-config";
 
 export interface WeatherState {
   raining: boolean;
@@ -43,9 +44,11 @@ export function tickWeatherState(
   dtSec: number,
   opts: { forceRain?: boolean } = {},
 ): WeatherState {
-  const timeOfDay = (state.timeOfDay + dtSec / 1_200) % 1;
+  const increment = (dtSec * TIME_WEATHER_CONFIG.timeSpeedMultiplier) / TIME_WEATHER_CONFIG.dayDurationSeconds;
+  const timeOfDay = (state.timeOfDay + increment) % 1;
   if (opts.forceRain) {
-    return { raining: true, rainRemainingSec: Math.max(state.rainRemainingSec, 90), timeOfDay };
+    const rainDuration = TIME_WEATHER_CONFIG.rainDurationMinSec + Math.random() * (TIME_WEATHER_CONFIG.rainDurationMaxSec - TIME_WEATHER_CONFIG.rainDurationMinSec);
+    return { raining: true, rainRemainingSec: Math.max(state.rainRemainingSec, rainDuration), timeOfDay };
   }
 
   const rainRemainingSec = Math.max(0, state.rainRemainingSec - dtSec);
@@ -57,7 +60,13 @@ export function tickWeatherState(
 }
 
 export function isNight(timeOfDay: number): boolean {
-  return timeOfDay >= 0.75 || timeOfDay < 0.18;
+  const start = TIME_WEATHER_CONFIG.nightStartFraction;
+  const end = TIME_WEATHER_CONFIG.dayStartFraction;
+  if (start > end) {
+    return timeOfDay >= start || timeOfDay < end;
+  } else {
+    return timeOfDay >= start && timeOfDay < end;
+  }
 }
 
 export function nightEnvironmentModifiers(input: {

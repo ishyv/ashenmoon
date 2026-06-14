@@ -30,7 +30,7 @@ function withDefaults(recipe: RecipeInput): CraftRecipe {
     requiredContext: recipe.requiredContext ?? (recipe.requiresCampfire ? "campfire" : "hand"),
     discoverable: recipe.discoverable ?? true,
     feedbackTags: recipe.feedbackTags ?? [],
-    output: recipe.output ?? { itemId: recipe.id, qty: 1 },
+    output: recipe.output ?? { itemId: recipe.id as ValidItemId, qty: 1 },
   };
 }
 

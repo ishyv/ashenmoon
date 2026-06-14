@@ -74,6 +74,7 @@ interface ImmediateInteractionDeps {
   getStumpTexture: () => Texture;
   map?: MapResource | undefined;
   onStationInteract?: ((target: Entity) => void) | undefined;
+  onOpenCarcassPanel?: ((targetId: string) => void) | undefined;
 }
 
 interface ImmediateInteractionResources extends RuntimeResourceMap {
@@ -167,9 +168,10 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
   {
     id: "process",
     handle: ({ target, resources }) => {
-      const { onStationInteract, vfx, entityLayer } = resources.deps;
+      const { onStationInteract, onOpenCarcassPanel } = resources.deps;
       if (target.carcass) {
-        resources.deps.interaction.activeWorldAction = startCarcassWorldAction(target, vfx, entityLayer);
+        // Open the dedicated CarcassPanel so the player can choose which action to run.
+        onOpenCarcassPanel?.(target.id);
         return;
       }
       if (onStationInteract) {
@@ -637,7 +639,8 @@ export function triggerImmediateInteraction(
   getTreeFrames: () => Texture[],
   getStumpTexture: () => Texture,
   map?: MapResource,
-  onStationInteract?: (target: Entity) => void
+  onStationInteract?: (target: Entity) => void,
+  onOpenCarcassPanel?: (targetId: string) => void,
 ): void {
   immediateInteractionDispatcher.dispatch({
     world,
@@ -655,6 +658,7 @@ export function triggerImmediateInteraction(
         getStumpTexture,
         map,
         onStationInteract,
+        onOpenCarcassPanel,
       },
     },
     events: [],
@@ -673,6 +677,7 @@ export function triggerImmediateInteraction(
         getStumpTexture,
         map,
         onStationInteract,
+        onOpenCarcassPanel,
       } as T;
     },
   });
@@ -705,6 +710,7 @@ export function runInteractionSystem(
   map?: MapResource,
   onStationInteract?: (target: Entity) => void,
   stationTickContext: StationProcessTickContext = { raining: false },
+  onOpenCarcassPanel?: (targetId: string) => void,
 ): void {
   // Advance an active process; walking out of the heat cancels it.
   if (interaction.activeProcess) {
@@ -948,7 +954,8 @@ export function runInteractionSystem(
           getTreeFrames,
           getStumpTexture,
           map,
-          onStationInteract
+          onStationInteract,
+          onOpenCarcassPanel,
         );
       }
     }

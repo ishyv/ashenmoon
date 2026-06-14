@@ -82,6 +82,16 @@ export interface Entity {
     facingX: 1 | -1;
     /** Cached animation state name; prevents redundant texture swaps. */
     animState: string;
+    /** Graduated awareness of the player: drives two-ring detection. */
+    awarenessLevel: "unaware" | "curious" | "alert" | "fleeing";
+    /** Counts down before awareness can drop a tier; prevents instant calm. */
+    awarenessDecaySec: number;
+    /** Last threat position (player or fire center). */
+    threatOrigin?: { x: number; y: number };
+    /** Wolf pack: ID of prey currently being hunted; copied to pack members. */
+    huntTargetId?: string;
+    /** Death-fade timer (seconds). Set on death; ecology system ticks it to 0, then despawns. */
+    dyingSec?: number;
   };
 
   /**

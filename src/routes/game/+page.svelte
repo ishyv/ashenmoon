@@ -27,6 +27,7 @@ import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
 import { dialogueState } from "$lib/state/rpg/quests.svelte";
 import StationPanel from "$lib/ui/panels/StationPanel.svelte";
+import CarcassPanel from "$lib/ui/panels/CarcassPanel.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 
@@ -42,8 +43,10 @@ const showInventory = $derived(overlayStack.has(OverlayId.Inventory));
 const showSkills    = $derived(overlayStack.has(OverlayId.Skills));
 const showScenario  = $derived(overlayStack.has(OverlayId.Scenario));
 const showStation   = $derived(overlayStack.has(OverlayId.Station));
+const showCarcass   = $derived(overlayStack.has(OverlayId.Carcass));
 let activeScenarioId = $state<string | null>(null);
 let activeStationEntity = $state<Entity | null>(null);
+let carcassPanelTargetId = $state<string | null>(null);
 let contextMenu   = $state<WorldContextMenuTarget | null>(null);
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 let envInterval: ReturnType<typeof setInterval> | null = null;
@@ -162,6 +165,13 @@ $effect(() => {
   }
 });
 
+// --- Carcass Panel â†” stack sync ------------------------------------------
+$effect(() => {
+  if (!overlayStack.has(OverlayId.Carcass) && carcassPanelTargetId) {
+    carcassPanelTargetId = null;
+  }
+});
+
 // Auto-close station panel if player walks too far
 $effect(() => {
   if (activeStationEntity && coords) {
@@ -203,6 +213,10 @@ onMount(async () => {
     onStationInteract: (target) => {
       activeStationEntity = target;
       overlayStack.push(OverlayId.Station);
+    },
+    onOpenCarcassPanel: (id) => {
+      carcassPanelTargetId = id;
+      overlayStack.push(OverlayId.Carcass);
     },
   });
   await engine.init();
@@ -355,6 +369,17 @@ onDestroy(() => {
         if (!overlayStack.has(OverlayId.Inventory)) {
           overlayStack.push(OverlayId.Inventory);
         }
+      }}
+    />
+  {/if}
+
+  {#if showCarcass && carcassPanelTargetId}
+    <CarcassPanel
+      targetId={carcassPanelTargetId}
+      {engine}
+      onClose={() => {
+        overlayStack.close(OverlayId.Carcass);
+        carcassPanelTargetId = null;
       }}
     />
   {/if}

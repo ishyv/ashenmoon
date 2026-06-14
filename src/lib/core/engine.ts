@@ -214,6 +214,7 @@ import { syncHudCooldownsSystem } from "$lib/core/systems/hud-sync-system";
 import { spawnResourceEntity, spawnCampSystem, spawnEnemy, spawnLandmark } from "$lib/core/systems/map/spawn-system";
 import { FogSystem } from "$lib/core/systems/atmosphere/fog-system";
 import { VisionSystem } from "$lib/core/systems/atmosphere/vision-system";
+import { RainEffectSystem } from "$lib/core/systems/weather/rain-effect-system";
 import { handleEnemyDeathSystem } from "$lib/core/systems/combat/enemy-death-system";
 import {
   CollisionFootprints,
@@ -230,6 +231,7 @@ export class GameEngine {
   private onHudUpdate: (state: HudState) => void;
   private onContextMenu: GameEngineConfig["onContextMenu"];
   private onStationInteract?: GameEngineConfig["onStationInteract"];
+  private onOpenCarcassPanel?: GameEngineConfig["onOpenCarcassPanel"];
   private containerEl: HTMLDivElement;
 
   // Bevy-aligned Resources / Singletons
@@ -246,6 +248,7 @@ export class GameEngine {
   public combatResource = new CombatResource();
   public weatherResource = new WeatherResource();
   public fogSystem = new FogSystem();
+  public rainEffectSystem = new RainEffectSystem();
   private visionSystem = new VisionSystem();
 
   // Facing vector
@@ -331,6 +334,7 @@ export class GameEngine {
     this.onHudUpdate = config.onHudUpdate;
     this.onContextMenu = config.onContextMenu;
     this.onStationInteract = config.onStationInteract;
+    this.onOpenCarcassPanel = config.onOpenCarcassPanel;
     this.scenarioId = config.scenarioId ?? null;
   }
 
@@ -404,6 +408,9 @@ export class GameEngine {
       // Atmospheric fog layer — above world, below night overlay.
       this.fogSystem.init();
       this.app.stage.addChild(this.fogSystem.layer);
+
+      // Rain screen-space effect — above fog, below night overlay
+      this.app.stage.addChild(this.rainEffectSystem.layer);
 
       // Night/weather overlay: covers the full screen in a dark rectangle.
       // Alpha is driven per-frame by visibilityMultiplier so day = transparent,
@@ -737,7 +744,8 @@ export class GameEngine {
           (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
           this.mapResource,
           this.onStationInteract,
-          { raining: this.weatherResource.state.raining }
+          { raining: this.weatherResource.state.raining },
+          this.onOpenCarcassPanel,
         );
       }
 
@@ -857,7 +865,8 @@ export class GameEngine {
         this.entityLayer,
         this.entitySprites,
         findLitCampfires(world),
-        this.worldEventTimeOfDay()
+        this.worldEventTimeOfDay(),
+        this.weatherResource.state.raining,
       );
       tickEnemyBleedSystem(
         world,
@@ -1078,6 +1087,11 @@ export class GameEngine {
         dt,
         wetnessState.penalties.coldBuildRateMult
       );
+
+      this.rainEffectSystem.tick(dt, this.weatherResource.state.raining, {
+        width: this.app.screen.width,
+        height: this.app.screen.height,
+      });
 
       // Atmospheric fog — collect lit campfire positions for local clearance
       const campfirePositions: { x: number; y: number; heatRadius: number }[] = [];

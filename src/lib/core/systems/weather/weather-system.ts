@@ -3,6 +3,7 @@ import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { calculatePlayerWarmth } from "$lib/domain/exposure/placed-exposure";
 import { gameState } from "$lib/state/game-state.svelte";
+import { TIME_WEATHER_CONFIG } from "$lib/domain/weather/time-config";
 import {
   createWorldEventState,
   isNight,
@@ -120,7 +121,9 @@ export function weatherTickSystem(
     weather.rainCooldownSec -= dt;
     if (weather.rainCooldownSec <= 0) {
       weather.state = tickWeatherState(weather.state, dt, { forceRain: true });
-      weather.rainCooldownSec = ENGINE_CONFIG.RAIN.NEXT_COOLDOWN_SEC;
+      const minCooldown = TIME_WEATHER_CONFIG.rainCooldownMinSec;
+      const maxCooldown = TIME_WEATHER_CONFIG.rainCooldownMaxSec;
+      weather.rainCooldownSec = minCooldown + Math.random() * (maxCooldown - minCooldown);
       weather.feedbackEvents.push(WORLD_EVENT_FEEDBACK.rain);
     } else {
       weather.state = tickWeatherState(weather.state, dt);
@@ -199,6 +202,71 @@ export function weatherTickSystem(
   }
 }
 
+function interpolateColor(color1: number, color2: number, ratio: number): number {
+  const r1 = (color1 >> 16) & 0xff;
+  const g1 = (color1 >> 8) & 0xff;
+  const b1 = color1 & 0xff;
+
+  const r2 = (color2 >> 16) & 0xff;
+  const g2 = (color2 >> 8) & 0xff;
+  const b2 = color2 & 0xff;
+
+  const r = Math.round(r1 + (r2 - r1) * ratio);
+  const g = Math.round(g1 + (g2 - g1) * ratio);
+  const b = Math.round(b1 + (b2 - b1) * ratio);
+
+  return (r << 16) | (g << 8) | b;
+}
+
+export function getCycleColorAndAlpha(timeOfDay: number): { color: number; alpha: number } {
+  const startDawn = TIME_WEATHER_CONFIG.dayStartFraction - 0.06;
+  const peakDawn = TIME_WEATHER_CONFIG.dayStartFraction;
+  const endDawn = TIME_WEATHER_CONFIG.dayStartFraction + 0.06;
+
+  const startDusk = TIME_WEATHER_CONFIG.nightStartFraction - 0.06;
+  const peakDusk = TIME_WEATHER_CONFIG.nightStartFraction;
+  const endDusk = TIME_WEATHER_CONFIG.nightStartFraction + 0.06;
+
+  const maxDark = TIME_WEATHER_CONFIG.maxNightDarkness;
+  const duskColor = TIME_WEATHER_CONFIG.colors.dusk;
+  const nightColor = TIME_WEATHER_CONFIG.colors.night;
+  const dawnColor = TIME_WEATHER_CONFIG.colors.dawn;
+
+  if (timeOfDay >= startDawn && timeOfDay < endDawn) {
+    // Dawn transition
+    const ratio = (timeOfDay - startDawn) / (endDawn - startDawn);
+    if (ratio < 0.5) {
+      // Night -> Dawn
+      const alpha = maxDark - (maxDark - 0.4) * (ratio * 2);
+      return { color: interpolateColor(nightColor, dawnColor, ratio * 2), alpha };
+    } else {
+      // Dawn -> Day
+      const subRatio = (ratio - 0.5) * 2;
+      const alpha = 0.4 * (1 - subRatio);
+      return { color: dawnColor, alpha };
+    }
+  } else if (timeOfDay >= endDawn && timeOfDay < startDusk) {
+    // Clear Day
+    return { color: 0xffffff, alpha: 0 };
+  } else if (timeOfDay >= startDusk && timeOfDay < endDusk) {
+    // Dusk transition
+    const ratio = (timeOfDay - startDusk) / (endDusk - startDusk);
+    if (ratio < 0.5) {
+      // Day -> Dusk
+      const alpha = 0.4 * (ratio * 2);
+      return { color: duskColor, alpha };
+    } else {
+      // Dusk -> Night
+      const subRatio = (ratio - 0.5) * 2;
+      const alpha = 0.4 + (maxDark - 0.4) * subRatio;
+      return { color: interpolateColor(duskColor, nightColor, subRatio), alpha };
+    }
+  } else {
+    // Night
+    return { color: nightColor, alpha: maxDark };
+  }
+}
+
 export function weatherOverlaySystem(
   world: World<Entity>,
   weather: WeatherResource,
@@ -223,8 +291,16 @@ export function weatherOverlaySystem(
       shelterColdMultiplier: shelterColdMultiplierAt(pgx, pgy),
     });
 
-    const targetAlpha = 1 - nightMods.visibilityMultiplier;
-    weather.nightOverlayAlpha += (targetAlpha - weather.nightOverlayAlpha) * Math.min(1, dt * 0.5);
+    const { color: targetColor, alpha: targetAlphaBase } = getCycleColorAndAlpha(weather.state.timeOfDay);
+    
+    // Scale darkness slightly near campfires
+    const darknessFactor = nearCampfire ? 0.65 : 1.0;
+    const targetAlpha = targetAlphaBase * darknessFactor;
+
+    weather.nightOverlayAlpha += (targetAlpha - weather.nightOverlayAlpha) * Math.min(1, dt * 0.8);
+    
+    // Smoothly redraw overlay with new interpolated color
+    nightOverlay.clear().rect(0, 0, 4096, 4096).fill({ color: targetColor });
     nightOverlay.alpha = weather.nightOverlayAlpha;
 
     const { temperatureDelta } = nightMods;

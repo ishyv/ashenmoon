@@ -84,7 +84,7 @@ export function readResonance(
   }
 
   const costIds = nearest.costs.map((c) => c.itemId);
-  const costSet = new Set(costIds);
+  const costSet = new Set<string>(costIds);
   const presentSet = new Set(present);
 
   const correctPresent = costIds.filter((id) => presentSet.has(id));

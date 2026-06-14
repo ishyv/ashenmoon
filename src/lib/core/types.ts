@@ -40,6 +40,8 @@ export interface GameEngineConfig {
   scenarioId?: string;
   /** Called when the player interacts with a station or campfire. */
   onStationInteract?: (target: Entity) => void;
+  /** Called when the player presses E on a carcass — opens the loot panel. */
+  onOpenCarcassPanel?: (targetId: string) => void;
 }
 
 /**

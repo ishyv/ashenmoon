@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readResonance } from "./resonance";
 import type { CraftRecipe } from "./recipes";
 
-const RECIPES: CraftRecipe[] = [
+const RECIPES: any[] = [
   {
     id: "simple_potion",
     name: "simple potion",

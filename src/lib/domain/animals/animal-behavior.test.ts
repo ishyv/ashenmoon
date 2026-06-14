@@ -18,20 +18,33 @@ function animal(id: string, speciesId: keyof typeof ANIMAL_DEFINITIONS, x = 0, y
     threatened: false,
     attackCooldownSec: 0,
     health: ANIMAL_DEFINITIONS[speciesId].maxHealth,
+    awarenessLevel: "unaware",
   };
 }
 
 describe("animal behavior", () => {
-  it("makes rabbits flee from a nearby player", () => {
-    const result = chooseAnimalBehavior(animal("rabbit", "rabbit"), {
+  it("makes rabbits enter alert on first tick, then flee on second tick", () => {
+    // First tick: unaware rabbit encounters player in inner ring → alert
+    const first = chooseAnimalBehavior(animal("rabbit", "rabbit"), {
       player: { x: 20, y: 0 },
       litCampfires: [],
       nearbyAnimals: [],
       timeOfDay: "day",
+      isRaining: false,
     });
+    expect(first.behavior).toBe("alert");
+    expect(first.targetKind).toBe("player");
 
-    expect(result.behavior).toBe("flee");
-    expect(result.targetKind).toBe("player");
+    // Second tick: already alert → flee
+    const second = chooseAnimalBehavior({ ...animal("rabbit", "rabbit"), awarenessLevel: "alert" }, {
+      player: { x: 20, y: 0 },
+      litCampfires: [],
+      nearbyAnimals: [],
+      timeOfDay: "day",
+      isRaining: false,
+    });
+    expect(second.behavior).toBe("flee");
+    expect(second.targetKind).toBe("player");
   });
 
   it("makes boars threaten before attacking when approached", () => {
@@ -40,12 +53,14 @@ describe("animal behavior", () => {
       litCampfires: [],
       nearbyAnimals: [],
       timeOfDay: "day",
+      isRaining: false,
     });
     const second = chooseAnimalBehavior({ ...animal("boar", "boar"), threatened: true }, {
       player: { x: 40, y: 0 },
       litCampfires: [],
       nearbyAnimals: [],
       timeOfDay: "day",
+      isRaining: false,
     });
 
     expect(first.behavior).toBe("threaten");
@@ -58,6 +73,7 @@ describe("animal behavior", () => {
       litCampfires: [],
       nearbyAnimals: [animal("rabbit", "rabbit", 40, 0)],
       timeOfDay: "dusk",
+      isRaining: false,
     });
 
     expect(result.behavior).toBe("hunt");

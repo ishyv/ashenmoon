@@ -40,7 +40,12 @@ const COMMANDS: readonly DevCommandHelp[] = [
   { name: "collision", help: "collision [list | show <on|off> | get <id> | set <id> <minX> <maxX> <minY> <maxY> | reset <id>] : tune collision footprints" },
   { name: "focused", help: "focused [start] : begin a focused-gathering session on the hovered node" },
   { name: "enablefreebuilding", help: "enablefreebuilding <true|false> : place buildings without material costs" },
+  { name: "time", help: "time [set <fraction> | speed <mult> | check] : manage and inspect game time" },
+  { name: "weather", help: "weather [rain <on|off> | check] : manage and inspect active weather" },
 ];
+
+import { TIME_WEATHER_CONFIG } from "$lib/domain/weather/time-config";
+import { isNight } from "$lib/domain/weather/weather-events";
 
 export function registerDevCommands(engine: GameEngine): void {
   for (const command of COMMANDS) {
@@ -64,6 +69,56 @@ export function registerDevCommands(engine: GameEngine): void {
       const enabled = val === "true";
       devFlags.freeBuildingEnabled = enabled;
       return `free building ${enabled ? "enabled" : "disabled"}`;
+    },
+  });
+
+  devConsole.register({
+    name: "time",
+    help: "time [set <fraction> | speed <mult> | check] : manage and inspect game time",
+    run: (args) => {
+      const sub = args[0]?.toLowerCase();
+      if (sub === "set") {
+        const val = parseFloat(args[1] || "");
+        if (isNaN(val) || val < 0 || val > 1) return "usage: time set <fraction (0.0 - 1.0)>";
+        engine.weatherResource.state.timeOfDay = val;
+        return `time set to ${val.toFixed(2)}`;
+      } else if (sub === "speed") {
+        const val = parseFloat(args[1] || "");
+        if (isNaN(val) || val < 0) return "usage: time speed <multiplier (>= 0)>";
+        TIME_WEATHER_CONFIG.timeSpeedMultiplier = val;
+        return `time speed multiplier set to ${val}`;
+      } else if (sub === "check") {
+        const tod = engine.weatherResource.state.timeOfDay;
+        const night = isNight(tod);
+        return `time of day: ${tod.toFixed(3)} (${night ? "Night" : "Day"}). speed multiplier: ${TIME_WEATHER_CONFIG.timeSpeedMultiplier}`;
+      }
+      return "usage: time [set <fraction> | speed <mult> | check]";
+    },
+  });
+
+  devConsole.register({
+    name: "weather",
+    help: "weather [rain <on|off> | check] : manage and inspect active weather",
+    run: (args) => {
+      const sub = args[0]?.toLowerCase();
+      if (sub === "rain") {
+        const val = args[1]?.toLowerCase();
+        if (val === "on") {
+          engine.weatherResource.state.raining = true;
+          engine.weatherResource.state.rainRemainingSec = 180;
+          return "rain triggered";
+        } else if (val === "off") {
+          engine.weatherResource.state.raining = false;
+          engine.weatherResource.state.rainRemainingSec = 0;
+          return "rain stopped";
+        }
+        return "usage: weather rain <on|off>";
+      } else if (sub === "check") {
+        const raining = engine.weatherResource.state.raining;
+        const remaining = engine.weatherResource.state.rainRemainingSec;
+        return `weather: ${raining ? `Raining (${remaining.toFixed(1)}s remaining)` : "Clear"}`;
+      }
+      return "usage: weather [rain <on|off> | check]";
     },
   });
 }
