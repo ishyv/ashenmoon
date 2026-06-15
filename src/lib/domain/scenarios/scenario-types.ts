@@ -1,4 +1,4 @@
-import type { Cell } from "$lib/core/types";
+import type { Cell } from "$lib/domain/worldgen/cell";
 import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 
 export interface ScenarioSpawnNode {

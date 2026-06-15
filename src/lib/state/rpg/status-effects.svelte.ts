@@ -1,7 +1,8 @@
 /**
  * Reactive wrapper over the pure status system (mirrors `stamina.svelte.ts`).
- * Owns the active-status list the HUD reads, persists it across refreshes,
- * and emits symptom feedback + quest events when statuses land/expire.
+ * Owns the active-status list the HUD reads and persists it across refreshes.
+ * Feedback/quest side effects are emitted as events and consumed by the RPG
+ * feedback router, keeping this wrapper focused on state.
  *
  * The engine drives time: it calls `tickStatusEffects(dt)` each frame and
  * applies the returned hp delta to the player entity (this module never
@@ -9,7 +10,6 @@
  */
 
 import {
-  STATUS_DEFINITIONS,
   isStatusId,
   type ActiveStatus,
   type StatusId,
@@ -20,9 +20,8 @@ import {
   clearStatus,
   tickStatuses,
 } from "$lib/domain/systems/status-system";
-import { GameEvent, StorageKeys } from "$lib/domain/game-events";
-import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
-import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
+import { StorageKeys } from "$lib/domain/game-events";
+import { playerRpgEntityId, rpgEventQueue } from "$lib/state/rpg/rpg-feedback-router";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 
 export const statusState = $state<{ active: ActiveStatus[] }>({ active: [] });
@@ -31,9 +30,12 @@ export function applyStatusEffect(id: StatusId, durationSec: number, source?: st
   const had = statusState.active.some((s) => s.id === id);
   statusState.active = applyStatus(statusState.active, id, durationSec, source);
   if (!had) {
-    const def = STATUS_DEFINITIONS[id];
-    emitPlayerFeedback(`${def.icon} ${def.applyMessage}`, "danger");
-    triggerQuestEvent(GameEvent.StatusApplied, id);
+    rpgEventQueue.push({
+      type: "status_added",
+      entityId: playerRpgEntityId(),
+      statusId: id,
+      ...(source !== undefined ? { source } : {}),
+    });
   }
   saveStatuses();
 }
@@ -42,7 +44,7 @@ export function clearStatusEffect(id: StatusId): void {
   const had = statusState.active.some((s) => s.id === id);
   statusState.active = clearStatus(statusState.active, id);
   if (had) {
-    emitPlayerFeedback(STATUS_DEFINITIONS[id].expireMessage, "info");
+    rpgEventQueue.push({ type: "status_cleared", entityId: playerRpgEntityId(), statusId: id });
   }
   saveStatuses();
 }
@@ -50,7 +52,7 @@ export function clearStatusEffect(id: StatusId): void {
 export function clearAllStatusEffects(): void {
   if (statusState.active.length === 0) return;
   statusState.active = [];
-  emitPlayerFeedback("You feel completely restored.", "good");
+  rpgEventQueue.push({ type: "status_all_cleared", entityId: playerRpgEntityId() });
   saveStatuses();
 }
 
@@ -83,12 +85,10 @@ export function tickStatusEffects(dt: number): { hpDelta: number } {
   }
 
   for (const id of result.pulses) {
-    const msg = STATUS_DEFINITIONS[id].pulseMessage;
-    if (msg) emitPlayerFeedback(msg, "warning");
+    rpgEventQueue.push({ type: "status_pulsed", entityId: playerRpgEntityId(), statusId: id });
   }
   for (const id of result.expired) {
-    emitPlayerFeedback(STATUS_DEFINITIONS[id].expireMessage, "info");
-    triggerQuestEvent(GameEvent.StatusExpired, id);
+    rpgEventQueue.push({ type: "status_expired", entityId: playerRpgEntityId(), statusId: id });
   }
   if (changed) {
     saveStatuses();

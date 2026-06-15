@@ -2,8 +2,7 @@ import type { Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import type { VFXResource } from "$lib/core/vfx/vfx";
-import { spawnEnvFloatingText, spawnEnvParticles } from "$lib/core/vfx/vfx";
-import { playSound } from "$lib/audio/audio-engine";
+import { spawnEnvParticles } from "$lib/core/vfx/vfx";
 import { Colors } from "$lib/utils/colors";
 import { getItemDef } from "$lib/domain/items";
 import { getEquippedWeaponId, getItemQty } from "$lib/state/rpg/inventory-api";
@@ -19,6 +18,7 @@ import {
 } from "$lib/domain/animals/carcass-processing";
 import { actionsForCarcass, type WorldActionOption } from "$lib/domain/world-actions";
 import { createWorldActionRuntime, type WorldActionRuntime } from "$lib/domain/world-action-runtime";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
 
 export function firstProcessCarcassAction(target: Entity): WorldActionOption | null {
   if (!target.carcass) return null;
@@ -30,16 +30,18 @@ export function startCarcassWorldAction(
   target: Entity,
   vfx: VFXResource,
   entityLayer: Container,
+  events?: GameEventQueue,
 ): WorldActionRuntime | null {
+  void vfx; void entityLayer;
   const player = getPlayerEntity();
   const action = firstProcessCarcassAction(target);
   if (!player.position) return null;
   if (!action) {
-    spawnEnvFloatingText(vfx, "nothing useful remains", Colors.ui.muted, player.position, entityLayer);
+    events?.push({ type: "feedback_requested", channel: "ui", message: "nothing useful remains", tone: "info" });
     return null;
   }
 
-  spawnEnvFloatingText(vfx, action.feedback.start, Colors.ui.muted, player.position, entityLayer);
+  events?.push({ type: "feedback_requested", channel: "ui", message: action.feedback.start, tone: "info" });
   return createWorldActionRuntime(action);
 }
 
@@ -48,6 +50,7 @@ export function completeCarcassWorldAction(
   runtime: WorldActionRuntime,
   vfx: VFXResource,
   entityLayer: Container,
+  events?: GameEventQueue,
 ): void {
   const carcass = target.carcass;
   const player = getPlayerEntity();
@@ -67,7 +70,7 @@ export function completeCarcassWorldAction(
   });
 
   if (!result.ok) {
-    spawnEnvFloatingText(vfx, result.feedback, Colors.ui.error, player.position, entityLayer);
+    events?.push({ type: "feedback_requested", channel: "ui", message: result.feedback, tone: "error" });
     return;
   }
 
@@ -79,7 +82,10 @@ export function completeCarcassWorldAction(
   void (async () => {
     for (const yieldItem of result.yields) {
       const sync = await syncPickup(yieldItem.itemId, `${target.id}:${result.action}:${yieldItem.itemId}`, yieldItem.qty);
-      if (sync.ok) applyRpgState(sync.data.playerState);
+      if (sync.ok) {
+        applyRpgState(sync.data.playerState);
+        events?.push({ type: "item_gained", itemId: yieldItem.itemId, qty: yieldItem.qty, source: "carcass" });
+      }
     }
   })();
 
@@ -95,20 +101,14 @@ export function completeCarcassWorldAction(
       } else {
         applyStatusEffect(risk.status, risk.durationSec, "hazard:carcass");
       }
-      spawnEnvFloatingText(
-        vfx,
-        risk.status === StatusId.Cut ? "cut" : "sickened",
-        Colors.ui.error,
-        player.position,
-        entityLayer,
-      );
+      // Wound/status events are emitted by applyWound/applyStatusEffect to rpgEventQueue.
     }
   }
 
   const yieldText = result.yields
     .map((yieldItem) => `+${yieldItem.qty} ${getItemDef(yieldItem.itemId)?.name.toLowerCase() ?? yieldItem.itemId}`)
     .join(", ");
-  spawnEnvFloatingText(vfx, yieldText || result.feedback, Colors.resource.gold, player.position, entityLayer);
+  events?.push({ type: "feedback_requested", channel: "ui", message: yieldText || result.feedback, tone: "success" });
   spawnEnvParticles(vfx, Colors.combat.enemyDeath, 5, "sizzle", player.position, entityLayer);
-  playSound("node.deplete");
+  // Sound is dispatched by FeedbackRouter on world_action_completed.
 }

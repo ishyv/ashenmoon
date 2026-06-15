@@ -7,9 +7,18 @@
  * Units are tiles; multiply `sprite` dimensions by TILE at render time. `sprite`
  * height can exceed the footprint (e.g. a tower's art is taller than its base).
  */
-import type { BuildingType } from "$lib/core/assets/assets";
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
+
+export type BuildingTextureType =
+  | "archery"
+  | "barracks"
+  | "castle"
+  | "house1"
+  | "house2"
+  | "house3"
+  | "monastery"
+  | "tower";
 
 export interface BuildingSpec {
   /** lowercase player-facing label. */
@@ -19,7 +28,7 @@ export interface BuildingSpec {
   /** collision + placement footprint, in tiles. */
   footprint: { w: number; h: number };
   /** which building art to draw (some types reuse another's texture). */
-  textureType: BuildingType;
+  textureType: BuildingTextureType;
   /** rendered sprite size, in tiles. */
   sprite: { w: number; h: number };
   /** inventory cost paid before the building is recorded. */

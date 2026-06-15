@@ -4,6 +4,7 @@ import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE } from "$lib/core/systems/map/map";
 import type { InputResource } from "$lib/core/input/input";
 import { CombatResource, CombatConfig, applyDamage } from "./combat";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
 import type { VFXResource } from "$lib/core/vfx/vfx";
 import { spawnEnvFloatingText, spawnEnvParticles, spawnShockwaveRing, spawnSlashArc, triggerCameraShake, spawnFellSweepCleave, spawnFellSweepWhirl } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
@@ -246,6 +247,7 @@ export function fellSweepSystem(
   isPlacementMode: boolean,
   fellSweepLevel: number,
   onEnemyKilled: (enemy: Entity) => void,
+  events?: GameEventQueue,
 ): void {
   if (!inputs.pendingFellSweep) return;
   inputs.pendingFellSweep = false;
@@ -337,7 +339,7 @@ export function fellSweepSystem(
       const dy = ey - pcy;
       const d = Math.hypot(dx, dy);
       if (d <= scaling.reach + enemyRadius) {
-        const died = applyDamage(e, finalDamage, pcx, pcy, scaling.knockback, config, vfx, entityLayer);
+        const died = applyDamage(e, finalDamage, pcx, pcy, scaling.knockback, config, vfx, entityLayer, undefined, events);
         hitCount++;
         if (died) onEnemyKilled(e);
       }
@@ -384,7 +386,7 @@ export function fellSweepSystem(
         }
 
         // Apply linear knockback along fissure direction using coordinates relative to direction
-        const died = applyDamage(e, finalDamage, ex - ax, ey - ay, scaling.knockback, config, vfx, entityLayer);
+        const died = applyDamage(e, finalDamage, ex - ax, ey - ay, scaling.knockback, config, vfx, entityLayer, undefined, events);
         hitCount++;
         if (died) onEnemyKilled(e);
       }

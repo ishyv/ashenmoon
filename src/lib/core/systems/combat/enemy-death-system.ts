@@ -1,7 +1,6 @@
 import { world, type Entity } from "$lib/core/ecs/ecs-miniplex";
 import { Container } from "pixi.js";
 import {
-  spawnDeathBurst,
   spawnLevelUpBurst,
   spawnEnvFloatingText,
   type VFXResource,
@@ -31,14 +30,8 @@ export function handleEnemyDeathSystem(
   playerPos: { x: number; y: number }
 ): void {
   const pos = enemy.position;
+  // Death burst and sound are emitted via entity_died event → FeedbackRouter.
   if (pos) {
-    spawnDeathBurst(
-      vfx,
-      entityLayer,
-      pos.x + TILE / 2,
-      pos.y + TILE * 0.6,
-      Colors.combat.enemyDeath
-    );
     const xp = enemy.loot?.xpReward ?? 0;
     if (xp > 0) {
       spawnEnvFloatingText(vfx, `+${xp} xp`, Colors.resource.xp, pos, entityLayer);
@@ -50,8 +43,6 @@ export function handleEnemyDeathSystem(
       }
     }
   }
-  
-  playSound("enemy.death", pos ? { position: { x: pos.x + TILE / 2, y: pos.y + TILE / 2 } } : {});
 
   if (pos && enemy.animal) {
     // Begin death-fade — ecology system ticks dyingSec, spawns carcass, and despawns.

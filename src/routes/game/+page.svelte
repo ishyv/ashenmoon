@@ -25,7 +25,7 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { loadGameState } from "$lib/state/game-state.svelte";
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
-import { dialogueState } from "$lib/state/rpg/quests.svelte";
+import { dialogueState, activeQuests } from "$lib/state/rpg/quests.svelte";
 import StationPanel from "$lib/ui/panels/StationPanel.svelte";
 import CarcassPanel from "$lib/ui/panels/CarcassPanel.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
@@ -220,6 +220,9 @@ onMount(async () => {
     },
   });
   await engine.init();
+  if (!activeQuests.currentQuestId) {
+    activeQuests.currentQuestId = "lost_in_woods";
+  }
   registerDevCommands(engine);
 
   // Start 5-second backend env tick loop

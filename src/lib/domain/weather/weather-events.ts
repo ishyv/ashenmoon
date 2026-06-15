@@ -1,5 +1,6 @@
-import type { SoundId } from "$lib/audio/sound-manifest";
 import { TIME_WEATHER_CONFIG } from "./time-config";
+
+export type WorldEventSoundId = "ambient.wind" | "node.deplete";
 
 export interface WeatherState {
   raining: boolean;
@@ -22,7 +23,7 @@ export interface WorldEvent {
 export interface WorldEventFeedback {
   readonly message: string;
   readonly tone: "info" | "warning";
-  readonly sound?: SoundId;
+  readonly sound?: WorldEventSoundId;
 }
 
 export const WORLD_EVENT_FEEDBACK: Record<WorldEventType, WorldEventFeedback> = {

@@ -2,6 +2,19 @@ import type { RecipeInput } from "$lib/domain/crafting/recipe-types";
 
 export const fuelRecipes: readonly RecipeInput[] = [
   {
+    id: "bundle_twigs",
+    name: "Bundle Twigs",
+    description: "You gather small twigs into a bundle of usable kindling.",
+    category: "fuel_fire",
+    requiredContext: "hand",
+    discoverable: true,
+    discoveryText: "You gather small twigs into a bundle of usable kindling.",
+    costs: [{ itemId: "stick", name: "stick", required: 4 }],
+    output: { itemId: "twig_bundle", qty: 1 },
+    process: "assemble",
+    durationSec: 3,
+  },
+  {
     id: "charcoal",
     name: "Charcoal",
     description: "slow-burned wood for steady heat.",

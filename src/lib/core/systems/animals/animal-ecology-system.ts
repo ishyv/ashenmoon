@@ -27,6 +27,7 @@ import {
 import { spawnCarcassEntity } from "$lib/core/systems/animals/carcass-runtime";
 import { despawnEntity } from "$lib/core/systems/combat/combat";
 import { M3_CARCASS_DEFINITIONS } from "$lib/domain/animals/carcass-processing";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
 
 type AnimalTimeOfDay = "day" | "dusk" | "night";
 
@@ -129,6 +130,7 @@ function applyAnimalDecision(input: {
   ecsWorld: World<Entity>;
   litCampfires: readonly LitCampfire[];
   animalsById: ReadonlyMap<string, Entity>;
+  events?: GameEventQueue;
 }): void {
   const {
     entity,
@@ -144,6 +146,7 @@ function applyAnimalDecision(input: {
     ecsWorld,
     litCampfires,
     animalsById,
+    events,
   } = input;
   const animal = entity.animal!;
   const def = ANIMAL_DEFINITIONS[animal.speciesId];
@@ -177,7 +180,7 @@ function applyAnimalDecision(input: {
     animal.wanderTimerSec = Math.max(animal.wanderTimerSec - dt, 0);
     moveAnimalToward(entity, map, playerCenter.x, playerCenter.y, def.fleeSpeed * 1.4, dt);
     if (Math.hypot(playerCenter.x - pos.x, playerCenter.y - pos.y) <= (def.attackRadiusPx ?? TILE)) {
-      tryAnimalAttackPlayer(entity, player, config, combat, vfx, entityLayer);
+      tryAnimalAttackPlayer(entity, player, config, combat, vfx, entityLayer, events);
     }
     return;
   }
@@ -189,7 +192,7 @@ function applyAnimalDecision(input: {
     if (target?.position) {
       const targetCenter = animalCenter(target);
       moveAnimalToward(entity, map, targetCenter.x, targetCenter.y, def.moveSpeed, dt);
-      tryAnimalAttackPrey(entity, target, config, vfx, entityLayer, entitySprites, ecsWorld);
+      tryAnimalAttackPrey(entity, target, config, vfx, entityLayer, entitySprites, ecsWorld, events);
     }
     return;
   }
@@ -200,7 +203,7 @@ function applyAnimalDecision(input: {
   }
 
   if (decision.behavior === "attack" && def.damage && Math.hypot(playerCenter.x - pos.x, playerCenter.y - pos.y) <= (def.attackRadiusPx ?? TILE)) {
-    tryAnimalAttackPlayer(entity, player, config, combat, vfx, entityLayer);
+    tryAnimalAttackPlayer(entity, player, config, combat, vfx, entityLayer, events);
     return;
   }
 
@@ -237,6 +240,7 @@ export function animalEcologySystem(
   litCampfires: readonly LitCampfire[],
   timeOfDay: AnimalTimeOfDay,
   isRaining: boolean,
+  events?: GameEventQueue,
 ): void {
   if (!player.position) return;
   const playerCenter = animalCenter(player);
@@ -298,6 +302,7 @@ export function animalEcologySystem(
       ecsWorld,
       litCampfires,
       animalsById,
+      ...(events !== undefined ? { events } : {}),
     });
 
     syncAnimalSprite(entity, entitySprites, entityLayer);

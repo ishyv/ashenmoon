@@ -314,7 +314,7 @@ function finalizeAndReward(
   depleteNodeSystem(
     world,
     node,
-    interaction,
+    (e) => { if (interaction.currentTarget === e) interaction.currentTarget = null; },
     vfx,
     entityLayer,
     entitySprites,

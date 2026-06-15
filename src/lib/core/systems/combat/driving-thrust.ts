@@ -31,6 +31,7 @@ import {
 } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
 import { applyDamage, type CombatConfig, type CombatResource } from "./combat";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
 
 const BODY_HX = PLAYER_BODY.hx;
 const BODY_HY = PLAYER_BODY.hy;
@@ -97,6 +98,7 @@ function applyDrivingThrustHits(args: {
   hitbox: DrivingThrustHitbox;
   direction: Vec2;
   onEnemyKilled: (enemy: Entity) => void;
+  events?: GameEventQueue;
 }): void {
   const candidates = [...args.world.with("health", "position").entities]
     .filter((e) => e.health!.faction === "hostile" && e.health!.current > 0 && !args.combat.drivingThrustState.hitEntityIds.has(e.id))
@@ -138,6 +140,7 @@ function applyDrivingThrustHits(args: {
       args.vfx,
       args.entityLayer,
       args.combat,
+      args.events,
     );
     args.combat.drivingThrustState.hitEntityIds.add(hit.entity.id);
 
@@ -168,6 +171,7 @@ function advanceDrivingThrust(args: {
   setPlayerAnim: (state: "idle" | "run" | "attack") => void;
   entityLayer: Container;
   onEnemyKilled: (enemy: Entity) => void;
+  events?: GameEventQueue;
 }): void {
   const state = args.combat.drivingThrustState;
   if (state.phase === "idle") return;
@@ -196,6 +200,7 @@ function advanceDrivingThrust(args: {
       hitbox,
       direction: state.direction,
       onEnemyKilled: args.onEnemyKilled,
+      ...(args.events !== undefined ? { events: args.events } : {}),
     });
   }
 
@@ -245,6 +250,7 @@ export function drivingThrustSystem(
   map: MapResource,
   isPlacementMode: boolean,
   onEnemyKilled: (enemy: Entity) => void,
+  events?: GameEventQueue,
 ): void {
   if (combat.drivingThrustCooldownTimer > 0) combat.drivingThrustCooldownTimer = Math.max(0, combat.drivingThrustCooldownTimer - dt);
 
@@ -303,6 +309,7 @@ export function drivingThrustSystem(
     setPlayerAnim,
     entityLayer,
     onEnemyKilled,
+    ...(events !== undefined ? { events } : {}),
   });
 }
 

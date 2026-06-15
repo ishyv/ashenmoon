@@ -118,12 +118,11 @@ import {
 } from "$lib/core/systems/camp/campfire-runtime-system";
 import {
   InteractionResource,
-  updateTargetSystem,
   runInteractionSystem,
   handleHitFeedbackSystem,
   depleteNodeSystem,
-  setHighlight,
 } from "$lib/core/systems/interaction/interaction-system";
+import { updateTargetSystem } from "$lib/core/systems/interaction/targeting-system";
 import { FocusedGatherResource, runFocusedGatherSystem } from "$lib/core/systems/focused-gather/focused-gather-system";
 import { renderFocusedGatherSystem } from "$lib/core/systems/focused-gather/focused-gather-renderer";
 import {
@@ -181,6 +180,7 @@ import {
 import { StatusId } from "$lib/domain/systems/status-types";
 import { loadKnowledge } from "$lib/state/rpg/knowledge.svelte";
 import { loadRecipes } from "$lib/state/rpg/crafting.svelte";
+import { flushRpgFeedbackEvents } from "$lib/state/rpg/rpg-feedback-router";
 import { triggerQuestEvent, dialogueState } from "$lib/state/rpg/quests.svelte";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
@@ -224,6 +224,8 @@ import {
   resolveCollisionAabb,
   type CollisionFootprint,
 } from "$lib/domain/collision";
+import { createGameEventQueue, type QueuedGameEvent } from "$lib/domain/game-event-queue";
+import { routeGameEventsToFeedback } from "$lib/core/systems/feedback/feedback-router";
 
 export class GameEngine {
   private app!: Application;
@@ -246,6 +248,8 @@ export class GameEngine {
   public itemPlacementResource = new ItemPlacementResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
+  public eventQueue = createGameEventQueue();
+  public lastFrameEvents: readonly QueuedGameEvent[] = [];
   public weatherResource = new WeatherResource();
   public fogSystem = new FogSystem();
   public rainEffectSystem = new RainEffectSystem();
@@ -746,6 +750,7 @@ export class GameEngine {
           this.onStationInteract,
           { raining: this.weatherResource.state.raining },
           this.onOpenCarcassPanel,
+          this.eventQueue,
         );
       }
 
@@ -788,7 +793,8 @@ export class GameEngine {
             this.entitySprites,
             this.enemyColors,
             this.playerEntity.position!
-          )
+          ),
+          this.eventQueue
         );
 
         playerAttackSystem(
@@ -811,7 +817,8 @@ export class GameEngine {
             this.entitySprites,
             this.enemyColors,
             this.playerEntity.position!
-          )
+          ),
+          this.eventQueue
         );
 
         fellSweepSystem(
@@ -835,7 +842,8 @@ export class GameEngine {
             this.entitySprites,
             this.enemyColors,
             this.playerEntity.position!
-          )
+          ),
+          this.eventQueue
         );
       } else {
         this.inputResource.pendingDrivingThrust = null;
@@ -851,7 +859,8 @@ export class GameEngine {
         this.vfxResource,
         this.entityLayer,
         this.entitySprites,
-        (entity, state) => getWarriorFrames(state as WarriorAnimKey, this.enemyColors.get(entity.id) ?? "red")
+        (entity, state) => getWarriorFrames(state as WarriorAnimKey, this.enemyColors.get(entity.id) ?? "red"),
+        this.eventQueue
       );
 
       animalEcologySystem(
@@ -867,6 +876,7 @@ export class GameEngine {
         findLitCampfires(world),
         this.worldEventTimeOfDay(),
         this.weatherResource.state.raining,
+        this.eventQueue,
       );
       tickEnemyBleedSystem(
         world,
@@ -882,7 +892,8 @@ export class GameEngine {
           this.entitySprites,
           this.enemyColors,
           this.playerEntity.position!
-        )
+        ),
+        this.eventQueue
       );
 
       knockbackSystem(world, this.mapResource, this.entitySprites, dt);
@@ -909,9 +920,9 @@ export class GameEngine {
         dt,
         (k, r) => this.isPlayerNearForestAnimalZone(k, r),
         () => this.hasPredatorAndPreyAnimals(),
-        () => this.worldEventTimeOfDay()
+        () => this.worldEventTimeOfDay(),
+        this.eventQueue,
       );
-      this.flushWeatherFeedback();
 
       tickCampfireEntities(world, dt, { raining: this.weatherResource.state.raining });
 
@@ -951,6 +962,7 @@ export class GameEngine {
 
       if (playerHealth.current <= 0) this.respawnPlayer();
       this.syncPlayerHp();
+      flushRpgFeedbackEvents();
 
       // Regenerate stamina when not sprinting (slower while in combat,
       // slower still while sick/exhausted). Pool size and the status regen
@@ -976,6 +988,14 @@ export class GameEngine {
         this.focusedGatherResource,
         this.combatResource
       );
+
+      const frameEvents = this.eventQueue.drain();
+      routeGameEventsToFeedback(frameEvents, {
+        world,
+        vfx: this.vfxResource,
+        entityLayer: this.entityLayer,
+      });
+      this.lastFrameEvents = frameEvents;
 
       // Pin shadow to player feet
       const shadowPos = this.playerEntity.position!;
@@ -1790,14 +1810,6 @@ export class GameEngine {
     ).coldMultiplier;
   }
 
-  private flushWeatherFeedback(): void {
-    const events = this.weatherResource.feedbackEvents.splice(0);
-    for (const event of events) {
-      emitPlayerFeedback(event.message, event.tone);
-      if (event.sound) playSound(event.sound);
-    }
-  }
-
   public startBuildingPlacement(
     type: string,
     onCancel?: () => void,
@@ -2282,6 +2294,3 @@ export class GameEngine {
     }
   }
 }
-
-
-

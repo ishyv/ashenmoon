@@ -39,8 +39,6 @@ import {
 } from "./kite-combo";
 import {
   type VFXResource,
-  flashEntity,
-  spawnDamageNumber,
   spawnSlashArc,
   spawnCrosscutSlash,
   spawnFourfoldFinisherSlash,
@@ -51,11 +49,13 @@ import {
 } from "$lib/core/vfx/vfx";
 import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
-import { mitigatePhysical, staminaCost } from "$lib/domain/stats/stat-calculation";
+import { staminaCost } from "$lib/domain/stats/stat-calculation";
 import { playSound } from "$lib/audio/audio-engine";
 import { Colors } from "$lib/utils/colors";
 import { gameState } from "$lib/state/game-state.svelte";
 import { PLAYER_BODY } from "$lib/domain/collision";
+import { resolveDamage } from "$lib/domain/combat/damage";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
 import { createInitialFellSweepChargeState, type FellSweepChargeState } from "$lib/domain/combat/fell-sweep";
 import {
   advanceCrosscutChain,
@@ -199,18 +199,16 @@ export function applyDamage(
   vfx: VFXResource,
   entityLayer: Container,
   combat?: CombatResource,
+  events?: GameEventQueue,
+  armor?: number,
 ): boolean {
   const h = target.health;
   if (!h || h.invulnTimer > 0 || h.current <= 0) return false;
 
   const isPlayer = h.faction === "player";
-  if (isPlayer) {
-    // Armor mitigation from the stat layer. Enemy armor deferred until
-    // enemies get archetype-level stats.
-    amount = Math.round(mitigatePhysical(amount, getPlayerStats().combat.armor));
-  }
+  let damageMultiplier = 1;
   if (isPlayer && combat && combat.kiteStacks > 0) {
-    amount = Math.round(amount * (1 + 0.15 * combat.kiteStacks));
+    damageMultiplier += 0.15 * combat.kiteStacks;
     spawnEnvFloatingText(
       vfx,
       "⚠️ Focus Broken!",
@@ -222,7 +220,44 @@ export function applyDamage(
     combat.kiteStacksDecayTimer = 0;
   }
 
-  h.current = Math.max(0, h.current - amount);
+  const damage = resolveDamage({
+    health: h,
+    amount,
+    damageType: "physical",
+    armor: armor ?? 0,
+    damageMultiplier,
+  });
+
+  if (!damage.applied) return false;
+
+  h.current = damage.nextHealth;
+
+  events?.push({
+    type: "damage_applied",
+    targetId: target.id,
+    amount: damage.damageApplied,
+    damageType: "physical",
+    lethal: damage.lethal,
+    targetFaction: h.faction,
+    ...(target.position ? { targetPosition: { x: target.position.x, y: target.position.y } } : {}),
+  });
+  events?.push({
+    type: "health_changed",
+    entityId: target.id,
+    previous: damage.previousHealth,
+    current: damage.nextHealth,
+    max: h.max,
+  });
+  if (damage.lethal) {
+    events?.push({
+      type: "entity_died",
+      entityId: target.id,
+      cause: "combat",
+      faction: h.faction,
+      ...(target.position ? { position: { x: target.position.x, y: target.position.y } } : {}),
+      ...(target.loot?.xpReward !== undefined ? { xpReward: target.loot.xpReward } : {}),
+    });
+  }
 
   let shouldApplyKnockback = true;
   if (!isPlayer && combat) {
@@ -254,31 +289,7 @@ export function applyDamage(
 
   if (isPlayer) h.invulnTimer = config.playerIFrames;
 
-  // --- feedback: flash, damage number, impact shake, hurt/hit sfx ---
-  const fx = (target.position?.x ?? sourceX) + TILE / 2;
-  const flashY = (target.position?.y ?? sourceY) + TILE;
-  const numberY = (target.position?.y ?? sourceY) + TILE * 0.4;
-  flashEntity(
-    vfx,
-    entityLayer,
-    target.id,
-    fx,
-    flashY,
-    isPlayer ? Colors.combat.playerHit : Colors.combat.enemyHit,
-  );
-  spawnDamageNumber(
-    vfx,
-    entityLayer,
-    fx,
-    numberY,
-    amount,
-    isPlayer ? Colors.combat.playerDmgNum : Colors.combat.enemyDmgNum,
-  );
-  triggerCameraShake(vfx, isPlayer ? 4 : 2.5, 0.12);
-  const hitPos = { x: fx, y: (target.position?.y ?? sourceY) + TILE / 2 };
-  playSound(isPlayer ? "combat.hit.player" : "combat.hit.enemy", { position: hitPos });
-
-  return h.current <= 0;
+  return damage.lethal;
 }
 
 /**
@@ -396,6 +407,7 @@ function maybeApplyCrosscutBleed(
   vfx: VFXResource,
   entityLayer: Container,
   combat: CombatResource,
+  events?: GameEventQueue,
 ): boolean {
   if (!result.grade || !result.bleedChancePct || Math.random() * 100 >= result.bleedChancePct) return false;
   if (!target.health || target.health.current <= 0) return false;
@@ -420,6 +432,7 @@ function maybeApplyCrosscutBleed(
       vfx,
       entityLayer,
       combat,
+      events,
     );
   }
 
@@ -442,6 +455,7 @@ export function tickEnemyBleedSystem(
   entityLayer: Container,
   dt: number,
   onEnemyKilled: (enemy: Entity) => void,
+  events?: GameEventQueue,
 ): void {
   for (const e of world.with("health", "position", "bleed").entities) {
     const h = e.health!;
@@ -457,7 +471,7 @@ export function tickEnemyBleedSystem(
       bleed.tickTimer += bleed.tickEverySec;
       const cx = e.position!.x + TILE / 2;
       const cy = e.position!.y + TILE / 2;
-      const died = applyDamage(e, bleed.damagePerTick, cx, cy, 0, config, vfx, entityLayer, combat);
+      const died = applyDamage(e, bleed.damagePerTick, cx, cy, 0, config, vfx, entityLayer, combat, events);
       if (died) {
         clearEnemyBleed(e);
         onEnemyKilled(e);
@@ -489,6 +503,7 @@ export function playerAttackSystem(
   movement: MovementResource,
   isPlacementMode: boolean,
   onEnemyKilled: (enemy: Entity) => void,
+  events?: GameEventQueue,
 ): void {
   updateDirectionalMomentumCombo(
     combat,
@@ -879,9 +894,10 @@ export function playerAttackSystem(
       vfx,
       entityLayer,
       combat,
+      events,
     );
     if (isCrosscut && !died) {
-      const bleedKilled = maybeApplyCrosscutBleed(e, crosscutResult, config, vfx, entityLayer, combat);
+      const bleedKilled = maybeApplyCrosscutBleed(e, crosscutResult, config, vfx, entityLayer, combat, events);
       if (bleedKilled && (e.health?.current ?? 0) <= 0) onEnemyKilled(e);
     }
     if (died) onEnemyKilled(e);

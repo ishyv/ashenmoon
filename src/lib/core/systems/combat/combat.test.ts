@@ -14,6 +14,7 @@ import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgSkills } from "$lib/state/rpg-actions.svelte";
 import { stamina, setStamina } from "$lib/state/rpg/stamina.svelte";
 import { MovementResource, playerMovementSystem } from "$lib/core/systems/movement/movement";
+import { createGameEventQueue } from "$lib/domain/game-event-queue";
 
 // Mocking dependencies that aren't available in node/test environment
 vi.mock("$lib/core/vfx/vfx", () => ({
@@ -314,6 +315,45 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
     expect(player.health?.current).toBe(87);
     expect(combat.kiteStacks).toBe(0);
     expect(combat.kiteStacksDecayTimer).toBe(0);
+  });
+
+  it("should emit damage, health, and death events when damage is applied", () => {
+    const { config, vfx, entityLayer } = setupTest();
+    const enemy: Entity = {
+      id: "enemy_event_test",
+      position: { x: 64, y: 64, targetX: 64, targetY: 64 },
+      health: { current: 10, max: 20, faction: "hostile", invulnTimer: 0 },
+    };
+    const events = createGameEventQueue();
+
+    const lethal = applyDamage(enemy, 15, 0, 0, 0, config, vfx, entityLayer, undefined, events);
+
+    expect(lethal).toBe(true);
+    expect(events.drain()).toEqual([
+      {
+        type: "damage_applied",
+        targetId: "enemy_event_test",
+        amount: 15,
+        damageType: "physical",
+        lethal: true,
+        targetFaction: "hostile",
+        targetPosition: { x: 64, y: 64 },
+      },
+      {
+        type: "health_changed",
+        entityId: "enemy_event_test",
+        previous: 10,
+        current: 0,
+        max: 20,
+      },
+      {
+        type: "entity_died",
+        entityId: "enemy_event_test",
+        cause: "combat",
+        faction: "hostile",
+        position: { x: 64, y: 64 },
+      },
+    ]);
   });
 
   it("should reward stamina and sacrifice HP when Kite Combo hits an enemy at high stacks", () => {

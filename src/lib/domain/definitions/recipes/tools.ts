@@ -110,8 +110,8 @@ export const toolRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You scrape a bone shard into a needle for hidework.",
     costs: [
-      { itemId: "bone_shard", name: "bone shard", required: 1 },
-      { itemId: "flat_stone", name: "flat stone", required: 1 },
+      { itemId: "small_bone", name: "small bone", required: 1 },
+      { itemId: "flint_shard", name: "flint shard", required: 1 },
     ],
     output: { itemId: "bone_needle", qty: 1 },
     process: "assemble",

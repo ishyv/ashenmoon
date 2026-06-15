@@ -8,7 +8,7 @@ import {
 import { StorageKeys } from "$lib/domain/game-events";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
-import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
+import { playerRpgEntityId, rpgEventQueue } from "$lib/state/rpg/rpg-feedback-router";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 
 export const woundState = $state<{ active: WoundState[] }>({ active: [] });
@@ -30,6 +30,13 @@ export function applyWound(input: {
 
   const wound = createWound(woundInput);
   woundState.active = [...woundState.active, wound];
+  rpgEventQueue.push({
+    type: "wound_added",
+    entityId: playerRpgEntityId(),
+    woundId: wound.id,
+    severity: wound.severity,
+    ...(input.source !== undefined ? { source: input.source } : {}),
+  });
   for (const status of statusIdsForWound(wound)) {
     applyStatusEffect(status, status === StatusId.Bleeding ? 180 : 600, input.source ?? "wound");
   }
@@ -55,7 +62,12 @@ export function tickWounds(dtSec: number): void {
     const before = previous.find((candidate) => candidate.id === wound.id);
     if (wound.infected && before && !before.infected) {
       applyStatusEffect(StatusId.Infected, 900, "wound");
-      emitPlayerFeedback("A wound turns hot and angry.", "danger");
+      rpgEventQueue.push({
+        type: "wound_progressed",
+        entityId: playerRpgEntityId(),
+        woundId: wound.id,
+        progression: "infected",
+      });
     }
   }
 

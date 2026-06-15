@@ -25,7 +25,6 @@ export const INITIAL_QUESTS: Record<string, Quest> = {
       { id: "gather_flint", label: "Gather Flint Shard", current: 0, target: 1, completed: false },
       { id: "gather_fiber", label: "Gather Grass Fiber", current: 0, target: 1, completed: false },
       { id: "craft_axe", label: "Craft Flint Axe", current: 0, target: 1, completed: false },
-      { id: "talk_vane", label: "Report back to Commander Vane", current: 0, target: 1, completed: false },
     ],
   },
   securing_perimeter: {
@@ -37,7 +36,6 @@ export const INITIAL_QUESTS: Record<string, Quest> = {
     objectives: [
       { id: "harvest_oak", label: "Harvest an Oak Tree", current: 0, target: 1, completed: false },
       { id: "refuel_fire", label: "Refuel the Campfire", current: 0, target: 1, completed: false },
-      { id: "talk_vane_2", label: "Report back to Vane", current: 0, target: 1, completed: false },
     ],
   },
   outpost_foundations: {
@@ -49,7 +47,6 @@ export const INITIAL_QUESTS: Record<string, Quest> = {
     objectives: [
       { id: "craft_block", label: "Craft Stone Blocks", current: 0, target: 3, completed: false },
       { id: "build_wall", label: "Place Stone Walls", current: 0, target: 3, completed: false },
-      { id: "talk_vane_3", label: "Report back to Vane", current: 0, target: 1, completed: false },
     ],
   },
   outpost_sanctuary: {
@@ -61,7 +58,6 @@ export const INITIAL_QUESTS: Record<string, Quest> = {
     objectives: [
       { id: "build_house", label: "Place Outpost House", current: 0, target: 1, completed: false },
       { id: "build_tower", label: "Place Defense Tower", current: 0, target: 1, completed: false },
-      { id: "talk_vane_4", label: "Report back to Vane", current: 0, target: 1, completed: false },
     ],
   },
 };

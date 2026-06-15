@@ -1,4 +1,4 @@
-import { Cell } from "$lib/core/types";
+import { Cell } from "$lib/domain/worldgen/cell";
 import type { ScenarioDefinition } from "./scenario-types";
 
 export const allLandmarksScenario: ScenarioDefinition = {

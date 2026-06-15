@@ -23,6 +23,9 @@ import { type VFXResource, spawnEnvFloatingText } from "$lib/core/vfx/vfx";
 import { applyDamage, type CombatConfig, type CombatResource } from "$lib/core/systems/combat/combat";
 import { Colors } from "$lib/utils/colors";
 import { applyEntityAnim, type EntityAnimSpec } from "$lib/core/systems/animation/entity-animator";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
+import { resolveMeleeHit, MELEE_FORGIVENESS } from "$lib/domain/combat/attack";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 
 const ENEMY_HX = TILE * 0.3;
 const ENEMY_HY = TILE * 0.26;
@@ -111,7 +114,8 @@ export function enemyAiSystem(
   vfx: VFXResource,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
-  getEnemyFrames: (entity: Entity, state: AnimState) => Texture[]
+  getEnemyFrames: (entity: Entity, state: AnimState) => Texture[],
+  events?: GameEventQueue,
 ): void {
   const pp = player.position;
   if (!pp) return;
@@ -166,8 +170,9 @@ export function enemyAiSystem(
           melee.windupTimer -= dt;
           if (melee.windupTimer <= 0) {
             // Strike resolves only if the player is still in reach (dodgeable).
-            if (distPlayer <= melee.range * 1.4) {
-              applyDamage(player, melee.damage, ecx, ecy, melee.knockback, config, vfx, entityLayer, combat);
+            const strikeResult = resolveMeleeHit({ attackerX: ecx, attackerY: ecy, targetX: pcx, targetY: pcy, rangePx: melee.range, forgiveness: MELEE_FORGIVENESS });
+            if (strikeResult.hit) {
+              applyDamage(player, melee.damage, ecx, ecy, melee.knockback, config, vfx, entityLayer, combat, events, getPlayerStats().combat.armor);
             }
             melee.cooldownTimer = melee.cooldown;
             ai.state = "recover";

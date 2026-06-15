@@ -5,13 +5,12 @@ import { gameState } from "$lib/state/game-state.svelte";
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { devFlags } from "$lib/state/dev-flags.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
-import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import { type CraftRecipe, CRAFT_RECIPES } from "$lib/domain/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system";
 import { getExperimentHint, matchExperiment } from "$lib/domain/crafting/experimental";
 import { inspect as inspectKnowledge } from "$lib/state/rpg/knowledge.svelte";
-import { knownRecipeList, learnRecipe } from "$lib/state/rpg/crafting.svelte";
+import { knownRecipeList } from "$lib/state/rpg/crafting.svelte";
 import { buildOptionsFromInventory } from "$lib/domain/building-options";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 import ItemGrid from "./inventory/ItemGrid.svelte";
@@ -219,13 +218,9 @@ async function craftItem(recipe: CraftRecipe): Promise<void> {
       availableStations: engine?.nearbyStationIds?.() ?? [],
     }});
     if (!result.ok) throw new Error(result.error);
-    playSound("craft");
     
     // Clear items in mix if we successfully crafted something
     experimentInputs = {};
-    
-    learnRecipe(recipe.id);
-    triggerQuestEvent("craft", recipe.id);
   } catch (err) {
     console.error("craft error:", err instanceof Error ? err.message : String(err));
   }
@@ -256,22 +251,15 @@ async function runExperiment() {
     if (result.ok) {
       const sync = result.data;
       if (sync.success) {
-        playSound("craft");
         experimentInputs = {};
         const recipe = CRAFT_RECIPES.find((r) => r.id === sync.recipeId);
         const name = recipe ? recipe.name.toLowerCase() : "new pattern";
         experimentMessage = `learned ${name}.`;
-        if (sync.recipeId) {
-          learnRecipe(sync.recipeId);
-          triggerQuestEvent("craft", sync.recipeId);
-        }
       } else {
-        playSound("node.deplete");
         const { partial } = matchExperiment(experimentInputs);
         experimentMessage = getExperimentHint(experimentInputs, partial);
       }
     } else {
-      playSound("node.deplete");
       if (result.error === "requires_campfire") {
         experimentMessage = "this needs campfire heat.";
       } else if (result.error === "insufficient_materials") {

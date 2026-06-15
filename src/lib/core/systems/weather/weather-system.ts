@@ -30,6 +30,7 @@ import {
   type WolfCampThreatFactors,
   type WolfCampThreatOutcome,
 } from "$lib/domain/threats/wolf-camp-threat";
+import type { GameEventQueue } from "$lib/domain/game-event-queue";
 
 const RAW_MEAT_IDS = new Set(["raw_meat", "raw_small_meat", "raw_large_meat", "fatty_meat"]);
 const SPOILED_MEAT_IDS = new Set(["spoiled_meat", "rotten_meat"]);
@@ -54,8 +55,6 @@ export class WeatherResource {
   
   public coldAccumulator = 0;
   public hypothermiaRefreshTimer = 0;
-  
-  public feedbackEvents: WorldEventFeedback[] = [];
 }
 
 export function collectWolfCampThreatFactors(input: {
@@ -114,7 +113,8 @@ export function weatherTickSystem(
   dt: number,
   isNearForestAnimalZone: (kind: string, radius: number) => boolean,
   hasPredatorAndPreyAnimals: () => boolean,
-  worldEventTimeOfDay: () => "day" | "dusk" | "night"
+  worldEventTimeOfDay: () => "day" | "dusk" | "night",
+  events?: GameEventQueue,
 ): void {
   // Rain cycle
   if (!weather.state.raining) {
@@ -124,7 +124,8 @@ export function weatherTickSystem(
       const minCooldown = TIME_WEATHER_CONFIG.rainCooldownMinSec;
       const maxCooldown = TIME_WEATHER_CONFIG.rainCooldownMaxSec;
       weather.rainCooldownSec = minCooldown + Math.random() * (maxCooldown - minCooldown);
-      weather.feedbackEvents.push(WORLD_EVENT_FEEDBACK.rain);
+      const rain = WORLD_EVENT_FEEDBACK.rain;
+      events?.push({ type: "feedback_requested", channel: "ui", message: rain.message, tone: rain.tone, ...(rain.sound ? { sound: rain.sound } : {}) });
     } else {
       weather.state = tickWeatherState(weather.state, dt);
     }
@@ -166,7 +167,8 @@ export function weatherTickSystem(
     }));
 
     if (wolfThreat.outcome !== "none" && weather.worldEventState.cooldowns.wolf_howl <= 0) {
-      weather.feedbackEvents.push(WOLF_THREAT_FEEDBACK[wolfThreat.outcome]);
+      const wf = WOLF_THREAT_FEEDBACK[wolfThreat.outcome];
+      events?.push({ type: "feedback_requested", channel: "ui", message: wf.message, tone: wf.tone, ...(wf.sound ? { sound: wf.sound } : {}) });
       weather.worldEventState = putWorldEventOnCooldown(weather.worldEventState, "wolf_howl");
 
       for (const entity of world.with("animal", "position").entities) {
@@ -187,7 +189,7 @@ export function weatherTickSystem(
     
     if (event) {
       const feedback = WORLD_EVENT_FEEDBACK[event.type];
-      weather.feedbackEvents.push(feedback);
+      events?.push({ type: "feedback_requested", channel: "ui", message: feedback.message, tone: feedback.tone, ...(feedback.sound ? { sound: feedback.sound } : {}) });
       weather.worldEventState = putWorldEventOnCooldown(weather.worldEventState, event.type);
 
       if (event.type === "wolf_howl") {

@@ -1,16 +1,6 @@
 import type { AnimatedSprite, Application, Container, Graphics, Sprite, Text } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-
-/** Ground type for each grid cell. Rendered as a tiling biome texture or flat camp clearing. */
-export enum Cell {
-  Meadows,
-  ScorchedWastes,
-  CrimsonGrove,
-  FungalMire,
-  Frostbane,
-  Water,
-  Camp,
-}
+export { Cell } from "$lib/domain/worldgen/cell";
 
 export interface HudState {
   gx: number;

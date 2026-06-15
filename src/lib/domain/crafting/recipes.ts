@@ -7,6 +7,7 @@
  */
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
 import { allRecipes } from "$lib/domain/definitions/recipes";
+import type { ValidItemId } from "$lib/domain/definitions/items";
 import type {
   CraftRecipe,
   RecipeInput,
