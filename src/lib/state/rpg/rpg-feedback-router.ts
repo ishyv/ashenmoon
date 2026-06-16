@@ -53,6 +53,7 @@ function routeCraftEvent(event: QueuedGameEvent): void {
   } else if (event.type === "recipe_discovered") {
     playSound("craft");
     learnRecipe(event.recipeId);
+    emitPlayerFeedback(`blueprint studied. recipe unlocked.`, "good");
     triggerQuestEvent(GameEvent.Craft, event.recipeId);
   } else if (event.type === "craft_failed") {
     playSound("node.deplete");

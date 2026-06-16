@@ -1,9 +1,9 @@
 import { getBuildingSpec, BUILDING_SPECS } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
-import { resolveExperiment } from "$lib/domain/crafting/experimental";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
+import { resolveStudyBlueprint } from "$lib/domain/systems/study-system";
 import type {
   RpgEnvironmentTickResult,
   RpgInventorySlot,
@@ -27,7 +27,7 @@ export type RpgReducerCommand =
   | { type: "gather"; action: "mine" | "forest"; locationId: string }
   | { type: "refuel" }
   | { type: "craft"; recipeId: string; context: CraftContext }
-  | { type: "experiment"; inputs: Record<string, number>; context: CraftContext }
+  | { type: "studyBlueprint"; itemId: string }
   | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number }
@@ -41,17 +41,15 @@ export interface GatherSync {
   toolBroken: boolean;
 }
 
-export interface ExperimentSync {
+export interface StudySync {
   playerState: RpgPlayerState;
-  success: boolean;
-  recipeId?: string | undefined;
-  reason?: string | undefined;
+  learnedRecipeId: string;
 }
 
 export type RpgReducerResult =
   | { playerState: RpgPlayerState }
   | GatherSync
-  | ExperimentSync
+  | StudySync
   | RpgEnvironmentTickResult;
 
 export interface RpgReducerOptions {
@@ -333,33 +331,15 @@ function placeItem(state: RpgPlayerState, command: Extract<RpgReducerCommand, { 
   return { playerState };
 }
 
-function experiment(
+function studyBlueprint(
   state: RpgPlayerState,
-  command: Extract<RpgReducerCommand, { type: "experiment" }>,
-): ExperimentSync {
+  command: Extract<RpgReducerCommand, { type: "studyBlueprint" }>,
+): StudySync {
   const playerState = clonePlayerState(state);
-  const result = resolveExperiment(playerState.inventory.slots, command.inputs, command.context);
-  
-  if (result.slots) {
-    playerState.inventory = { slots: result.slots };
-  }
-  
-  if (result.ok) {
-    return {
-      playerState,
-      success: true,
-      recipeId: result.recipe.id,
-    };
-  } else {
-    if (result.reason === "requires_campfire" || result.reason === "insufficient_materials") {
-      throw new Error(result.reason);
-    }
-    return {
-      playerState,
-      success: false,
-      reason: result.reason,
-    };
-  }
+  const result = resolveStudyBlueprint(playerState.inventory.slots, command.itemId);
+  if (!result.ok) throw new Error(result.reason);
+  playerState.inventory = { slots: result.slots };
+  return { playerState, learnedRecipeId: result.recipeId };
 }
 
 /**
@@ -386,8 +366,8 @@ export function reduceRpgCommand(
       return refuel(state);
     case "craft":
       return craft(state, command);
-    case "experiment":
-      return experiment(state, command);
+    case "studyBlueprint":
+      return studyBlueprint(state, command);
     case "build":
       return build(state, command, options);
     case "destroyBuilding":

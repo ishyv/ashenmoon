@@ -27,6 +27,7 @@ export enum Category {
   Container = "container",
   Clothing = "clothing",
   Structure = "structure",
+  Knowledge = "knowledge",
 }
 
 /**

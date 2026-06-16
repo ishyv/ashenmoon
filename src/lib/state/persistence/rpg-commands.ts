@@ -1,7 +1,6 @@
 import { BUILDING_SPECS, getBuildingSpec } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
-import { resolveExperiment } from "$lib/domain/crafting/experimental";
 import { StorageKeys } from "$lib/domain/game-events";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
@@ -500,38 +499,6 @@ function placeItem(itemId: string, qty = 1): RpgPlayerState {
   });
 }
 
-export interface ExperimentSync {
-  playerState: RpgPlayerState;
-  success: boolean;
-  recipeId?: string | undefined;
-  reason?: string | undefined;
-}
-
-function experiment(inputs: Record<string, number>, ctx: CraftContext): ExperimentSync {
-  let success = false;
-  let recipeId: string | undefined;
-  let reason: string | undefined;
-
-  const playerState = mutateAndSave((state) => {
-    const result = resolveExperiment(state.inventory.slots, inputs, ctx);
-    if (result.slots) {
-      state.inventory = { slots: result.slots };
-    }
-    if (result.ok) {
-      success = true;
-      recipeId = result.recipe.id;
-    } else {
-      if (result.reason === "requires_campfire" || result.reason === "insufficient_materials") {
-        throw new Error(result.reason);
-      }
-      success = false;
-      reason = result.reason;
-    }
-  });
-
-  return { playerState, success, recipeId, reason };
-}
-
 export const localRpgCommands = {
   getPlayerState: getLocalRpgState,
   savePlayerState: saveLocalRpgState,
@@ -543,7 +510,6 @@ export const localRpgCommands = {
   build,
   destroyBuilding,
   craft,
-  experiment,
   environmentTick,
   placeItem,
 };

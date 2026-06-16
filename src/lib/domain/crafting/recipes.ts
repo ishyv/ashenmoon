@@ -98,3 +98,16 @@ export function assertValidCraftRecipes(
     throw new Error(`invalid craft recipes:\n- ${problems.join("\n- ")}`);
   }
 }
+
+/** Recipes the player has unlocked. */
+export function listKnownRecipes(
+  knownRecipeIds: ReadonlySet<string>,
+  recipes: readonly CraftRecipe[] = CRAFT_RECIPES,
+): CraftRecipe[] {
+  return recipes.filter((r) => knownRecipeIds.has(r.id));
+}
+
+/** Whether a recipe id is unlocked. */
+export function isRecipeKnown(knownRecipeIds: ReadonlySet<string>, recipeId: string): boolean {
+  return knownRecipeIds.has(recipeId);
+}

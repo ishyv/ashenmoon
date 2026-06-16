@@ -6,11 +6,10 @@ import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { devFlags } from "$lib/state/dev-flags.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
 import { playSound } from "$lib/audio/audio-engine";
-import { type CraftRecipe, CRAFT_RECIPES } from "$lib/domain/crafting/recipes";
+import { type CraftRecipe } from "$lib/domain/crafting/recipes";
 import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system";
-import { getExperimentHint, matchExperiment } from "$lib/domain/crafting/experimental";
 import { inspect as inspectKnowledge } from "$lib/state/rpg/knowledge.svelte";
-import { knownRecipeList } from "$lib/state/rpg/crafting.svelte";
+import { allRecipeList, recipeKnowledge } from "$lib/state/rpg/crafting.svelte";
 import { buildOptionsFromInventory } from "$lib/domain/building-options";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 import ItemGrid from "./inventory/ItemGrid.svelte";
@@ -32,12 +31,10 @@ let {
 let activeTab = $state<InventoryTab>("stash");
 let hoveredItem = $state<string | null>(null);
 let selectedItem = $state<string | null>(null);
-let experimentInputs = $state<Record<string, number>>({});
-let experimentMessage = $state("");
 let decayProgress = $state<Record<string, number>>({});
 let decayInterval: ReturnType<typeof setInterval> | undefined;
 
-const recipes = $derived(knownRecipeList());
+const allRecipes = $derived(allRecipeList());
 const inspectNotes = $derived(selectedItem ? inspectKnowledge(selectedItem) : null);
 const stashLimit = $derived(gameState.rpg.profile?.stashSize ?? 20);
 
@@ -169,35 +166,6 @@ onDestroy(() => {
   if (decayInterval) clearInterval(decayInterval);
 });
 
-function addExperimentIngredient(itemId: string) {
-  const current = experimentInputs[itemId] ?? 0;
-  const invQty = getMaterialQty(itemId);
-  if (current < invQty) {
-    experimentInputs[itemId] = current + 1;
-    playSound("pickup");
-  }
-}
-
-function removeExperimentIngredient(itemId: string) {
-  const current = experimentInputs[itemId] ?? 0;
-  if (current > 1) {
-    experimentInputs[itemId] = current - 1;
-  } else {
-    delete experimentInputs[itemId];
-  }
-  playSound("pickup");
-}
-
-function experimentQty(itemId: string): number {
-  return experimentInputs[itemId] ?? 0;
-}
-
-function clearExperiment() {
-  experimentInputs = {};
-  experimentMessage = "";
-  playSound("pickup");
-}
-
 function canCraft(recipe: CraftRecipe): boolean {
   if (!gameState.rpg.inventory) return false;
   return canCraftRecipe(gameState.rpg.inventory.slots, recipe.id, {
@@ -218,9 +186,6 @@ async function craftItem(recipe: CraftRecipe): Promise<void> {
       availableStations: engine?.nearbyStationIds?.() ?? [],
     }});
     if (!result.ok) throw new Error(result.error);
-    
-    // Clear items in mix if we successfully crafted something
-    experimentInputs = {};
   } catch (err) {
     console.error("craft error:", err instanceof Error ? err.message : String(err));
   }
@@ -231,45 +196,14 @@ function startBuildPlacement(recipe: BuildRecipeView): void {
   engine?.startBuildingPlacement(recipe.id, () => {}, onClose, recipe.sourceItemId);
 }
 
-async function runExperiment() {
-  const count = Object.keys(experimentInputs).length;
-  if (count === 0) {
-    experimentMessage = "add ingredients first.";
-    return;
-  }
-
+async function studyBlueprint(itemId: string): Promise<void> {
   try {
-    const result = await dispatchRpgCommand({
-      type: "experiment",
-      inputs: experimentInputs,
-      context: {
-        isNearCampfire: engine?.isNearCampfire() ?? false,
-        availableStations: engine?.nearbyStationIds?.() ?? [],
-      },
-    });
-
-    if (result.ok) {
-      const sync = result.data;
-      if (sync.success) {
-        experimentInputs = {};
-        const recipe = CRAFT_RECIPES.find((r) => r.id === sync.recipeId);
-        const name = recipe ? recipe.name.toLowerCase() : "new pattern";
-        experimentMessage = `learned ${name}.`;
-      } else {
-        const { partial } = matchExperiment(experimentInputs);
-        experimentMessage = getExperimentHint(experimentInputs, partial);
-      }
-    } else {
-      if (result.error === "requires_campfire") {
-        experimentMessage = "this needs campfire heat.";
-      } else if (result.error === "insufficient_materials") {
-        experimentMessage = "you do not have enough material.";
-      } else {
-        experimentMessage = result.error;
-      }
-    }
+    const result = await dispatchRpgCommand({ type: "studyBlueprint", itemId });
+    if (!result.ok) throw new Error(result.error);
+    selectedItem = null;
+    playSound("craft");
   } catch (err) {
-    console.error("experiment error:", err);
+    console.error("study error:", err instanceof Error ? err.message : String(err));
   }
 }
 </script>
@@ -288,6 +222,7 @@ async function runExperiment() {
           selectedItem = null;
           engine?.startItemPlacement(itemId, () => {}, () => {});
         }}
+        onStudy={studyBlueprint}
       />
     </GamePanel>
   {/if}
@@ -330,15 +265,9 @@ async function runExperiment() {
         />
       {:else if activeTab === "crafting"}
         <CraftingPanel
-          recipes={recipes}
+          {allRecipes}
+          knownRecipeIds={recipeKnowledge.known}
           items={itemsList}
-          {experimentInputs}
-          {experimentMessage}
-          {experimentQty}
-          addExperimentIngredient={addExperimentIngredient}
-          removeExperimentIngredient={removeExperimentIngredient}
-          {runExperiment}
-          {clearExperiment}
           {canCraft}
           {craftItem}
           isNearCampfire={() => engine?.isNearCampfire() ?? false}

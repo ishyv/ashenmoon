@@ -3,6 +3,7 @@ import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-
 import { getItemDef, reactsInto, traitOf } from "$lib/domain/items";
 import type { KnowledgeProperty } from "$lib/domain/knowledge/item-knowledge";
 import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
+import { recipeKnown } from "$lib/state/rpg/crafting.svelte";
 
 const KNOWLEDGE_LABELS: Record<KnowledgeProperty, string> = {
   edible: "edible",
@@ -23,6 +24,7 @@ let {
   onClose,
   onEquip,
   onPlace,
+  onStudy,
 }: {
   itemId: string;
   inspectNotes: { known: KnowledgeProperty[]; unknown: KnowledgeProperty[] } | null;
@@ -31,6 +33,7 @@ let {
   onClose: () => void;
   onEquip: (itemId: string) => void;
   onPlace: (itemId: string) => void;
+  onStudy?: (itemId: string) => void;
 } = $props();
 
 const meta = $derived(getItemDef(itemId));
@@ -38,6 +41,8 @@ const knownProps = $derived(new Set(inspectNotes?.known ?? []));
 const flammable = $derived(meta ? traitOf(meta, "flammable") : null);
 const tempSensitive = $derived(meta ? traitOf(meta, "temperature_sensitive") : null);
 const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
+const blueprintTrait = $derived(meta ? traitOf(meta, "blueprint") : null);
+const blueprintAlreadyKnown = $derived(blueprintTrait ? recipeKnown(blueprintTrait.recipeId) : false);
 </script>
 
 {#if meta}
@@ -99,7 +104,12 @@ const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
           {getConsumeVerb(itemId)}
         </button>
       {/if}
-      {#if !isEquipped(itemId)}
+      {#if blueprintTrait && onStudy}
+        <button class="action-btn" disabled={blueprintAlreadyKnown} onclick={() => onStudy?.(itemId)}>
+          {blueprintAlreadyKnown ? "already known" : "study"}
+        </button>
+      {/if}
+      {#if !isEquipped(itemId) && !blueprintTrait}
         <button class="action-btn" onclick={() => onPlace(itemId)}>
           place
         </button>

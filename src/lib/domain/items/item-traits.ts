@@ -29,7 +29,8 @@ export type ItemTrait =
   | MedicineIngredientTrait
   | HandlingRiskTrait
   | CuttingEdgeTrait
-  | RestQualityTrait;
+  | RestQualityTrait
+  | BlueprintTrait;
 
 /**
  * Defines item behavior based on ambient temperature.
@@ -334,6 +335,14 @@ export function RestQuality(value: number): RestQualityTrait {
   return { kind: "rest_quality", value };
 }
 
+export interface BlueprintTrait {
+  kind: "blueprint";
+  recipeId: string;
+}
+
+export function Blueprint(recipeId: string): BlueprintTrait {
+  return { kind: "blueprint", recipeId };
+}
 
 /**
  * Returns the trait of the given kind carried by a definition, or `undefined`.

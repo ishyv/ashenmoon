@@ -1,5 +1,4 @@
-import { isRecipeKnown, listKnownRecipes } from "$lib/domain/crafting/experimental";
-import type { CraftRecipe } from "$lib/domain/crafting/recipes";
+import { isRecipeKnown, listKnownRecipes, CRAFT_RECIPES, type CraftRecipe } from "$lib/domain/crafting/recipes";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 import { StorageKeys } from "$lib/domain/game-events";
 
@@ -28,6 +27,10 @@ export function recipeKnown(recipeId: string): boolean {
 
 export function knownRecipeList(): CraftRecipe[] {
   return listKnownRecipes(recipeKnowledge.known);
+}
+
+export function allRecipeList(): CraftRecipe[] {
+  return [...CRAFT_RECIPES];
 }
 
 export function loadRecipes(): void {

@@ -4,7 +4,7 @@ import { createDefaultProfile, createDefaultSkills } from "$lib/domain/rpg-defau
 import {
   reduceRpgCommand,
   type GatherSync,
-  type ExperimentSync,
+  type StudySync,
   type RpgReducerResult,
 } from "$lib/domain/rpg-reducer";
 import type {
@@ -31,7 +31,7 @@ export type RpgCommand =
   | { type: "gather"; action: "mine" | "forest"; locationId: string }
   | { type: "refuel" }
   | { type: "craft"; recipeId: string; context: CraftContext }
-  | { type: "experiment"; inputs: Record<string, number>; context: CraftContext }
+  | { type: "studyBlueprint"; itemId: string }
   | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number }
@@ -44,7 +44,7 @@ type CommandData = {
   gather: GatherSync;
   refuel: { playerState: RpgPlayerState };
   craft: { playerState: RpgPlayerState };
-  experiment: ExperimentSync;
+  studyBlueprint: StudySync;
   build: { playerState: RpgPlayerState };
   destroyBuilding: { playerState: RpgPlayerState };
   placeItem: { playerState: RpgPlayerState };
@@ -91,21 +91,13 @@ function emitCommandEvents<C extends RpgCommand>(command: C, data: CommandData[C
     return;
   }
 
-  if (command.type === "experiment") {
-    const experimentData = data as CommandData["experiment"];
-    if (experimentData.success && experimentData.recipeId) {
-      rpgEventQueue.push({
-        type: "recipe_discovered",
-        actorId: playerRpgEntityId(),
-        recipeId: experimentData.recipeId,
-      });
-    } else if (!experimentData.success) {
-      rpgEventQueue.push({
-        type: "craft_failed",
-        actorId: playerRpgEntityId(),
-        reason: experimentData.reason ?? "experiment_failed",
-      });
-    }
+  if (command.type === "studyBlueprint") {
+    const studyData = data as CommandData["studyBlueprint"];
+    rpgEventQueue.push({
+      type: "recipe_discovered",
+      actorId: playerRpgEntityId(),
+      recipeId: studyData.learnedRecipeId,
+    });
   }
 }
 
@@ -115,12 +107,6 @@ function emitCommandFailure(command: RpgCommand, reason: string): void {
       type: "craft_failed",
       actorId: playerRpgEntityId(),
       recipeId: command.recipeId,
-      reason,
-    });
-  } else if (command.type === "experiment") {
-    rpgEventQueue.push({
-      type: "craft_failed",
-      actorId: playerRpgEntityId(),
       reason,
     });
   }
