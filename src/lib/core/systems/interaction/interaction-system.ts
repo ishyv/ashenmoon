@@ -8,28 +8,32 @@ import {
   type VFXResource,
   spawnEnvFloatingText,
   spawnEnvParticles,
+  spawnSlashArc,
   triggerCameraShake,
 } from "$lib/core/vfx/vfx";
-import { Cell } from "$lib/core/types";
+import { Cell, type AnimState } from "$lib/core/types";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { gameState } from "$lib/state/game-state.svelte";
-import { applyRpgState, setRpgInventory } from "$lib/state/rpg-actions.svelte";
+import { applyRpgState, setRpgInventory, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { getItemDef } from "$lib/domain/items";
 import { Colors } from "$lib/utils/colors";
+import { getActionFeedback } from "$lib/domain/feedback/action-feedback";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import { awardSkillXp } from "$lib/state/rpg/skill-xp";
 import { SkillKey, InputAction, EntityId, GameEvent } from "$lib/domain/game-events";
-import { getItemQty, getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
+import { getItemQty, getEquippedWeaponId, findBestAutoEquipTool } from "$lib/state/rpg/inventory-api";
+import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remote-sync";
 import { transformStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
 import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
-import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
+import { applyStatusEffect, statusState } from "$lib/state/rpg/status-effects.svelte";
 import { applyWound } from "$lib/state/rpg/wounds.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
+import { stamina } from "$lib/state/rpg/stamina.svelte";
 import { emitPlayerHpDelta } from "$lib/ui/player-feedback.svelte";
 import {
   createTreeFallHazard,
@@ -37,10 +41,9 @@ import {
   isPointInTreeFallZone,
 } from "$lib/domain/hazards/tree-fall-hazard";
 import { LANDMARK_DEFS } from "$lib/domain/worldgen/landmark-definitions";
-import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
+import { discoverSource, learnAbout } from "$lib/state/rpg/knowledge.svelte";
 import { learnRecipe } from "$lib/state/rpg/crafting.svelte";
-import {
-  completeCarcassWorldAction,
+import { completeCarcassWorldAction,
   startCarcassWorldAction,
 } from "$lib/core/systems/animals/carcass-interactions";
 import { tickWorldActionRuntime, type WorldActionRuntime } from "$lib/domain/world-action-runtime";
@@ -53,7 +56,6 @@ import {
 } from "$lib/domain/systems/station-process";
 import { InteractionDispatcher } from "$lib/core/runtime/interactions";
 import type { RuntimeResourceMap } from "$lib/core/runtime/runtime";
-import type { ParticleFXKey } from "$lib/core/assets/assets";
 import { INTERACT_RANGE } from "$lib/core/systems/interaction/targeting-system";
 import { resolvePickupTarget } from "$lib/core/systems/interaction/pickup-resolution";
 import { resolveGatherRiskForInteraction } from "$lib/core/systems/interaction/gather-risk-resolution";
@@ -82,8 +84,6 @@ interface ImmediateInteractionDeps {
   playerSprite: AnimatedSprite;
   triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void;
   dialogueState: DialogueStateRef;
-  getTreeFrames: () => Texture[];
-  getStumpTexture: () => Texture;
   map?: MapResource | undefined;
   onStationInteract?: ((target: Entity) => void) | undefined;
   onOpenCarcassPanel?: ((targetId: string) => void) | undefined;
@@ -106,8 +106,6 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         entitySprites,
         playerSprite,
         triggerQuestEvent,
-        getTreeFrames,
-        getStumpTexture,
         eventQueue,
       } = resources.deps;
       const baseScale = (TILE * 1.1) / 192;
@@ -124,7 +122,12 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
 
       if (item) {
         void syncPickup(item, target.id, qty).then((r) => {
-          if (r.ok) applyRpgState(r.data.playerState);
+          if (r.ok) {
+            applyRpgState(r.data.playerState);
+            if (target.interactable?.name) {
+              discoverSource(item, target.interactable.name);
+            }
+          }
         });
 
         const itemName = getItemDef(item)?.name ?? item;
@@ -170,8 +173,6 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         entityLayer,
         entitySprites,
         triggerQuestEvent,
-        getTreeFrames,
-        getStumpTexture,
         map
       );
     },
@@ -189,12 +190,20 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
     id: "process",
     handle: ({ target, resources }) => {
       const { onStationInteract, onOpenCarcassPanel } = resources.deps;
+      console.log("[DEBUG ENGINE] Immediate Interaction process handler invoked for target:", {
+        id: target.id,
+        carcass: !!target.carcass,
+        hasOnOpenCarcassPanel: !!onOpenCarcassPanel,
+        hasOnStationInteract: !!onStationInteract
+      });
       if (target.carcass) {
         // Open the dedicated CarcassPanel so the player can choose which action to run.
+        console.log("[DEBUG ENGINE] Calling onOpenCarcassPanel");
         onOpenCarcassPanel?.(target.id);
         return;
       }
       if (onStationInteract) {
+        console.log("[DEBUG ENGINE] Calling onStationInteract");
         onStationInteract(target);
       }
     },
@@ -230,7 +239,12 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         for (const drop of def.drops) {
           if (typeof drop.chance === "number" && Math.random() > drop.chance) continue;
           void syncPickup(drop.itemId, `${target.id}_drop_${drop.itemId}`, drop.qty).then((r) => {
-            if (r.ok) applyRpgState(r.data.playerState);
+            if (r.ok) {
+              applyRpgState(r.data.playerState);
+              if (target.interactable?.name) {
+                discoverSource(drop.itemId, target.interactable.name);
+              }
+            }
           });
           const itemName = getItemDef(drop.itemId)?.name ?? drop.itemId;
           spawnEnvFloatingText(vfx, `+${drop.qty} ${itemName}`, Colors.resource.gold, playerEntity.position!, entityLayer);
@@ -269,10 +283,8 @@ export function handleHitFeedbackSystem(
   vfx: VFXResource,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
-  getParticleFXFrames: (key: ParticleFXKey) => Texture[],
-  getWoodItemTexture: () => Texture,
 ): void {
-  _handleHitFeedback(entity, yieldName, quantity, vfx, entityLayer, entitySprites, getParticleFXFrames, getWoodItemTexture);
+  _handleHitFeedback(entity, yieldName, quantity, vfx, entityLayer, entitySprites);
 }
 
 export function depleteNodeSystem(
@@ -283,11 +295,9 @@ export function depleteNodeSystem(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   triggerQuestEvent: (evt: string, val?: string) => void,
-  getTreeFrames: () => Texture[],
-  getStumpTexture: () => Texture,
   map?: MapResource,
 ): void {
-  _depleteNode(world, entity, clearCurrentTarget, vfx, entityLayer, entitySprites, triggerQuestEvent, getTreeFrames, getStumpTexture, map);
+  _depleteNode(world, entity, clearCurrentTarget, vfx, entityLayer, entitySprites, triggerQuestEvent, map);
 }
 
 /**
@@ -303,13 +313,17 @@ export function triggerImmediateInteraction(
   playerSprite: AnimatedSprite,
   triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void,
   dialogueState: DialogueStateRef,
-  getTreeFrames: () => Texture[],
-  getStumpTexture: () => Texture,
   map?: MapResource,
   onStationInteract?: (target: Entity) => void,
   onOpenCarcassPanel?: (targetId: string) => void,
   eventQueue?: GameEventQueue,
 ): void {
+  console.log("[DEBUG ENGINE] triggerImmediateInteraction called:", {
+    targetId: target.id,
+    action: target.interactable?.action,
+    hasOnStationInteract: !!onStationInteract,
+    hasOnOpenCarcassPanel: !!onOpenCarcassPanel
+  });
   immediateInteractionDispatcher.dispatch({
     world,
     target,
@@ -322,8 +336,6 @@ export function triggerImmediateInteraction(
         playerSprite,
         triggerQuestEvent,
         dialogueState,
-        getTreeFrames,
-        getStumpTexture,
         map,
         onStationInteract,
         onOpenCarcassPanel,
@@ -342,8 +354,6 @@ export function triggerImmediateInteraction(
         playerSprite,
         triggerQuestEvent,
         dialogueState,
-        getTreeFrames,
-        getStumpTexture,
         map,
         onStationInteract,
         onOpenCarcassPanel,
@@ -363,17 +373,13 @@ export function runInteractionSystem(
   vfx: VFXResource,
   dt: number,
   playerSprite: AnimatedSprite,
-  setPlayerAnim: (state: "idle" | "run" | "attack") => void,
+  setPlayerAnim: (state: AnimState) => void,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   onInteract: (target: Entity) => void,
   devConsoleLog: (text: string) => void,
   triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void,
   dialogueState: DialogueStateRef,
-  getParticleFXFrames: (key: ParticleFXKey) => Texture[],
-  getWoodItemTexture: () => Texture,
-  getTreeFrames: () => Texture[],
-  getStumpTexture: () => Texture,
   isPlacementMode: boolean,
   isDashing: boolean,
   onHit: (entity: Entity, yieldName: string, quantity: number) => void,
@@ -433,7 +439,13 @@ export function runInteractionSystem(
             outputItemId: outId,
             outputQty: result.outputQty,
           });
-          eventQueue?.push({ type: "feedback_requested", channel: "ui", message: `process complete: ${resultName.toLowerCase()}`, tone: "success" });
+          const completionFeedback = outId === "clean_water" ? getActionFeedback("water_cleanse") : undefined;
+          eventQueue?.push({
+            type: "feedback_requested",
+            channel: "ui",
+            message: completionFeedback?.toast ?? `process complete: ${resultName.toLowerCase()}`,
+            tone: "success",
+          });
           // Sound and craft quest handled by FeedbackRouter on interaction_completed.
           for (const knowledge of result.knowledge) learnAbout(knowledge.itemId, knowledge.trait);
           if (result.recipeToLearn) learnRecipe(result.recipeToLearn);
@@ -454,10 +466,9 @@ export function runInteractionSystem(
     const runtime = interaction.activeWorldAction;
     const target = world.with("position").entities.find((e) => e.id === runtime.action.executeIntent.targetId);
 
-    const inRange = !!target?.position && !!playerEntity.position && Math.hypot(
-      (target.position.x - playerEntity.position.x) / TILE,
-      (target.position.y - playerEntity.position.y) / TILE,
-    ) <= INTERACT_RANGE;
+    const dx = target?.position && playerEntity.position ? Math.abs(target.position.x - playerEntity.position.x) / TILE : 999;
+    const dy = target?.position && playerEntity.position ? Math.abs(target.position.y - playerEntity.position.y) / TILE : 999;
+    const inRange = dx <= INTERACT_RANGE && dy <= INTERACT_RANGE;
 
     if (!target || !inRange) {
       if (playerEntity.position) spawnEnvFloatingText(vfx, "action interrupted.", Colors.ui.muted, playerEntity.position, entityLayer);
@@ -468,10 +479,32 @@ export function runInteractionSystem(
     const tickedAction = tickWorldActionRuntime(runtime, dt);
     interaction.activeWorldAction = tickedAction;
 
+    if (tickedAction.action.executeIntent.kind === "carcass.process") {
+      setPlayerAnim("gather");
+      if (target.position && playerEntity.position) {
+        const pdx = target.position.x - playerEntity.position.x;
+        if (pdx < 0) playerSprite.scale.x = -Math.abs(playerSprite.scale.x);
+        else if (pdx > 0) playerSprite.scale.x = Math.abs(playerSprite.scale.x);
+      }
+      
+      const prevHitIndex = Math.floor(runtime.elapsedSec / 0.4);
+      const currentHitIndex = Math.floor(tickedAction.elapsedSec / 0.4);
+      if (currentHitIndex > prevHitIndex && !tickedAction.completed) {
+        playSound("gather.chop");
+        if (target.position) {
+          const carcassCenter = {
+            x: target.position.x + TILE / 2,
+            y: target.position.y + TILE / 2,
+          };
+          spawnEnvParticles(vfx, 0x8a1a1a, 6, "smoke", carcassCenter, entityLayer);
+        }
+      }
+    }
+
     if (tickedAction.completed) {
       interaction.activeWorldAction = null;
       if (tickedAction.action.executeIntent.kind === "carcass.process") {
-        completeCarcassWorldAction(target, tickedAction, vfx, entityLayer, eventQueue);
+        completeCarcassWorldAction(target, tickedAction, vfx, entityLayer, entitySprites, eventQueue);
       }
       enqueueWorldActionCompletedEvent({
         queue: eventQueue,
@@ -529,6 +562,14 @@ export function runInteractionSystem(
     }
 
     const wantsInteract = inputs.isActionPressed(InputAction.Harvest) || inputs.pendingInteract;
+    if (wantsInteract) {
+      console.log("[DEBUG ENGINE] Interaction requested:", {
+        harvestPressed: inputs.isActionPressed(InputAction.Harvest),
+        pendingInteract: inputs.pendingInteract,
+        gatheringTarget: interaction.gatheringTarget?.id ?? null,
+        currentTarget: interaction.currentTarget?.id ?? null
+      });
+    }
     inputs.pendingInteract = false;
 
     if (wantsInteract && interaction.gatheringTarget === null) {
@@ -560,7 +601,17 @@ export function runInteractionSystem(
               entityLayer.addChild(textObj);
             };
 
-            const gate = checkGatherTool(weaponId, expectedKind);
+            let gate = checkGatherTool(weaponId, expectedKind);
+            if (!gate.ok) {
+              const autoToolId = findBestAutoEquipTool(expectedKind);
+              if (autoToolId) {
+                equipLocalWeapon(autoToolId);
+                void dispatchRpgCommand({ type: "equipTool", itemId: autoToolId, auto: true });
+                const newWeaponId = getEquippedWeaponId();
+                gate = checkGatherTool(newWeaponId, expectedKind);
+              }
+            }
+
             if (!gate.ok) {
               const detail = gate.reason === "no_tool"
                 ? `no tool equipped; equip a ${expectedKind}.`
@@ -582,7 +633,7 @@ export function runInteractionSystem(
         } else {
           triggerImmediateInteraction(
             world, target, interaction, vfx, entityLayer, entitySprites, playerSprite,
-            triggerQuestEvent, dialogueState, getTreeFrames, getStumpTexture, map,
+            triggerQuestEvent, dialogueState, map,
             onStationInteract, onOpenCarcassPanel, eventQueue,
           );
         }
@@ -593,6 +644,18 @@ export function runInteractionSystem(
       const target = interaction.gatheringTarget;
       const res = target.resource;
 
+      const gatherable = res?.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
+      const expectedKind = gatherable?.requiredToolKind ?? (res?.rpgAction ? requiredToolKind(res.rpgAction) : null);
+      if (expectedKind) {
+        const weaponId = getEquippedWeaponId();
+        const gate = checkGatherTool(weaponId, expectedKind);
+        if (!gate.ok) {
+          interaction.gatheringTarget = null;
+          setPlayerAnim("idle");
+          return false;
+        }
+      }
+
       const playerEntity = getPlayerEntity();
       if (playerEntity.position && target.position) {
         const dx = target.position.x - playerEntity.position.x;
@@ -600,9 +663,33 @@ export function runInteractionSystem(
         else if (dx > 0) playerSprite.scale.x = Math.abs(playerSprite.scale.x);
       }
 
-      setPlayerAnim("attack");
+      const currentStamina = stamina.current;
+      const isExhausted = statusState.active.some((s) => s.id === StatusId.Exhaustion);
+      const isTired = currentStamina < 25 || isExhausted;
 
-      const gatherable = res?.gatherableId ? getGatherableDefinition(res.gatherableId) : undefined;
+      setPlayerAnim(isTired ? "gather_tired" : "gather");
+
+      if (playerEntity.position && target.position) {
+        const playerCenter = {
+          x: playerEntity.position.x + TILE / 2,
+          y: playerEntity.position.y + TILE / 2,
+        };
+        const targetCenter = {
+          x: target.position.x + TILE / 2,
+          y: target.position.y + TILE / 2,
+        };
+        spawnSlashArc(
+          vfx,
+          entityLayer,
+          playerCenter.x,
+          playerCenter.y,
+          Math.atan2(targetCenter.y - playerCenter.y, targetCenter.x - playerCenter.x),
+          TILE * (isTired ? 0.55 : 0.78),
+          isTired ? 0.2 : 0.36,
+          isTired ? 0x555555 : Colors.vfx.focusedGather,
+        );
+      }
+
       const isTree = gatherable?.solidKind === "tree";
       const skillKey = gatherable?.skillKey ?? SkillKey.Mining;
       const skillLevel = gameState.rpg.skills?.[skillKey]?.level ?? 1;
@@ -635,7 +722,7 @@ export function runInteractionSystem(
           depleteNodeSystem(
             world, target,
             (e) => { if (interaction.currentTarget === e) interaction.currentTarget = null; },
-            vfx, entityLayer, entitySprites, triggerQuestEvent, getTreeFrames, getStumpTexture, map,
+            vfx, entityLayer, entitySprites, triggerQuestEvent, map,
           );
           interaction.gatheringTarget = null;
         }
@@ -645,8 +732,16 @@ export function runInteractionSystem(
         void syncGather(res.rpgAction, res.rpgLocationId).then((r) => {
           if (r.ok) {
             applyRpgState(r.data.playerState);
-            for (const mat of r.data.materialsGained) devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
-            if (r.data.toolBroken) devConsoleLog(`[Warning] Your equipped tool broke!`);
+            for (const mat of r.data.materialsGained) {
+              devConsoleLog(`gathered ${mat.id} (+${mat.quantity})`);
+              if (target.interactable?.name) {
+                discoverSource(mat.id, target.interactable.name);
+              }
+            }
+            if (r.data.toolBroken) {
+              devConsoleLog(`[Warning] Your equipped tool broke!`);
+              interaction.gatheringTarget = null;
+            }
           } else {
             devConsoleLog(`[Error] Gathering failed: ${r.error}`);
           }

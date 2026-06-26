@@ -123,6 +123,11 @@ export const FIRST_CAMP_RELATIVE_LAYOUT = {
     { gatherableId: "grass_patch", dx: 3, dy: 6, prefix: "clearing" },
     { gatherableId: "moss_patch", dx: -7, dy: -6, prefix: "forest" },
     { gatherableId: "bark_strip", dx: -8, dy: -7, prefix: "forest" },
+    { gatherableId: "branch_pickup", dx: -6, dy: -5, prefix: "forest" },
+    { gatherableId: "vine_node", dx: -4, dy: -8, prefix: "forest" },
+    { gatherableId: "wild_root_node", dx: -2, dy: 6, prefix: "clearing" },
+    { gatherableId: "acorn_pickup", dx: -6, dy: 8, prefix: "clearing" },
+    { gatherableId: "wild_herb_patch", dx: 3, dy: -5, prefix: "forest" },
   ],
 } as const satisfies FirstCampRelativeLayout;
 

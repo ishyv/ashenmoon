@@ -1,4 +1,4 @@
-import { Category, Rarity, itemId, type IconSheet } from "$lib/domain/items/item-types";
+import { Category, Rarity, itemId } from "$lib/domain/items/item-types";
 import { Item } from "$lib/domain/items/item-builder";
 import { TransformInto } from "$lib/domain/items/item-effects";
 import {
@@ -13,8 +13,6 @@ import {
   InsulationMaterial,
 } from "$lib/domain/items/item-traits";
 
-const SH = (col: number, row: number): IconSheet => ({ src: "/assets/shikashi-icons/icons.png", col, row, size: 32 });
-const I32 = (col: number, row: number): IconSheet => ({ src: "/assets/icons-32/icons.png", col, row, size: 32 });
 
 export const materialItems = {
   stone: Item({
@@ -24,7 +22,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 1.2, stackLimit: 30 },
-    iconUrl: "/assets/icons/rock.png",
   }),
   stick: Item({
     id: itemId("stick"),
@@ -33,7 +30,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Timber,
     physical: { carryClass: "pocket", weight: 0.2, stackLimit: 20 },
-    iconUrl: "/assets/icons/twigs.png",
   }).with(
     Flammable({ ignitionTemp: 95, burnDurationSec: 6, effect: TransformInto(itemId("ash")) })
   ),
@@ -55,7 +51,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Timber,
     physical: { carryClass: "pack", weight: 0.8, stackLimit: 12 },
-    iconSheet: I32(4, 0),
   }).with(
     Flammable({ ignitionTemp: 105, burnDurationSec: 10, effect: TransformInto(itemId("charcoal")) })
   ),
@@ -66,7 +61,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pocket", weight: 0.15, stackLimit: 20 },
-    iconUrl: "/assets/icons/flint_shard.png",
   }),
   grass_fiber: Item({
     id: itemId("grass_fiber"),
@@ -75,7 +69,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 40 },
-    iconUrl: "/assets/icons/fiber.png",
   }),
   leaves: Item({
     id: itemId("leaves"),
@@ -84,7 +77,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.03, stackLimit: 50 },
-    iconUrl: "/assets/icons/leaves.png",
   }).with(
     Flammable({ ignitionTemp: 70, burnDurationSec: 3, effect: TransformInto(itemId("ash")) })
   ),
@@ -117,7 +109,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.1, stackLimit: 30 },
-    iconUrl: "/assets/icons/tree_bark.png",
   }).with(
     Flammable({ ignitionTemp: 90, burnDurationSec: 5, effect: TransformInto(itemId("charcoal")) })
   ),
@@ -146,7 +137,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.8, stackLimit: 20 },
-    iconUrl: "/assets/icons/mud.png",
   }).with(
     TemperatureSensitive({ minSafeTemp: -100, maxSafeTemp: 90, effect: TransformInto(itemId("hardened_clay")) })
   ),
@@ -165,7 +155,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.02, stackLimit: 50 },
-    iconSheet: SH(2, 16),
   }),
   copper_ore: Item({
     id: itemId("copper_ore"),
@@ -174,7 +163,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 1.4, stackLimit: 20 },
-    iconSheet: SH(6, 14),
   }),
   tinder_bundle: Item({
     id: itemId("tinder_bundle"),
@@ -183,7 +171,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 20 },
-    iconUrl: "/assets/icons/leaves.png",
   }).with(
     Flammable({ ignitionTemp: 55, burnDurationSec: 4, effect: TransformInto(itemId("ash")) })
   ),
@@ -194,7 +181,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Timber,
     physical: { carryClass: "pack", weight: 1.8, stackLimit: 8 },
-    iconSheet: SH(4, 14),
   }).with(
     Flammable({ ignitionTemp: 105, burnDurationSec: 24, effect: TransformInto(itemId("charcoal")) })
   ),
@@ -205,7 +191,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.06, stackLimit: 30 },
-    iconUrl: "/assets/icons/fiber.png",
   }),
   grass_cord: Item({
     id: itemId("grass_cord"),
@@ -232,7 +217,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.7, stackLimit: 20 },
-    iconUrl: "/assets/icons/mud.png",
   }),
   sealing_paste: Item({
     id: itemId("sealing_paste"),
@@ -241,7 +225,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.45, stackLimit: 20 },
-    iconSheet: SH(2, 9),
   }).with(Sealant(1)),
   iron_ore: Item({
     id: itemId("iron_ore"),
@@ -250,7 +233,6 @@ export const materialItems = {
     rarity: Rarity.Uncommon,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 1.6, stackLimit: 20 },
-    iconSheet: SH(6, 14),
   }),
   silver_ore: Item({
     id: itemId("silver_ore"),
@@ -259,7 +241,6 @@ export const materialItems = {
     rarity: Rarity.Rare,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 1.3, stackLimit: 20 },
-    iconSheet: SH(7, 14),
   }),
   wood: Item({
     id: itemId("wood"),
@@ -268,7 +249,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Timber,
     physical: { carryClass: "pack", weight: 1.5, stackLimit: 20 },
-    iconSheet: I32(2, 0),
   }).with(
     Flammable({ ignitionTemp: 120, burnDurationSec: 15, effect: TransformInto(itemId("charcoal")) })
   ),
@@ -279,7 +259,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 2, stackLimit: 20 },
-    iconSheet: SH(5, 14),
   }),
   copper_ingot: Item({
     id: itemId("copper_ingot"),
@@ -288,7 +267,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 1, stackLimit: 20 },
-    iconSheet: SH(6, 14),
   }),
   iron_ingot: Item({
     id: itemId("iron_ingot"),
@@ -297,7 +275,6 @@ export const materialItems = {
     rarity: Rarity.Uncommon,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 1.2, stackLimit: 20 },
-    iconSheet: SH(6, 14),
   }),
   silver_ingot: Item({
     id: itemId("silver_ingot"),
@@ -306,7 +283,6 @@ export const materialItems = {
     rarity: Rarity.Rare,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 1, stackLimit: 20 },
-    iconSheet: SH(7, 14),
   }),
   plank: Item({
     id: itemId("plank"),
@@ -315,7 +291,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.6, stackLimit: 30 },
-    iconSheet: I32(3, 0),
   }),
   ice_block: Item({
     id: itemId("ice_block"),
@@ -334,7 +309,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.2, stackLimit: 30 },
-    iconUrl: "/assets/icons/coal.png",
   }),
   volatile_ash: Item({
     id: itemId("volatile_ash"),
@@ -343,7 +317,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.02, stackLimit: 50 },
-    iconSheet: SH(5, 9),
   }),
   flat_stone: Item({
     id: itemId("flat_stone"),
@@ -352,7 +325,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 1.0, stackLimit: 10 },
-    iconUrl: "/assets/icons/rock.png",
   }),
   resin: Item({
     id: itemId("resin"),
@@ -361,7 +333,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.1, stackLimit: 20 },
-    iconSheet: SH(15, 12),
   }).with(
     Flammable({ ignitionTemp: 65, burnDurationSec: 8, effect: TransformInto(itemId("ash")) })
   ),
@@ -372,7 +343,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.08, stackLimit: 20 },
-    iconSheet: SH(7, 9),
   }).with(
     Flammable({ ignitionTemp: 75, burnDurationSec: 5, effect: TransformInto(itemId("ash")) })
   ),
@@ -457,7 +427,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
-    iconSheet: I32(1, 10),
   }),
   bone: Item({
     id: itemId("bone"),
@@ -466,7 +435,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pack", weight: 0.25, stackLimit: 20 },
-    iconSheet: I32(1, 11),
   }),
   bone_shard: Item({
     id: itemId("bone_shard"),
@@ -475,7 +443,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.1, stackLimit: 20 },
-    iconSheet: I32(2, 11),
   }),
   tendon: Item({
     id: itemId("tendon"),
@@ -505,7 +472,6 @@ export const materialItems = {
     rarity: Rarity.Uncommon,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 10 },
-    iconSheet: I32(5, 7),
   }),
   tusk_shard: Item({
     id: itemId("tusk_shard"),
@@ -514,7 +480,6 @@ export const materialItems = {
     rarity: Rarity.Uncommon,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.12, stackLimit: 10 },
-    iconSheet: I32(3, 11),
   }),
   antler: Item({
     id: itemId("antler"),
@@ -532,7 +497,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.01, stackLimit: 10 },
-    iconSheet: SH(14, 14),
   }),
   soot: Item({
     id: itemId("soot"),
@@ -550,7 +514,6 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 0.5, stackLimit: 20 },
-    iconSheet: SH(10, 14),
   }),
   charred_ash: Item({
     id: itemId("charred_ash"),
@@ -559,6 +522,5 @@ export const materialItems = {
     rarity: Rarity.Common,
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 0.1, stackLimit: 30 },
-    iconSheet: SH(11, 14),
   }),
 };

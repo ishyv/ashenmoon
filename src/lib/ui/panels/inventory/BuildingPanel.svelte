@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { BuildRecipeView } from "./types";
+import { getBuildingSpec } from "$lib/domain/building-specs";
 
 let {
   recipes,
@@ -19,7 +20,12 @@ let {
     {#each recipes as recipe}
       <div class="recipe-card">
         <div>
-          <div class="recipe-name">{recipe.name.toLowerCase()}</div>
+          <div class="recipe-name">
+            {recipe.name.toLowerCase()}
+            {#if getBuildingSpec(recipe.id)?.isMultiStage}
+              <span class="multistage-tag">multi-stage</span>
+            {/if}
+          </div>
           <div class="recipe-desc">{recipe.description}</div>
         </div>
 
@@ -120,6 +126,21 @@ let {
     cursor: not-allowed;
     color: var(--inv-text-muted);
     opacity: 0.55;
+  }
+
+  .multistage-tag {
+    font-size: 0.6rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: normal;
+    color: var(--inv-accent, #ffdc78);
+    border: 1px solid var(--inv-accent, #ffdc78);
+    background: rgba(255, 220, 120, 0.05);
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 </style>
 

@@ -12,6 +12,7 @@ import {
   type PointerAttackIntentConfig,
   type Vec2,
 } from "$lib/domain/combat/driving-thrust";
+import type { AttackInputSnapshot } from "$lib/domain/combat/input-intent";
 
 function directionBetween(start: Vec2, end: Vec2): Vec2 | null {
   const dx = end.x - start.x;
@@ -31,6 +32,7 @@ export class InputResource {
     [InputAction.FocusedGather]: ["f"],
     [InputAction.Console]: ["/"],
     [InputAction.Sprint]: ["shift"],
+    [InputAction.StanceModifier]: ["control"],
   };
 
   public mouseWorld = { x: 0, y: 0 };
@@ -44,6 +46,13 @@ export class InputResource {
   public pendingFellSweep = false;
   /** Set when a short LMB swipe resolves into the fixed-distance thrust special. */
   public pendingDrivingThrust: DrivingThrustPendingInput | null = null;
+  /**
+   * Raw gesture captured on mouse-up for the weapon-driven combat path. The
+   * weapon-attack system classifies it into an InputIntent. Set on every LMB
+   * release; consumed (and cleared) by the new system, which also clears the
+   * legacy pending flags when it acts so combat never double-fires.
+   */
+  public pendingWeaponAttack: AttackInputSnapshot | null = null;
   public primarySwipeStartScreen: Vec2 | null = null;
   public primarySwipeStartWorld: Vec2 | null = null;
   public primarySwipeCurrentScreen: Vec2 | null = null;
@@ -134,6 +143,18 @@ export class InputResource {
       clickDirection,
       config: this.pointerAttackIntentConfig,
     });
+
+    // Weapon-driven path: capture the full gesture for the new combat system,
+    // which classifies it into a tap/hold/swipe (+ stance) intent. Always set;
+    // the new system decides whether the equipped weapon handles it.
+    this.pendingWeaponAttack = {
+      start: screenStart,
+      end: args.screen,
+      downAtMs: this.mouseDownAt,
+      upAtMs: args.nowMs,
+      clickDirection,
+      stanceHeld: this.isStanceHeld(),
+    };
 
     if (this.armedPointerAttackIntent === "full_swipe" || intent.kind === "full_swipe") {
       this.pendingFellSweep = true;
@@ -266,6 +287,11 @@ export class InputResource {
   public isActionPressed(action: string): boolean {
     const keysList = this.bindings[action] ?? [];
     return keysList.some((k) => this.keys[k.toLowerCase()]);
+  }
+
+  /** Whether the weapon-stance modifier (Ctrl by default) is currently held. */
+  public isStanceHeld(): boolean {
+    return this.isActionPressed(InputAction.StanceModifier);
   }
 
   public updateBindings(newBindings: Record<string, string[]>): void {

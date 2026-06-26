@@ -92,6 +92,8 @@ export interface Entity {
     huntTargetId?: string;
     /** Death-fade timer (seconds). Set on death; ecology system ticks it to 0, then despawns. */
     dyingSec?: number;
+    /** Dynamic scaled damage for the animal. */
+    damage?: number;
   };
 
   /**
@@ -177,6 +179,12 @@ export interface Entity {
   landmark?: {
     kind: LandmarkKind;
     depleted: boolean;
+  };
+  
+  /** Placed building with type and construction stage. */
+  building?: {
+    type: string;
+    stage: number;
   };
 }
 

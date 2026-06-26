@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 105" role="img" aria-label="deer spoiling carcass">
+  <ellipse cx="85.0" cy="93" rx="57.8" ry="8" fill="#080706" opacity=".42"/>
+  <path d="M27.2 72.9c8-34 40-47 95.2-39 23 4 40 18 42 36-17 18-76 22-127.5 3z" fill="#080706"/>
+  <path d="M39.1 70.9c10-21 36-31 76.5-25 18 3 31 13 33 25-16 10-57 13-98.6 0z" fill="#7a4d2c" opacity=".75"/>
+  <path d="M54.4 57.9c21-9 48-6 64 9-22 9-46 9-71 1z" fill="#34251a" opacity=".56"/>
+  
+  <path d="M127.0 36.9l14-20M132.0 34.9l21-7M133.0 33.9l8 15" stroke="#d9c28e" stroke-width="5" stroke-linecap="round" fill="none"/>
+  
+  
+  <circle cx="77.0" cy="56.9" r="9" fill="#58613c" opacity=".8"/><circle cx="114.0" cy="70.9" r="7" fill="#58613c" opacity=".7"/>
+  <path d="M50.0 83.9c23 8 60 8 87-2" stroke="#080706" stroke-width="5" stroke-linecap="round" opacity=".5"/>
+</svg>

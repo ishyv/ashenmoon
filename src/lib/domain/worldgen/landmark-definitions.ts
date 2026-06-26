@@ -13,7 +13,11 @@ export type LandmarkKind =
   | "deer_grazing_area"
   | "fallen_tree"
   | "old_stump"
-  | "pond";
+  | "pond"
+  | "sentry_chest"
+  | "skeleton_remains"
+  | "cursed_monolith"
+  | "bone_pile";
 
 export interface LandmarkDrop {
   itemId: string;
@@ -132,6 +136,48 @@ export const LANDMARK_DEFS: Record<LandmarkKind, LandmarkDef> = {
     displayName: "dark pond",
     examineText: "Still water, dark at the centre. The surface reflects the canopy.",
     drops: [],
+    solid: false,
+  },
+  sentry_chest: {
+    kind: "sentry_chest",
+    displayName: "sentry chest",
+    examineText: "A weathered ironbound chest, rusted shut but partially split open at the side. Moss covers the lid.",
+    depletedText: "The chest lies broken and empty.",
+    drops: [
+      { itemId: "flint_shard", qty: 2 },
+      { itemId: "stone_block", qty: 1, chance: 0.5 },
+      { itemId: "copper_ore", qty: 1, chance: 0.3 },
+    ],
+    solid: true,
+  },
+  skeleton_remains: {
+    kind: "skeleton_remains",
+    displayName: "skeleton remains",
+    examineText: "Bleached bones, scattered and half-buried in the leaf litter. Scraps of cloth and fiber wraps cling to them.",
+    depletedText: "Only dust and broken bones remain.",
+    drops: [
+      { itemId: "grass_fiber", qty: 2 },
+      { itemId: "small_bone", qty: 2 },
+      { itemId: "bone_shard", qty: 1, chance: 0.6 },
+    ],
+    solid: false,
+  },
+  cursed_monolith: {
+    kind: "cursed_monolith",
+    displayName: "cursed altar",
+    examineText: "A jagged stone monolith, cold and silent. Faint, dark veins are etched into the rock face. The air nearby feels heavy.",
+    drops: [],
+    solid: true,
+  },
+  bone_pile: {
+    kind: "bone_pile",
+    displayName: "bone pile",
+    examineText: "A heap of gnawed animal bones. Wolves have dragged their kills here.",
+    depletedText: "A scattered pile of splinters.",
+    drops: [
+      { itemId: "small_bone", qty: 1 },
+      { itemId: "bone_shard", qty: 1, chance: 0.5 },
+    ],
     solid: false,
   },
 };

@@ -19,6 +19,7 @@ import { Colors } from "$lib/utils/colors";
 import { EntityId } from "$lib/domain/game-events";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import type { FourfoldSlashState, FourfoldSlashConfig } from "$lib/domain/combat/fourfold-slash";
+import { getCharacterLevel } from "$lib/state/rpg/stats.svelte";
 
 export class VFXResource {
   public particles: Particle[] = [];
@@ -376,7 +377,8 @@ export function footstepParticleSystem(
   isMoving: boolean,
   isDashing: boolean,
   isSprinting: boolean,
-  entityLayer: Container
+  entityLayer: Container,
+  onFootstep?: (speed: "sneak" | "run" | "dash") => void
 ): void {
   if (isMoving || isDashing) {
     const interval = isDashing ? 0.05 : isSprinting ? 0.09 : 0.14;
@@ -398,6 +400,10 @@ export function footstepParticleSystem(
         maxLife: 0.3 + Math.random() * 0.15,
       });
       entityLayer.addChild(g);
+
+      if (onFootstep) {
+        onFootstep(isDashing ? "dash" : isSprinting ? "run" : "sneak");
+      }
     }
   } else {
     vfx.footstepTimer = 0;
@@ -460,7 +466,8 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
       arc.variant === "rising_wheel" ||
       arc.variant === "crosswind_cut" ||
       arc.variant === "starburst_cross" ||
-      arc.variant === "vortex_slice"
+      arc.variant === "vortex_slice" ||
+      arc.variant === "level_shockwave"
     ) {
       const variant = arc.variant;
       if (variant === "wheel_slash") {
@@ -638,6 +645,16 @@ export function slashArcUpdateSystem(vfx: VFXResource, dt: number, entityLayer: 
         arc.graphic.moveTo(-Math.cos(angle2) * half * 0.8, -Math.sin(angle2) * half * 0.8);
         arc.graphic.lineTo(Math.cos(angle2) * half * 0.8, Math.sin(angle2) * half * 0.8);
         arc.graphic.stroke({ color: Colors.ui.white, width: 2, alpha: alpha * 0.9 });
+      } else if (variant === "level_shockwave") {
+        const radius = arc.reach * t;
+        const width = 2 * (1 - t);
+        const alpha = (1 - t) * 0.45;
+        const a0 = arc.angle - arc.halfAngle;
+        const a1 = arc.angle + arc.halfAngle;
+
+        arc.graphic.moveTo(Math.cos(a0) * radius, Math.sin(a0) * radius);
+        arc.graphic.arc(0, 0, radius, a0, a1);
+        arc.graphic.stroke({ color: arc.color ?? 0xffaa44, width, alpha });
       }
 
       if (arc.life >= arc.maxLife) {
@@ -859,6 +876,57 @@ export function spawnSlashArc(
   g.y = cy;
   entityLayer.addChild(g);
   vfx.slashArcs.push({ graphic: g, life: 0, maxLife: 0.22, angle, reach, halfAngle, color });
+
+  // Sparks always fire; more and brighter at higher levels.
+  const level = getCharacterLevel();
+
+  {
+    const sparkCount = level >= 15 ? 10 : level >= 10 ? 6 : level >= 5 ? 3 : 2;
+    const colors = level >= 15 ? [0xffdd55, 0xff8833, 0xffffff] : level >= 10 ? [0xffaa33, 0xee7722] : [0xddaa77];
+
+    for (let i = 0; i < sparkCount; i++) {
+      const pG = new Graphics();
+      const size = 2 + Math.random() * 3;
+      pG.rect(-size / 2, -size / 2, size, size).fill(colors[Math.floor(Math.random() * colors.length)]);
+
+      const spreadAngle = angle + (Math.random() - 0.5) * halfAngle * 1.5;
+      const dist = reach * (0.3 + Math.random() * 0.6);
+      pG.x = cx + Math.cos(spreadAngle) * dist;
+      pG.y = cy + Math.sin(spreadAngle) * dist;
+
+      // Speed/direction
+      const speed = 120 + Math.random() * 100;
+      const vx = Math.cos(spreadAngle) * speed;
+      const vy = Math.sin(spreadAngle) * speed - (30 + Math.random() * 40);
+
+      vfx.particles.push({
+        graphic: pG,
+        vx,
+        vy,
+        gravity: 0,
+        life: 0,
+        maxLife: 0.15 + Math.random() * 0.18,
+      });
+      entityLayer.addChild(pG);
+    }
+  }
+
+  if (level >= 15) {
+    const wave = new Graphics();
+    wave.x = cx;
+    wave.y = cy;
+    entityLayer.addChild(wave);
+    vfx.slashArcs.push({
+      graphic: wave,
+      life: 0,
+      maxLife: 0.35,
+      angle,
+      reach: reach * 1.35,
+      halfAngle: halfAngle * 0.8,
+      color: 0xffaa44,
+      variant: "level_shockwave"
+    });
+  }
 }
 
 export function spawnFellSweepCleave(

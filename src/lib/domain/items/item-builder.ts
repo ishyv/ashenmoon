@@ -3,7 +3,6 @@ import {
   DEFAULT_CARRY_CLASS,
   Rarity,
   type ItemDefinition,
-  type IconSheet,
   type ItemId,
   type ItemPhysicalProperties,
 } from "./item-types";
@@ -19,8 +18,6 @@ interface ItemBaseInput {
   rarity: Rarity;
   category: Category;
   physical?: Partial<ItemPhysicalProperties>;
-  iconSheet?: IconSheet;
-  iconUrl?: string;
   icon?: string;
 }
 
@@ -48,8 +45,6 @@ export function Item(base: ItemBaseInput): ItemDefinition & {
     category: base.category,
     physical,
     traits: [],
-    ...(base.iconSheet !== undefined && { iconSheet: base.iconSheet }),
-    ...(base.iconUrl !== undefined && { iconUrl: base.iconUrl }),
     ...(base.icon !== undefined && { icon: base.icon }),
   };
 

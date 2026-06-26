@@ -21,7 +21,8 @@ export function createDefaultProfile(opts?: {
   weapon?: RpgPlayerState["profile"]["loadout"]["weapon"];
 }): RpgPlayerState["profile"] {
   return {
-    hpCurrent: opts?.hpCurrent ?? 100,
+    hpCurrent: opts?.hpCurrent ?? 600,
+    worldSeed: Math.floor(Math.random() * 1000000),
     stashSize: 20,
     loadout: {
       weapon: opts?.weapon ?? null,

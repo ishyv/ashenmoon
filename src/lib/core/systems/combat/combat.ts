@@ -20,6 +20,7 @@ import { Graphics } from "pixi.js";
 import type { AnimatedSprite, Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import { collidesWithSolid, type MovementResource } from "$lib/core/systems/movement/movement";
 import type { InputResource } from "$lib/core/input/input";
 import { InputAction } from "$lib/domain/game-events";
@@ -48,8 +49,9 @@ import {
   clearCrosscutIndicators,
 } from "$lib/core/vfx/vfx";
 import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
-import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
+import { getPlayerStats, getCharacterLevel } from "$lib/state/rpg/stats.svelte";
 import { staminaCost } from "$lib/domain/stats/stat-calculation";
+import { getItemDef } from "$lib/domain/items";
 import { playSound } from "$lib/audio/audio-engine";
 import { Colors } from "$lib/utils/colors";
 import { gameState } from "$lib/state/game-state.svelte";
@@ -87,6 +89,11 @@ import {
   type DrivingThrustConfig,
   type DrivingThrustState,
 } from "$lib/domain/combat/driving-thrust";
+import {
+  createInitialWeaponAttackRuntime,
+  type WeaponAttackRuntime,
+} from "$lib/domain/combat/weapons/attack-runtime";
+import { explicitWeaponDefForItem } from "$lib/domain/combat/weapons/weapon-registry";
 
 export { trackMovementCombo } from "./kite-combo";
 export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
@@ -103,10 +110,10 @@ const BODY_CY = PLAYER_BODY.cy;
 export class CombatConfig {
   // --- player swing ---
   /** how far the arc reaches from the player centre (world px). */
-  public reach = TILE * 1;
+  public reach = TILE * 1.4;
 
   /* Roughly represents the arc size, could be used to tweak as per player skills */
-  public arcSize = 30; 
+  public arcSize = 45; 
   
   /** half the swing cone; the arc spans aim Â± this (radians). */
   public arcHalfAngle =
@@ -181,6 +188,8 @@ export class CombatResource {
   };
   public directionalMomentumConfig: DirectionalMomentumComboConfig = { ...DEFAULT_DIRECTIONAL_MOMENTUM_COMBO_CONFIG };
   public rhythmConfig: RhythmConfig = { ...DEFAULT_RHYTHM_CONFIG };
+  /** Live state of the weapon-driven attack path (see weapon-attack-system). */
+  public weaponAttack: WeaponAttackRuntime = createInitialWeaponAttackRuntime();
 }
 
 /**
@@ -488,6 +497,12 @@ export function tickEnemyBleedSystem(
  * the aim direction, and every hostile inside it takes damage on the same swing.
  * Presentation (animation, swing arc, sound) fires here; lethal hits are handed
  * back to the engine via `onEnemyKilled` for loot/despawn.
+ *
+ * legacy: this is the original swing + combo path. It is superseded by
+ * weapon-attack-system.ts for any weapon with an explicit `WeaponDefinition` (the
+ * prototypes). For those weapons the weapon system clears `inputs.pendingAttack`
+ * before this runs, so this code stays dormant. It still serves weapons without a
+ * definition; retire it as more weapons migrate to the weapon-driven model.
  */
 export function playerAttackSystem(
   world: World<Entity>,
@@ -505,16 +520,23 @@ export function playerAttackSystem(
   onEnemyKilled: (enemy: Entity) => void,
   events?: GameEventQueue,
 ): void {
-  updateDirectionalMomentumCombo(
-    combat,
-    inputs,
-    combat.directionalMomentumConfig,
-    movement,
-    player,
-    dt,
-    vfx,
-    entityLayer
-  );
+  // Skip legacy combo state machines when a prototype weapon is equipped — the
+  // weapon-attack-system owns the full attack lifecycle for those weapons, and
+  // we don't want kite foot-embers or momentum tracking bleeding through.
+  const isWeaponDrivenPath = !!explicitWeaponDefForItem(currentEquippedWeaponId());
+
+  if (!isWeaponDrivenPath) {
+    updateDirectionalMomentumCombo(
+      combat,
+      inputs,
+      combat.directionalMomentumConfig,
+      movement,
+      player,
+      dt,
+      vfx,
+      entityLayer
+    );
+  }
 
   if (combat.swingActiveTimer > 0) {
     combat.swingActiveTimer -= dt;
@@ -536,8 +558,9 @@ export function playerAttackSystem(
     }
   }
 
-  // Update Kite Combo timers and foot embers/flames
-  updateKiteCombo(combat, player, vfx, entityLayer, dt);
+  if (!isWeaponDrivenPath) {
+    updateKiteCombo(combat, player, vfx, entityLayer, dt);
+  }
 
   const currentWeaponId = currentEquippedWeaponId();
   if (combat.lastCrosscutWeaponId === null) {
@@ -565,8 +588,9 @@ export function playerAttackSystem(
   if (isPlacementMode || (movement && movement.isDashing)) return;
 
   const pos = player.position!;
+  const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
   const pcx = pos.x + TILE / 2;
-  const pcy = pos.y + TILE / 2;
+  const pcy = pos.y + TILE - (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES * TILE) / 2;
 
   // Check if Kite Combo is ready (no side effects)
   const isKiteReady =
@@ -655,7 +679,7 @@ export function playerAttackSystem(
   let angle = Math.atan2(ay, ax);
   let crosscutSlashX = pcx;
   let crosscutSlashY = pcy;
-  let crosscutSlashReach = config.reach;
+  let crosscutSlashReach = config.reach * playerScale;
   if (isCrosscut && combat.crosscutState.firstClickWorldPosition) {
     const previousClick = combat.crosscutState.firstClickWorldPosition;
     const segmentX = inputs.mouseWorld.x - previousClick.x;
@@ -676,7 +700,7 @@ export function playerAttackSystem(
 
   const playerCombatStats = getPlayerStats().combat;
 
-  let effectiveReach = config.reach;
+  let effectiveReach = config.reach * playerScale;
   let effectiveHalfAngle = config.arcHalfAngle;
   let effectiveDamage = playerCombatStats.attackDamage;
   let arcColor: number = Colors.combat.slashArc;
@@ -699,7 +723,7 @@ export function playerAttackSystem(
     const dmgMult = combat.fourfoldConfig.damageMultipliers[finisherType];
     const staminaCostVal = combat.fourfoldConfig.staminaCosts[finisherType];
 
-    effectiveReach = config.reach * 1.35;
+    effectiveReach = config.reach * 1.35 * playerScale;
     effectiveHalfAngle = Math.PI; // 360 degrees sweep
     effectiveDamage = Math.round(effectiveDamage * dmgMult);
     useStaminaCost = staminaCostVal;
@@ -866,10 +890,18 @@ export function playerAttackSystem(
     );
   } else if (!isKiteCombo) {
     spawnSlashArc(vfx, entityLayer, pcx, pcy, angle, effectiveReach, effectiveHalfAngle, arcColor);
-    playSound("player.swing");
+    
+    const weaponId = currentEquippedWeaponId();
+    const weaponDef = weaponId ? getItemDef(weaponId) : undefined;
+    const category = weaponDef?.category ?? "unarmed";
+    playSound("player.swing", { conditions: { weaponCategory: category } });
+
+    const level = getCharacterLevel();
+    const basicShake = 0.8 + (level - 1) * 0.1;
+    triggerCameraShake(vfx, basicShake, 0.1);
   }
 
-  // Resolve every hostile inside the cone.
+  // Resolve every hostile inside the cone or segment.
   const cosHalf = Math.cos(effectiveHalfAngle);
   const enemyRadius = TILE * 0.4;
   let hitCount = 0;
@@ -879,11 +911,58 @@ export function playerAttackSystem(
     if (h.faction !== "hostile" || h.current <= 0) continue;
     const ex = e.position!.x + TILE / 2;
     const ey = e.position!.y + TILE / 2;
-    const dx = ex - pcx;
-    const dy = ey - pcy;
-    const d = Math.hypot(dx, dy);
-    if (d > effectiveReach + enemyRadius) continue;
-    if (d > 1 && (ax * dx + ay * dy) / d < cosHalf) continue;
+
+    let isHit = false;
+    if (isCrosscut && combat.crosscutState.firstClickWorldPosition) {
+      const stackPower = Math.min(5, Math.max(1, crosscutStacks));
+      const visualLength =
+        crosscutSlashReach *
+        (crosscutResult.grade === "excellent" ? 1.25 : crosscutResult.grade === "good" ? 1.12 : 0.98) *
+        (1 + stackPower * 0.045);
+      const half = visualLength * 0.5;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      // Segment start (A) and end (B)
+      const Ax = crosscutSlashX - cosA * half;
+      const Ay = crosscutSlashY - sinA * half;
+      const Bx = crosscutSlashX + cosA * half;
+      const By = crosscutSlashY + sinA * half;
+
+      // Vector from A to B
+      const vx = Bx - Ax;
+      const vy = By - Ay;
+      const v2 = vx * vx + vy * vy;
+
+      let t = 0;
+      if (v2 > 0.0001) {
+        // Vector from A to enemy center (ex, ey)
+        const wx = ex - Ax;
+        const wy = ey - Ay;
+        t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / v2));
+      }
+
+      const pxClose = Ax + t * vx;
+      const pyClose = Ay + t * vy;
+      const dist2 = (ex - pxClose) * (ex - pxClose) + (ey - pyClose) * (ey - pyClose);
+      const hitRadius = enemyRadius + 16; // 16px line thickness/tolerance
+
+      if (dist2 <= hitRadius * hitRadius) {
+        isHit = true;
+      }
+    } else {
+      const dx = ex - pcx;
+      const dy = ey - pcy;
+      const d = Math.hypot(dx, dy);
+      if (d <= effectiveReach + enemyRadius) {
+        if (d <= 1 || (ax * dx + ay * dy) / d >= cosHalf) {
+          isHit = true;
+        }
+      }
+    }
+
+    if (!isHit) continue;
+
     const died = applyDamage(
       e,
       effectiveDamage,

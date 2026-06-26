@@ -1,7 +1,13 @@
+// legacy: the fell-sweep "committed heavy" mechanic is reworked into the stone
+// axe's `committed_overhead` (stance-hold) attack on the weapon-driven path
+// (weapon-attack-system.ts). This charged-swing runtime still fires for weapons
+// without an explicit WeaponDefinition; retire it as weapons migrate. Charge-
+// scaled power is a Phase 6 follow-up on the weapon system.
 import type { World } from "miniplex";
 import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE } from "$lib/core/systems/map/map";
+import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import type { InputResource } from "$lib/core/input/input";
 import { CombatResource, CombatConfig, applyDamage } from "./combat";
 import type { GameEventQueue } from "$lib/domain/game-event-queue";
@@ -107,7 +113,7 @@ export function updateFellSweepChargeSystem(
 
   const pos = player.position!;
   const pcx = pos.x + TILE / 2;
-  const pcy = pos.y + TILE / 2;
+  const pcy = pos.y + TILE - (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES * TILE) / 2;
   const targetAim = normalizeAimDirection(inputs.mouseWorld.x - pcx, inputs.mouseWorld.y - pcy, state.aimDirection);
   const targetAimAngle = Math.atan2(targetAim.y, targetAim.x);
   const whirl = trackFellSweepWhirl(
@@ -171,9 +177,9 @@ export function renderFellSweepChargeFeedback(
 
   const charge = state.chargeProgress;
   const stage = state.chargeStage;
-  const pos = player.position;
+  const pos = player.position!;
   const pcx = pos.x + TILE / 2;
-  const pcy = pos.y + TILE / 2;
+  const pcy = pos.y + TILE - (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES * TILE) / 2;
   const isWhirl = state.isWhirlReady;
   const amp = isWhirl ? 13 : stage === "full" ? 10 : stage === "critical" ? 8 : 3 + charge * 5;
   playerSprite.x += (Math.random() - 0.5) * amp;
@@ -228,8 +234,8 @@ export function renderFellSweepChargeFeedback(
 }
 
 /**
- * Fell Sweep â€” charged melee attack. Activated by holding LMB for >= 800ms.
- * Charge level (0â€“1) scales arc width (+30%), reach (+50%), and damage (1.8xâ€“3x).
+ * Fell Sweep — charged melee attack. Activated by holding LMB for >= 800ms.
+ * Charge level (0–1) scales arc width (+30%), reach (+50%), and damage (1.8x–3x).
  * Long cooldown at level 1, reduced by 0.4s per level (floor 4s).
  */
 export function fellSweepSystem(
@@ -266,10 +272,12 @@ export function fellSweepSystem(
   const stage = fellSweepStage(charge);
   const isWhirl = combat.fellSweepChargeState.isWhirlReady;
   const scaling = fellSweepScaling(charge, config, DEFAULT_FELL_SWEEP_CONFIG, isWhirl);
+  const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
+  scaling.reach *= playerScale;
 
   const pos = player.position!;
   const pcx = pos.x + TILE / 2;
-  const pcy = pos.y + TILE / 2;
+  const pcy = pos.y + TILE - (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES * TILE) / 2;
   const aimed = combat.fellSweepChargeState.isCharging
     ? combat.fellSweepChargeState.aimDirection
     : normalizeAimDirection(inputs.mouseWorld.x - pcx, inputs.mouseWorld.y - pcy);
@@ -398,4 +406,3 @@ export function fellSweepSystem(
   }
   resetFellSweepCharge(combat);
 }
-

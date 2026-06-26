@@ -6,6 +6,7 @@ import {
   flashEntity,
   spawnDamageNumber,
   spawnDeathBurst,
+  spawnSlashArc,
   triggerCameraShake,
   type VFXResource,
 } from "$lib/core/vfx/vfx";
@@ -32,12 +33,35 @@ export function routeGameEventsToFeedback(
       routeEntityDied(event, context);
     } else if (event.type === "feedback_requested") {
       routeFeedbackRequested(event);
+    } else if (event.type === "attack_started") {
+      routeAttackStarted(event, context);
     } else if (event.type === "interaction_completed") {
       playSound("craft");
     } else if (event.type === "world_action_completed") {
       playSound("node.deplete");
     }
   }
+}
+
+/**
+ * The weapon swing: its arc VFX and swing sound. Impact feedback (flash, damage
+ * number, hit sound) still rides `damage_applied`, emitted when a swing connects.
+ */
+function routeAttackStarted(
+  event: Extract<QueuedGameEvent, { type: "attack_started" }>,
+  context: FeedbackRouterContext,
+): void {
+  spawnSlashArc(
+    context.vfx,
+    context.entityLayer,
+    event.origin.x,
+    event.origin.y,
+    event.aimAngle,
+    event.reachPx,
+    (event.arcDegrees * Math.PI) / 360, // half-angle in radians
+    Colors.combat.slashArc,
+  );
+  playSound("player.swing", { conditions: { weaponCategory: event.soundProfile } });
 }
 
 function routeFeedbackRequested(
@@ -92,5 +116,10 @@ function routeDamageApplied(
     isPlayer ? Colors.combat.playerDmgNum : Colors.combat.enemyDmgNum,
   );
   triggerCameraShake(context.vfx, isPlayer ? 4 : 2.5, 0.12);
-  playSound(isPlayer ? "combat.hit.player" : "combat.hit.enemy", { position: hitPos });
+
+  const species = target?.animal?.speciesId ?? "humanoid";
+  playSound(isPlayer ? "combat.hit.player" : "combat.hit.enemy", {
+    position: hitPos,
+    conditions: { targetSpecies: species }
+  });
 }

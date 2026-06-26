@@ -1,4 +1,5 @@
 import type { World } from "miniplex";
+import { getBuildingSpec } from "$lib/domain/building-specs";
 import type { Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -63,15 +64,39 @@ export function updateTargetSystem(
   const py = Math.floor(playerCy / TILE);
   const inRange = Math.max(Math.abs(mx - px), Math.abs(my - py)) <= INTERACT_RANGE;
 
-  const target = inRange
-    ? (world
-        .with("interactable", "position")
-        .entities.find(
-          (e: Entity) =>
-            Math.floor(e.position!.x / TILE) === mx &&
-            Math.floor(e.position!.y / TILE) === my,
-        ) ?? null)
-    : null;
+  let target: Entity | null = null;
+  if (inRange) {
+    const candidates = world
+      .with("interactable", "position")
+      .entities.filter(
+        (e: Entity) => {
+          let w = 1;
+          let h = 1;
+          if (e.building) {
+            const spec = getBuildingSpec(e.building.type);
+            if (spec) {
+              w = spec.footprint.w;
+              h = spec.footprint.h;
+            }
+          }
+          const ex = Math.floor(e.position!.x / TILE);
+          const ey = Math.floor(e.position!.y / TILE);
+          return mx >= ex && mx < ex + w && my >= ey && my < ey + h;
+        }
+      );
+    if (candidates.length > 0) {
+      target =
+        (candidates.find((e) => e.carcass !== undefined) ??
+        candidates.find((e) => e.interactable?.action === "talk") ??
+        candidates.find(
+          (e) =>
+            e.interactable?.action === "process" ||
+            e.interactable?.action === "refuel",
+        ) ??
+        candidates.find((e) => e.resource !== undefined) ??
+        candidates[0]) ?? null;
+    }
+  }
 
   if (target === interaction.currentTarget) return;
   setHighlight(interaction.currentTarget, false, entitySprites);

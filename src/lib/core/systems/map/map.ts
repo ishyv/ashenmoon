@@ -1,5 +1,6 @@
-import { Container, Graphics, Sprite, TilingSprite } from "pixi.js";
+import { Container, Graphics, Sprite, Texture, TilingSprite } from "pixi.js";
 import { Cell, type AABB } from "$lib/core/types";
+import { computeRenderZ } from "$lib/domain/collision";
 import { SeededNoise } from "$lib/utils/noise";
 import {
   createEmptyForestMetadata,
@@ -17,16 +18,12 @@ import {
   type ForestWaterSource,
 } from "$lib/domain/worldgen/first-camp-layout";
 import {
-  getBiomeTileTexture,
-  getWaterBackgroundTexture,
-  getTreeTexture,
-  getRockTexture,
-  getTreeVariantTexture,
-  getRockVariantTexture,
-  getWoodItemTexture,
-  getBushTexture,
-  getCloudTexture,
-} from "$lib/core/assets/assets";
+  FIRST_CAMP_DRESSING,
+  isFirstCampFloorOffset,
+  materializeCampDressing,
+} from "$lib/domain/worldgen/camp-dressing";
+import { STRUCTURE_TEMPLATES } from "$lib/domain/worldgen/structures";
+import { getAshenmoonGatherableTexture, getAshenmoonPropTexture, getAshenmoonVfxTexture } from "$lib/core/assets/ashenmoon-assets";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId } from "$lib/domain/game-events";
@@ -55,9 +52,9 @@ export type {
   ForestWaterSource,
 };
 
-type SpawnAdder = (gatherableId: string, x: number, y: number, prefix?: string) => void;
+export type SpawnAdder = (gatherableId: string, x: number, y: number, prefix?: string) => void;
 
-function applyFirstCampForestPass(map: MapResource, addSpawn: SpawnAdder, spawnX: number, spawnY: number): void {
+export function applyFirstCampForestPass(map: MapResource, addSpawn: SpawnAdder, spawnX: number, spawnY: number): void {
   const { mapW: W, mapH: H } = map;
   const metadata = materializeFirstCampLayout(FIRST_CAMP_RELATIVE_LAYOUT, { mapW: W, mapH: H, spawnX, spawnY });
   const pond = metadata.waterSources[0];
@@ -87,6 +84,117 @@ function applyFirstCampForestPass(map: MapResource, addSpawn: SpawnAdder, spawnX
   }
 }
 
+function applyRandomStructuresPass(
+  map: MapResource,
+  addSpawn: SpawnAdder,
+  spawnX: number,
+  spawnY: number,
+  noiseGen: SeededNoise,
+): void {
+  const { mapW: W, mapH: H } = map;
+  const SPACING = 20;
+  const SEPARATION = 4;
+  const numCellsX = Math.floor(W / SPACING);
+  const numCellsY = Math.floor(H / SPACING);
+
+  const occupiedFootprints = new Set<string>();
+
+  const isOccupied = (x: number, y: number) => {
+    if (x < 0 || x >= W || y < 0 || y >= H) return true;
+    if (occupiedFootprints.has(coordKey(x, y))) return true;
+    if (map.cells[y * W + x] === Cell.Water) return true;
+    if (isFirstCampFloorOffset(x - spawnX, y - spawnY)) return true;
+    const dx = x - spawnX;
+    const dy = y - spawnY;
+    if (Math.hypot(dx, dy) < 15) return true;
+    return false;
+  };
+
+  for (let cy = 0; cy < numCellsY; cy++) {
+    for (let cx = 0; cx < numCellsX; cx++) {
+      const structureNoise = noiseGen.noise(cx * 41.7 + 13.9, cy * 53.1 + 29.3);
+      if (structureNoise > 0.45) continue;
+
+      const structureIdx = Math.floor((structureNoise / 0.45) * STRUCTURE_TEMPLATES.length);
+      const template = STRUCTURE_TEMPLATES[structureIdx];
+      if (!template) continue;
+
+      const minX = cx * SPACING + SEPARATION;
+      const maxX = (cx + 1) * SPACING - SEPARATION - template.width;
+      const minY = cy * SPACING + SEPARATION;
+      const maxY = (cy + 1) * SPACING - SEPARATION - template.height;
+
+      if (minX >= maxX || minY >= maxY) continue;
+
+      const randomXNoise = noiseGen.noise(cx * 89.3 + cy * 17.4, 91.2);
+      const randomYNoise = noiseGen.noise(cx * 33.1, cy * 79.5 + 47.1);
+
+      const gx = minX + Math.floor(randomXNoise * (maxX - minX));
+      const gy = minY + Math.floor(randomYNoise * (maxY - minY));
+
+      let fits = true;
+      const cxx = gx + Math.floor(template.width / 2);
+      const cyy = gy + Math.floor(template.height / 2);
+
+      const centerCell = map.cells[cyy * W + cxx];
+      if (centerCell === undefined || !template.allowedBiomes.includes(centerCell)) {
+        fits = false;
+      }
+
+      for (let dy = 0; dy < template.height; dy++) {
+        for (let dx = 0; dx < template.width; dx++) {
+          const tx = gx + dx;
+          const ty = gy + dy;
+          if (isOccupied(tx, ty)) {
+            fits = false;
+            break;
+          }
+        }
+        if (!fits) break;
+      }
+
+      if (!fits) continue;
+
+      for (const comp of template.components) {
+        const tx = cxx + comp.dx;
+        const ty = cyy + comp.dy;
+        if (tx < 0 || tx >= W || ty < 0 || ty >= H) continue;
+
+        occupiedFootprints.add(coordKey(tx, ty));
+
+        if (comp.cellOverride !== undefined) {
+          map.cells[ty * W + tx] = comp.cellOverride;
+          if (comp.cellOverride === Cell.Water) {
+            map.solidCoords.add(coordKey(tx, ty));
+          }
+        }
+
+        if (comp.gatherableId) {
+          addSpawn(comp.gatherableId, tx, ty, `struct_${template.id}`);
+        }
+
+        if (comp.landmarkKind) {
+          map.forestMetadata.landmarks.push({
+            kind: comp.landmarkKind,
+            label: comp.landmarkKind.replace(/_/g, " "),
+            x: tx,
+            y: ty,
+          });
+        }
+
+        if (comp.animalZoneKind) {
+          map.forestMetadata.animalZones.push({
+            kind: comp.animalZoneKind,
+            x: tx,
+            y: ty,
+            radiusTiles: comp.animalZoneRadius ?? 3,
+          });
+        }
+      }
+    }
+  }
+}
+
 export class MapResource {
   public mapW = 100;
   public mapH = 100;
@@ -107,7 +215,7 @@ export class MapResource {
  * Builds the world map layout and deterministically computes cell types
  * and resource node spawns.
  */
-export function buildMapSystem(map: MapResource): void {
+export function buildMapSystem(map: MapResource, seed = 12345, options?: { carveCamp?: boolean | undefined }): void {
   const { mapW: W, mapH: H } = map;
   map.cells = [];
   map.solidCoords.clear();
@@ -115,14 +223,10 @@ export function buildMapSystem(map: MapResource): void {
   map.mapData = { spawns: [] };
   map.forestMetadata = createEmptyForestMetadata();
 
-  const noiseGen = new SeededNoise(12345);
+  const noiseGen = new SeededNoise(seed);
 
   const spawnX = Math.floor(W / 2);
   const spawnY = Math.floor(H / 2);
-  const campX1 = spawnX - 2;
-  const campX2 = spawnX + 2;
-  const campY1 = spawnY - 2;
-  const campY2 = spawnY + 2;
 
   const spawnsList: SpawnNode[] = [];
   let devSpawnIdSeq = 1;
@@ -141,9 +245,11 @@ export function buildMapSystem(map: MapResource): void {
     });
   };
 
+  const carveCamp = options?.carveCamp ?? true;
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const inCamp = x >= campX1 && x <= campX2 && y >= campY1 && y <= campY2;
+      const inCamp = carveCamp && isFirstCampFloorOffset(x - spawnX, y - spawnY);
       if (inCamp) {
         map.cells.push(Cell.Camp);
         continue;
@@ -230,6 +336,7 @@ export function buildMapSystem(map: MapResource): void {
     }
   }
 
+  applyRandomStructuresPass(map, addSpawn, spawnX, spawnY, noiseGen);
   applyFirstCampForestPass(map, addSpawn, spawnX, spawnY);
 
   // Scattered bare-hand materials around spawn.
@@ -285,6 +392,12 @@ export function buildMapSystem(map: MapResource): void {
     }
   }
 
+  // Clustered local debris near trees and ores
+  applyLocalResourceDebrisPass(map, addSpawn, occupiedSpawns, spawnsList, noiseGen);
+
+  // Global wilderness pickups
+  applyGlobalWildernessPickupsPass(map, addSpawn, occupiedSpawns, noiseGen);
+
   map.mapData = { spawns: spawnsList };
 }
 
@@ -302,30 +415,68 @@ export function drawTerrainSystem(map: MapResource, tileLayer: Container): void 
       const py = y * TILE;
 
       if (cell === Cell.Camp) {
+        const hash = (x * 928371 + y * 689287) & 0xffff;
+        const base = hash % 3 === 0
+          ? Colors.world.campDryGrass
+          : hash % 3 === 1
+            ? Colors.world.campPath
+            : Colors.world.camp;
+
         const g = new Graphics();
-        g.rect(px, py, TILE, TILE).fill(Colors.world.camp);
+        g.rect(px, py, TILE, TILE).fill(base);
+
+        if ((hash & 3) === 0) {
+          g.circle(px + TILE * 0.35, py + TILE * 0.42, TILE * 0.08).fill({ color: Colors.world.campAsh, alpha: 0.35 });
+        }
+        if ((hash & 7) === 0) {
+          g.rect(px + TILE * 0.18, py + TILE * 0.68, TILE * 0.46, TILE * 0.06).fill({ color: Colors.world.campAsh, alpha: 0.22 });
+        }
+
         tileLayer.addChild(g);
         map.tileSprites.push(null as any);
       } else if (cell === Cell.Water) {
-        const waterTex = getWaterBackgroundTexture();
-        const ts = new TilingSprite({ texture: waterTex, width: TILE, height: TILE });
-        ts.x = px;
-        ts.y = py;
-        tileLayer.addChild(ts);
-        map.tileSprites.push(ts);
+        const hash = (x * 1103515245 + y * 12345) & 0xffff;
+        const g = new Graphics();
+        g.rect(px, py, TILE, TILE).fill(0x17242a);
+        g.rect(px, py, TILE, TILE).fill({ color: 0x314b55, alpha: 0.32 });
+        if ((hash & 3) === 0) {
+          g.ellipse(px + TILE * 0.5, py + TILE * 0.5, TILE * 0.32, TILE * 0.08).stroke({ color: 0x87a9ad, width: 2, alpha: 0.28 });
+        }
+        if ((hash & 7) === 0) {
+          g.circle(px + TILE * 0.25, py + TILE * 0.72, TILE * 0.06).fill({ color: 0x87a9ad, alpha: 0.18 });
+        }
+        tileLayer.addChild(g);
+        map.tileSprites.push(null as any);
       } else {
-        let variant: 1 | 2 | 3 | 4 | 5 = 1;
-        if (cell === Cell.ScorchedWastes) variant = 2;
-        else if (cell === Cell.CrimsonGrove) variant = 3;
-        else if (cell === Cell.FungalMire) variant = 4;
-        else if (cell === Cell.Frostbane) variant = 5;
-
-        const tex = getBiomeTileTexture(variant);
-        const ts = new TilingSprite({ texture: tex, width: TILE, height: TILE });
-        ts.x = px;
-        ts.y = py;
-        tileLayer.addChild(ts);
-        map.tileSprites.push(ts);
+        const hash = (x * 928371 + y * 689287) & 0xffff;
+        const base = cell === Cell.ScorchedWastes
+          ? 0x3a2318
+          : cell === Cell.CrimsonGrove
+            ? 0x332026
+            : cell === Cell.FungalMire
+              ? 0x263326
+              : cell === Cell.Frostbane
+                ? 0x314b55
+                : 0x263326;
+        const accent = cell === Cell.ScorchedWastes
+          ? 0xc54f2f
+          : cell === Cell.CrimsonGrove
+            ? 0x8d2b35
+            : cell === Cell.FungalMire
+              ? 0x7b8156
+              : cell === Cell.Frostbane
+                ? 0x87a9ad
+                : 0x7b8156;
+        const g = new Graphics();
+        g.rect(px, py, TILE, TILE).fill(base);
+        if ((hash & 1) === 0) {
+          g.circle(px + (hash % TILE), py + ((hash >> 5) % TILE), 2).fill({ color: accent, alpha: 0.18 });
+        }
+        if ((hash & 5) === 0) {
+          g.rect(px + TILE * 0.15, py + TILE * 0.72, TILE * 0.55, 2).fill({ color: 0x080706, alpha: 0.08 });
+        }
+        tileLayer.addChild(g);
+        map.tileSprites.push(null as any);
       }
     }
   }
@@ -463,6 +614,9 @@ export function spawnDecorationsSystem(
 ): void {
   const { mapW: W, mapH: H } = map;
 
+  spawnFirstCampWaterCues(map, entityLayer);
+  spawnFirstCampDressing(map, entityLayer);
+
   for (let gy = 0; gy < H; gy++) {
     for (let gx = 0; gx < W; gx++) {
       const cell = map.cells[gy * W + gx];
@@ -473,7 +627,7 @@ export function spawnDecorationsSystem(
       if (hash > 0xffff * 0.06) continue;
 
       const variant = ((hash % 4) + 1) as 1 | 2 | 3 | 4;
-      const bush = new Sprite(getBushTexture(variant));
+      const bush = new Sprite(getAshenmoonGatherableTexture("berryBush"));
       bush.anchor.set(0.5, 1);
       bush.x = gx * TILE + TILE / 2 + ((hash >> 8) % 10) - 5;
       bush.y = gy * TILE + TILE + ((hash >> 4) % 10) - 5;
@@ -485,8 +639,7 @@ export function spawnDecorationsSystem(
 
   // Ambient cloud drift
   for (let i = 0; i < ENGINE_CONFIG.CLOUDS.COUNT; i++) {
-    const variant = ((i % 8) + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-    const cloud = new Sprite(getCloudTexture(variant));
+    const cloud = new Sprite(getAshenmoonVfxTexture("weatherFog"));
     cloud.anchor.set(0.5, 0.5);
     cloud.x = (i / ENGINE_CONFIG.CLOUDS.COUNT) * W * TILE + Math.random() * TILE * 10;
     cloud.y = Math.random() * H * TILE;
@@ -497,6 +650,164 @@ export function spawnDecorationsSystem(
       sprite: cloud,
       vx: ENGINE_CONFIG.CLOUDS.MIN_VX + Math.random() * ENGINE_CONFIG.CLOUDS.RANDOM_VX,
     });
+  }
+}
+
+function addStaticCue(
+  entityLayer: Container,
+  texture: Texture,
+  gx: number,
+  gy: number,
+  options: { widthTiles?: number; heightTiles?: number; anchorBottom?: boolean; alpha?: number } = {},
+): void {
+  const sprite = new Sprite(texture);
+  if (options.anchorBottom) {
+    sprite.anchor.set(0.5, 1);
+    sprite.x = gx * TILE + TILE / 2;
+    sprite.y = gy * TILE + TILE;
+    sprite.height = (options.heightTiles ?? 1) * TILE;
+    sprite.scale.x = sprite.scale.y;
+  } else {
+    sprite.x = gx * TILE;
+    sprite.y = gy * TILE;
+    sprite.width = (options.widthTiles ?? 1) * TILE;
+    sprite.height = (options.heightTiles ?? 1) * TILE;
+  }
+  sprite.alpha = options.alpha ?? 1;
+  sprite.zIndex = -10_000 + gy;
+  entityLayer.addChild(sprite);
+}
+
+function spawnFirstCampDressing(map: MapResource, entityLayer: Container): void {
+  const spawn = { x: Math.floor(map.mapW / 2), y: Math.floor(map.mapH / 2) };
+  const props = materializeCampDressing(FIRST_CAMP_DRESSING, spawn);
+
+  for (const prop of props) {
+    const texture = prop.kind === "firepit"
+      ? getAshenmoonPropTexture("firepitCold")
+      : prop.kind === "wreckage"
+        ? getAshenmoonPropTexture("brokenWagon")
+        : prop.kind === "supply_scraps"
+          ? getAshenmoonPropTexture("supplyScraps")
+          : prop.kind === "trampled_path"
+            ? getAshenmoonPropTexture("trampledPath")
+            : getAshenmoonPropTexture("ashRing");
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5, 1);
+    sprite.x = prop.x * TILE + TILE / 2;
+    sprite.y = prop.y * TILE + TILE;
+    sprite.scale.set((TILE * (prop.kind === "wreckage" ? 1.45 : 1.0)) / Math.max(texture.width, texture.height));
+    sprite.alpha = prop.kind === "trampled_path" || prop.kind === "ash_ring" ? 0.82 : 1;
+    sprite.zIndex = computeRenderZ(sprite.y, prop.kind === "trampled_path" || prop.kind === "ash_ring" ? -12 : -2);
+    entityLayer.addChild(sprite);
+  }
+}
+
+function spawnFirstCampWaterCues(map: MapResource, entityLayer: Container): void {
+  const pond = map.forestMetadata.waterSources.find((source) => source.kind === "pond");
+  if (!pond) return;
+
+  const waterTexture = getAshenmoonGatherableTexture("reeds");
+  for (let y = pond.y - 1; y <= pond.y + 1; y++) {
+    for (let x = pond.x - 1; x <= pond.x + 1; x++) {
+      if (!map.inBounds(x, y)) continue;
+      if (map.cells[y * map.mapW + x] !== Cell.Water) continue;
+      addStaticCue(entityLayer, waterTexture, x, y, { alpha: 0.82 });
+    }
+  }
+
+  const reeds = getAshenmoonGatherableTexture("reeds");
+  const pondPlant = getAshenmoonGatherableTexture("reeds");
+  for (const cue of [
+    { x: pond.x - 2, y: pond.y, texture: reeds, heightTiles: 0.85 },
+    { x: pond.x + 2, y: pond.y + 1, texture: reeds, heightTiles: 0.85 },
+    { x: pond.x, y: pond.y - 2, texture: pondPlant, heightTiles: 0.5 },
+  ]) {
+    if (!map.inBounds(cue.x, cue.y)) continue;
+    addStaticCue(entityLayer, cue.texture, cue.x, cue.y, {
+      anchorBottom: true,
+      heightTiles: cue.heightTiles,
+      alpha: 0.92,
+    });
+  }
+}
+
+function applyLocalResourceDebrisPass(
+  map: MapResource,
+  addSpawn: SpawnAdder,
+  occupiedSpawns: Set<string>,
+  spawnsList: SpawnNode[],
+  noiseGen: SeededNoise
+): void {
+  const { mapW: W, mapH: H } = map;
+  const originalSpawns = [...spawnsList];
+
+  for (const spawn of originalSpawns) {
+    const isTree = spawn.gatherableId.endsWith("_tree");
+    const isOre = spawn.gatherableId === "stone_node" || spawn.gatherableId.includes("ore") || spawn.gatherableId.includes("node");
+    if (!isTree && !isOre) continue;
+
+    const debrisId = isTree ? "stick_pickup" : "loose_stone_pickup";
+    let spawnedCount = 0;
+    const maxDebris = 2;
+
+    for (let dx = -2; dx <= 2 && spawnedCount < maxDebris; dx++) {
+      for (let dy = -2; dy <= 2 && spawnedCount < maxDebris; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = spawn.x + dx;
+        const ny = spawn.y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+
+        const cellType = map.cells[ny * W + nx];
+        if (cellType === Cell.Water) continue;
+
+        const key = coordKey(nx, ny);
+        if (occupiedSpawns.has(key)) continue;
+
+        const roll = Math.abs(noiseGen.noise(nx * 14.7 + 3.1, ny * 11.2 + 9.8) % 1);
+        if (roll < 0.35) {
+          addSpawn(debrisId, nx, ny, "pickup");
+          spawnedCount++;
+        }
+      }
+    }
+  }
+}
+
+function applyGlobalWildernessPickupsPass(
+  map: MapResource,
+  addSpawn: SpawnAdder,
+  occupiedSpawns: Set<string>,
+  noiseGen: SeededNoise
+): void {
+  const { mapW: W, mapH: H } = map;
+  const pickupKinds = [
+    "stick_pickup",
+    "loose_stone_pickup",
+    "flint_shard_pickup",
+    "leaf_litter",
+    "bark_strip",
+    "grass_patch",
+    "moss_patch",
+    "berry_bush",
+    "mushroom_patch"
+  ];
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const key = coordKey(x, y);
+      if (occupiedSpawns.has(key)) continue;
+
+      const cellType = map.cells[y * W + x];
+      if (cellType === Cell.Water) continue;
+
+      const roll = Math.abs(noiseGen.noise(x * 21.3 + 9.2, y * 13.6 + 4.7) % 1);
+      if (roll < 0.012) {
+        const typeRoll = Math.abs(noiseGen.noise(x * 5.4 + 1.1, y * 8.9 + 6.3) % 1);
+        const gatherableId = pickupKinds[Math.floor(typeRoll * pickupKinds.length)] ?? "stick_pickup";
+        addSpawn(gatherableId, x, y, "pickup");
+      }
+    }
   }
 }
 

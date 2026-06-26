@@ -76,3 +76,17 @@ export function syncPlaceItem(
     return result.data.playerState;
   });
 }
+
+/** Upgrade a building; deducts materials and returns the new local state. */
+export function syncUpgradeBuilding(
+  buildingId: string,
+): Promise<SyncResult<RpgPlayerState>> {
+  return syncLocal(async () => {
+    const result = await dispatchRpgCommand({
+      type: "upgradeBuilding",
+      buildingId,
+    });
+    if (!result.ok) throw new Error(result.error);
+    return result.data.playerState;
+  });
+}

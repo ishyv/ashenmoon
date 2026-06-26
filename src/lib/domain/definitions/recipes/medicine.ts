@@ -11,7 +11,7 @@ export const medicineRecipes: readonly RecipeInput[] = [
     process: "boil",
     feedbackTags: ["herbal", "steam"],
     costs: [
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
       { itemId: "moss", name: "moss", required: 1 },
     ],
   },
@@ -24,9 +24,9 @@ export const medicineRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You boil bitter roots and herbs into a medicine that tastes like punishment.",
     costs: [
-      { itemId: "bitter_root", name: "bitter root", required: 1 },
-      { itemId: "nettle", name: "nettle", required: 1 },
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "wild_root", name: "wild root", required: 1 },
+      { itemId: "wild_herb", name: "wild herb", required: 1 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
     ],
     output: { itemId: "bitter_tonic", qty: 1 },
     process: "boil",
@@ -85,7 +85,7 @@ export const medicineRecipes: readonly RecipeInput[] = [
     discoveryText: "You clean and fold plant material into something safe enough for a wound.",
     costs: [
       { itemId: "green_leaves", name: "green leaves", required: 3 },
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
       { itemId: "binding_cord", name: "binding cord", required: 2 },
     ],
     output: { itemId: "clean_bandage", qty: 1 },
@@ -137,7 +137,7 @@ export const medicineRecipes: readonly RecipeInput[] = [
     discoveryText: "You mix ash with boiled water into a harsh cleaning paste.",
     costs: [
       { itemId: "ash", name: "ash", required: 2 },
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
     ],
     output: { itemId: "ash_paste", qty: 1 },
     process: "assemble",
@@ -153,8 +153,8 @@ export const medicineRecipes: readonly RecipeInput[] = [
     discoveryText: "You crush herbs and leaves into a wet dressing for cuts.",
     costs: [
       { itemId: "wild_herb", name: "wild herb", required: 2 },
-      { itemId: "plantain_leaf", name: "plantain leaf", required: 1 },
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "moss", name: "moss", required: 1 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
     ],
     output: { itemId: "herb_poultice", qty: 1 },
     process: "assemble",
@@ -169,7 +169,7 @@ export const medicineRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You pack yarrow into a stronger dressing for bleeding.",
     costs: [
-      { itemId: "yarrow", name: "yarrow", required: 2 },
+      { itemId: "wild_herb", name: "wild herb", required: 2 },
       { itemId: "clean_bandage", name: "clean bandage", required: 1 },
     ],
     output: { itemId: "yarrow_poultice", qty: 1 },

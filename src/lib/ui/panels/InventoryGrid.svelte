@@ -12,6 +12,7 @@ import { inspect as inspectKnowledge } from "$lib/state/rpg/knowledge.svelte";
 import { allRecipeList, recipeKnowledge } from "$lib/state/rpg/crafting.svelte";
 import { buildOptionsFromInventory } from "$lib/domain/building-options";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
+import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-actions";
 import ItemGrid from "./inventory/ItemGrid.svelte";
 import ItemInspectPanel from "./inventory/ItemInspectPanel.svelte";
 import CraftingPanel from "./inventory/CraftingPanel.svelte";
@@ -39,19 +40,37 @@ const inspectNotes = $derived(selectedItem ? inspectKnowledge(selectedItem) : nu
 const stashLimit = $derived(gameState.rpg.profile?.stashSize ?? 20);
 
 const buildRecipes = $derived<BuildRecipeView[]>(
-  buildOptionsFromInventory((gameState.rpg.inventory?.slots ?? {}) as Record<string, RpgInventorySlot>)
-    .map((option) => ({
-      id: option.buildableId,
-      sourceItemId: option.sourceItemId,
-      available: option.available,
-      name: option.name,
-      description: option.description,
-      costs: [{
-        itemId: option.sourceItemId,
-        name: option.sourceItemName,
-        required: 1,
-      }],
-    })),
+  [
+    ...buildOptionsFromInventory((gameState.rpg.inventory?.slots ?? {}) as Record<string, RpgInventorySlot>)
+      .map((option) => ({
+        id: option.buildableId,
+        sourceItemId: option.sourceItemId,
+        available: option.available,
+        name: option.name,
+        description: option.description,
+        costs: [{
+          itemId: option.sourceItemId,
+          name: option.sourceItemName,
+          required: 1,
+        }],
+      })),
+    {
+      id: "house1",
+      sourceItemId: "",
+      available: Math.floor(getMaterialQty("stick") / 2),
+      name: "outpost house",
+      description: "a blueprint for a multi-stage outpost house.",
+      costs: [{ itemId: "stick", name: "Stick", required: 2 }],
+    },
+    {
+      id: "tower",
+      sourceItemId: "",
+      available: Math.floor(getMaterialQty("stick") / 2),
+      name: "tower",
+      description: "a blueprint for a multi-stage watchtower.",
+      costs: [{ itemId: "stick", name: "Stick", required: 2 }],
+    }
+  ]
 );
 
 $effect(() => {
@@ -89,7 +108,8 @@ async function equipTool(itemId: string) {
     if (def.category === "tool") {
       const result = await dispatchRpgCommand({ type: "equipTool", itemId });
       if (!result.ok) throw new Error(result.error);
-      playSound("pickup");
+      playSound("ui.inventory.equip", { conditions: { itemType: def.category } });
+      selectedItem = null;
       return;
     }
 
@@ -104,11 +124,24 @@ async function equipTool(itemId: string) {
       if (slotKey) {
         const result = await dispatchRpgCommand({ type: "equipGear", itemId, slot: slotKey });
         if (!result.ok) throw new Error(result.error);
-        playSound("pickup");
+        playSound("ui.inventory.equip", { conditions: { itemType: def.category } });
+        selectedItem = null;
       }
     }
   } catch (err) {
     console.error("equip error:", err instanceof Error ? err.message : String(err));
+  }
+}
+
+async function handleDblClickItem(itemId: string) {
+  const def = getItemDef(itemId);
+  if (!def) return;
+
+  if (def.category === "tool" || traitOf(def, "wearable")) {
+    await equipTool(itemId);
+  } else if (getConsumeVerb(itemId) && canConsume(itemId)) {
+    consumeItem(itemId);
+    selectedItem = null;
   }
 }
 
@@ -227,7 +260,7 @@ async function studyBlueprint(itemId: string): Promise<void> {
     </GamePanel>
   {/if}
 
-  <GamePanel id="inventory" title="stash & assembly" width={activeTab === "crafting" ? "42rem" : "22rem"} onClose={onClose}>
+  <GamePanel id="inventory" title="stash & assembly" width={activeTab === "crafting" ? "46rem" : "22rem"} onClose={onClose}>
     <section class="panel-overlay" aria-label="inventory">
       <header class="panel-tab-bar">
         <nav class="tab-header" aria-label="inventory tabs">
@@ -262,6 +295,7 @@ async function studyBlueprint(itemId: string): Promise<void> {
           {isEquipped}
           onSelect={(itemId) => (selectedItem = itemId)}
           onHover={(itemId) => (hoveredItem = itemId)}
+          onDblClick={handleDblClickItem}
         />
       {:else if activeTab === "crafting"}
         <CraftingPanel

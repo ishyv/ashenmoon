@@ -41,6 +41,8 @@ export interface RpgPlayerState {
     characterLevel?: number;
     /** xp toward the next character level; absent on old saves, read with ?? 0. */
     characterXp?: number;
+    /** seed used to generate the world map layout; generated on new game. */
+    worldSeed?: number;
     stashSize: number;
     loadout: {
       weapon: RpgWeaponSlot;
@@ -58,6 +60,7 @@ export interface RpgPlayerState {
       x: number;
       y: number;
       sourceItemId?: string;
+      stage?: number;
     }[];
     gatheredPickups?: string[];
   };

@@ -10,7 +10,7 @@ import { getConsumableTrait, resolveConsume } from "$lib/domain/systems/consume-
 import { removeStackQty } from "$lib/domain/systems/inventory-system";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgInventory } from "$lib/state/rpg-actions.svelte";
-import { restoreThirst } from "$lib/state/rpg/survival.svelte";
+import { restoreThirst, restoreHunger } from "$lib/state/rpg/survival.svelte";
 import {
   applyStatusEffect,
   clearAllStatusEffects,
@@ -23,6 +23,7 @@ import { GameEvent } from "$lib/domain/game-events";
 import { playSound } from "$lib/audio/audio-engine";
 import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
 import { propertiesFromConsume } from "$lib/domain/knowledge/knowledge-unlock";
+import { getActionFeedback } from "$lib/domain/feedback/action-feedback";
 
 
 /** Whether one unit of this item can be consumed right now. */
@@ -60,7 +61,8 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
 
   playSound("consume");
   const verbPast = outcome.verb === "drink" ? "drank" : outcome.verb === "eat" ? "ate" : "applied";
-  emitPlayerFeedback(`You ${verbPast} the ${def.name.toLowerCase()}.`, "info");
+  const drinkFeedback = itemId === "clean_water" ? getActionFeedback("drink_clean_water") : undefined;
+  emitPlayerFeedback(drinkFeedback?.toast ?? `You ${verbPast} the ${def.name.toLowerCase()}.`, "info");
 
   let harmed = false;
   let restoredThirst = false;
@@ -69,6 +71,9 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
       case "restore_thirst":
         restoreThirst(command.amount);
         restoredThirst = true;
+        break;
+      case "restore_hunger":
+        restoreHunger(command.amount);
         break;
       case "restore_hp":
         emitPlayerHpDelta(command.amount);

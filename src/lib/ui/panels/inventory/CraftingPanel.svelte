@@ -1,6 +1,14 @@
 <script lang="ts">
 import { getItemDef } from "$lib/domain/items";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
+import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
+import { getKnownSources } from "$lib/state/rpg/knowledge.svelte";
+
+function formatSources(sources: readonly string[]): string {
+  if (sources.length === 0) return "source unknown";
+  if (sources.length <= 2) return sources.join(", ");
+  return `${sources.slice(0, 2).join(", ")} +${sources.length - 2}`;
+}
 
 let {
   allRecipes,
@@ -54,6 +62,25 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
 
 function getItemQty(itemId: string): number {
   return items.find((i) => i.itemId === itemId)?.qty ?? 0;
+}
+
+function handleComponentClick(costItemId: string) {
+  const componentRecipe = allRecipes.find((r) => r.output.itemId === costItemId);
+  if (componentRecipe) {
+    selectedRecipeId = componentRecipe.id;
+    // Auto-switch category filter so the recipe displays in the left sidebar
+    const def = getItemDef(costItemId);
+    if (def) {
+      categoryFilter = def.category === "tool" ? "tool" : "resource";
+    }
+  }
+}
+
+async function handleComponentDblClick(costItemId: string) {
+  const componentRecipe = allRecipes.find((r) => r.output.itemId === costItemId);
+  if (componentRecipe && isKnown(componentRecipe.id) && canCraft(componentRecipe)) {
+    await craftItem(componentRecipe);
+  }
 }
 </script>
 
@@ -109,13 +136,7 @@ function getItemQty(itemId: string): number {
             >
               <div class="medallion-inner">
                 {#if known}
-                  {#if meta?.iconUrl}
-                    <img src={meta.iconUrl} alt={recipe.name} class="item-icon-img" />
-                  {:else if meta?.icon}
-                    <span class="item-icon-emoji">{meta.icon}</span>
-                  {:else}
-                    <span class="item-icon-text">{recipe.name.slice(0, 2).toLowerCase()}</span>
-                  {/if}
+                  <ItemIcon itemId={recipe.output.itemId} def={meta} class="item-icon-img" />
                 {:else}
                   <span class="locked-glyph">⚿</span>
                 {/if}
@@ -132,170 +153,182 @@ function getItemQty(itemId: string): number {
 
   <!-- Right Pane: Detail & Circle -->
   <main class="recipe-detail-pane">
-    <div class="alchemy-workspace">
-      <div class="circle-wrapper" style="width: {centerCoord * 2}px; height: {centerCoord * 2}px; margin: 0 auto; position: relative; display: block;">
-        <div class="runic-ring outer-ring"></div>
-        <div class="runic-ring inner-ring"></div>
+    {#if selectedRecipe}
+      {@const known = isKnown(selectedRecipe.id)}
+      <div class="detail-split-container">
+        <!-- Left half: runic crucible circle -->
+        <div class="alchemy-workspace">
+          <div class="circle-wrapper" style="width: {centerCoord * 2}px; height: {centerCoord * 2}px; position: relative; display: block;">
+            <div class="runic-ring outer-ring"></div>
+            <div class="runic-ring inner-ring"></div>
 
-        <svg class="resonance-canvas" viewBox="0 0 {centerCoord * 2} {centerCoord * 2}">
-          {#each slotIndices as index}
-            {@const angle = (index * 2 * Math.PI) / totalSlots - Math.PI / 2}
-            {@const targetX = centerCoord + circleRadius * Math.cos(angle)}
-            {@const targetY = centerCoord + circleRadius * Math.sin(angle)}
-            {@const satisfied = selectedRecipe
-              ? (getItemQty(selectedRecipe.costs[index]?.itemId ?? "") >= (selectedRecipe.costs[index]?.required ?? 0))
-              : false}
-            <line
-              x1={centerCoord} y1={centerCoord}
-              x2={targetX} y2={targetY}
-              class="resonance-line"
-              class:active={satisfied}
-            />
-          {/each}
-        </svg>
+            <svg class="resonance-canvas" viewBox="0 0 {centerCoord * 2} {centerCoord * 2}">
+              {#each slotIndices as index}
+                {@const angle = (index * 2 * Math.PI) / totalSlots - Math.PI / 2}
+                {@const targetX = centerCoord + circleRadius * Math.cos(angle)}
+                {@const targetY = centerCoord + circleRadius * Math.sin(angle)}
+                {@const satisfied = (getItemQty(selectedRecipe.costs[index]?.itemId ?? "") >= (selectedRecipe.costs[index]?.required ?? 0))}
+                <line
+                  x1={centerCoord} y1={centerCoord}
+                  x2={targetX} y2={targetY}
+                  class="resonance-line"
+                  class:active={satisfied}
+                />
+              {/each}
+            </svg>
 
-        {#each slotIndices as index}
-          {@const angle = (index * 2 * Math.PI) / totalSlots - Math.PI / 2}
-          {@const slotX = centerCoord + circleRadius * Math.cos(angle) - slotSize / 2}
-          {@const slotY = centerCoord + circleRadius * Math.sin(angle) - slotSize / 2}
+            {#each slotIndices as index}
+              {@const angle = (index * 2 * Math.PI) / totalSlots - Math.PI / 2}
+              {@const slotX = centerCoord + circleRadius * Math.cos(angle) - slotSize / 2}
+              {@const slotY = centerCoord + circleRadius * Math.sin(angle) - slotSize / 2}
 
-          {#if selectedRecipe}
-            {@const cost = selectedRecipe.costs[index]}
-            {#if cost}
-              {@const meta = getItemDef(cost.itemId)}
-              {@const current = getItemQty(cost.itemId)}
-              {@const satisfied = current >= cost.required}
-              {@const known = isKnown(selectedRecipe.id)}
-              <div
-                class="orbiting-slot recipe-slot"
-                class:satisfied={satisfied && known}
-                style="left: {slotX}px; top: {slotY}px;"
-                title="{meta?.name ?? cost.itemId}: {known ? `${current} / ${cost.required}` : '?'}"
-              >
-                <div class="slot-visual">
-                  {#if known}
-                    {#if meta?.iconUrl}
-                      <img src={meta.iconUrl} alt={meta.name} class="slot-icon-img" />
-                    {:else if meta?.icon}
-                      <span class="slot-icon-emoji">{meta.icon}</span>
+              {@const cost = selectedRecipe.costs[index]}
+              {#if cost}
+                {@const meta = getItemDef(cost.itemId)}
+                {@const current = getItemQty(cost.itemId)}
+                {@const satisfied = current >= cost.required}
+                <div
+                  class="orbiting-slot recipe-slot"
+                  class:satisfied={satisfied && known}
+                  style="left: {slotX}px; top: {slotY}px;"
+                  title="{meta?.name ?? cost.itemId}: {known ? `${current} / ${cost.required}` : '?'}"
+                >
+                  <div class="slot-visual">
+                    {#if known}
+                      <ItemIcon itemId={cost.itemId} def={meta} class="slot-icon-img" />
                     {:else}
-                      <span class="slot-icon-text">{cost.itemId.slice(0, 2).toLowerCase()}</span>
+                      <span class="slot-icon-text">?</span>
                     {/if}
+                  </div>
+                  {#if known}
+                    <span class="qty-label" class:missing={!satisfied}>
+                      {current}/{cost.required}
+                    </span>
                   {:else}
-                    <span class="slot-icon-text">?</span>
+                    <span class="qty-label missing">?</span>
                   {/if}
                 </div>
+              {/if}
+            {/each}
+
+            <!-- Central core -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="crucible-core lift"
+              class:has-heat={nearCampfire}
+              class:craftable={isRecipeReady(selectedRecipe)}
+              onclick={() => {
+                if (isRecipeReady(selectedRecipe)) craftItem(selectedRecipe);
+              }}
+              title="assemble {selectedRecipe.name.toLowerCase()}"
+            >
+              <div class="core-aura"></div>
+              <div class="core-visual">
                 {#if known}
-                  <span class="qty-label" class:missing={!satisfied}>
-                    {current}/{cost.required}
-                  </span>
+                  <ItemIcon itemId={selectedRecipe.output.itemId} def={getItemDef(selectedRecipe.output.itemId)} class="core-icon-img" />
                 {:else}
-                  <span class="qty-label missing">?</span>
+                  <span class="core-icon-emoji locked-core">⚿</span>
                 {/if}
               </div>
-            {/if}
-          {:else}
-            <div class="orbiting-slot empty" style="left: {slotX}px; top: {slotY}px;">
-              <span class="placeholder-rune">◦</span>
-            </div>
-          {/if}
-        {/each}
+              {#if known && selectedRecipe.output.qty > 1}
+                <span class="core-qty-badge">x{selectedRecipe.output.qty}</span>
+              {/if}
 
-        <!-- Central core -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="crucible-core lift"
-          class:has-heat={nearCampfire}
-          class:craftable={selectedRecipe && isRecipeReady(selectedRecipe)}
-          onclick={() => {
-            if (selectedRecipe && isRecipeReady(selectedRecipe)) craftItem(selectedRecipe);
-          }}
-          title={selectedRecipe ? `assemble ${selectedRecipe.name.toLowerCase()}` : "select a recipe"}
-        >
-          <div class="core-aura"></div>
-          {#if selectedRecipe}
-            {@const outputMeta = getItemDef(selectedRecipe.output.itemId)}
-            {@const known = isKnown(selectedRecipe.id)}
-            <div class="core-visual">
-              {#if known}
-                {#if outputMeta?.iconUrl}
-                  <img src={outputMeta.iconUrl} alt={selectedRecipe.name} class="core-icon-img" />
-                {:else if outputMeta?.icon}
-                  <span class="core-icon-emoji">{outputMeta.icon}</span>
-                {:else}
-                  <span class="core-icon-text">{selectedRecipe.name.slice(0, 2).toLowerCase()}</span>
-                {/if}
-              {:else}
-                <span class="core-icon-emoji locked-core">⚿</span>
+              {#if selectedRecipe.requiresCampfire && known}
+                <div class="campfire-heat-indicator" class:active={nearCampfire}>
+                  🔥
+                </div>
               {/if}
             </div>
-            {#if known && selectedRecipe.output.qty > 1}
-              <span class="core-qty-badge">x{selectedRecipe.output.qty}</span>
-            {/if}
-          {:else}
-            <div class="core-visual">
-              <span class="core-icon-text idle-core">select</span>
-            </div>
-          {/if}
+          </div>
+        </div>
 
-          {#if selectedRecipe?.requiresCampfire && isKnown(selectedRecipe.id)}
-            <div class="campfire-heat-indicator" class:active={nearCampfire}>
-              🔥
-            </div>
-          {/if}
+        <!-- Right half: details and checklist -->
+        <div class="workspace-details">
+          <div class="recipe-info-box">
+            <header class="info-header">
+              <h4 class="info-title">{selectedRecipe.name.toLowerCase()}</h4>
+              {#if known && selectedRecipe.requiresCampfire}
+                <span class="campfire-tag" class:active={nearCampfire}>
+                  {nearCampfire ? "lit campfire nearby" : "requires campfire"}
+                </span>
+              {/if}
+              {#if !known}
+                <span class="locked-tag">blueprint required</span>
+              {/if}
+            </header>
+            <p class="info-desc">{selectedRecipe.description}</p>
+
+            {#if known}
+              <div class="materials-header">required materials</div>
+              <div class="materials-scroll-wrapper">
+                <ul class="materials-list">
+                  {#each selectedRecipe.costs as cost}
+                    {@const meta = getItemDef(cost.itemId)}
+                    {@const current = getItemQty(cost.itemId)}
+                    {@const satisfied = current >= cost.required}
+                    {@const sources = getKnownSources(cost.itemId)}
+                    {@const componentRecipe = allRecipes.find((r) => r.output.itemId === cost.itemId)}
+                    {@const isClickable = !!componentRecipe}
+                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <li
+                      class="material-item"
+                      class:satisfied={satisfied}
+                      class:clickable={isClickable}
+                      onclick={() => isClickable && handleComponentClick(cost.itemId)}
+                      ondblclick={() => isClickable && handleComponentDblClick(cost.itemId)}
+                    >
+                      <div class="material-left">
+                        <div class="material-icon-wrapper">
+                          <ItemIcon itemId={cost.itemId} def={meta} />
+                        </div>
+                        <span class="material-name">{meta?.name.toLowerCase() ?? cost.itemId}</span>
+                        <span class="material-sources" class:unknown={sources.length === 0} title={sources.length > 0 ? `Known sources: ${sources.join(', ')}` : "Source unknown"}>
+                          ({formatSources(sources)})
+                        </span>
+                      </div>
+                      <span class="material-qty" class:missing={!satisfied}>
+                        {current} / {cost.required}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+
+            <button
+              class="action-btn craft-action-btn"
+              class:enabled={isRecipeReady(selectedRecipe)}
+              disabled={!isRecipeReady(selectedRecipe)}
+              onclick={() => { if (isRecipeReady(selectedRecipe)) craftItem(selectedRecipe); }}
+            >
+              {#if !known}
+                blueprint required
+              {:else if isRecipeReady(selectedRecipe)}
+                transmute {selectedRecipe.name.toLowerCase()}
+              {:else if selectedRecipe.requiresCampfire && !nearCampfire}
+                needs campfire heat
+              {:else}
+                lacks materials
+              {/if}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Detail panel -->
-    <div class="workspace-details">
-      {#if selectedRecipe}
-        {@const known = isKnown(selectedRecipe.id)}
-        <div class="recipe-info-box">
-          <header class="info-header">
-            <h4 class="info-title">{selectedRecipe.name.toLowerCase()}</h4>
-            {#if known && selectedRecipe.requiresCampfire}
-              <span class="campfire-tag" class:active={nearCampfire}>
-                {nearCampfire ? "lit campfire nearby" : "requires campfire"}
-              </span>
-            {/if}
-            {#if !known}
-              <span class="locked-tag">blueprint required</span>
-            {/if}
-          </header>
-          <p class="info-desc">{selectedRecipe.description}</p>
-
-          <button
-            class="action-btn craft-action-btn"
-            class:enabled={isRecipeReady(selectedRecipe)}
-            disabled={!isRecipeReady(selectedRecipe)}
-            onclick={() => { if (isRecipeReady(selectedRecipe)) craftItem(selectedRecipe); }}
-          >
-            {#if !known}
-              blueprint required
-            {:else if isRecipeReady(selectedRecipe)}
-              transmute {selectedRecipe.name.toLowerCase()}
-            {:else if selectedRecipe.requiresCampfire && !nearCampfire}
-              needs campfire heat
-            {:else}
-              lacks materials
-            {/if}
-          </button>
-        </div>
-      {:else}
-        <div class="idle-hint">
-          <span class="idle-text">select a formula from the grimoire.</span>
-        </div>
-      {/if}
-    </div>
+    {:else}
+      <div class="idle-hint">
+        <span class="idle-text">select a formula from the grimoire.</span>
+      </div>
+    {/if}
   </main>
 </div>
 
 <style>
   .crafting-dual-pane {
     display: flex;
-    width: 44rem;
+    width: 100%;
     height: 26rem;
     background: rgba(8, 6, 5, 0.4);
     border-radius: 4px;
@@ -469,22 +502,10 @@ function getItemQty(itemId: string): number {
     justify-content: center;
   }
 
-  .item-icon-img {
+  :global(.item-icon-img) {
     width: 100%;
     height: 100%;
     object-fit: contain;
-  }
-
-  .item-icon-emoji {
-    font-size: 1.25rem;
-    line-height: 1;
-  }
-
-  .item-icon-text {
-    font-size: 0.65rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-weight: 700;
-    color: var(--inv-text-muted);
   }
 
   .locked-glyph {
@@ -516,14 +537,22 @@ function getItemQty(itemId: string): number {
     padding: 0.8rem;
   }
 
-  .alchemy-workspace {
+  .detail-split-container {
+    display: flex;
+    gap: 1.2rem;
+    height: 100%;
     width: 100%;
-    flex: 0 0 auto;
+    align-items: stretch;
+  }
+
+  .alchemy-workspace {
+    flex: 0 0 180px;
+    width: 180px;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
-    min-height: 180px;
   }
 
   .circle-wrapper {
@@ -603,11 +632,6 @@ function getItemQty(itemId: string): number {
     box-shadow: 0 0 10px rgba(76, 175, 80, 0.1), 0 4px 10px rgba(0, 0, 0, 0.4);
   }
 
-  .orbiting-slot.empty {
-    border: 1px dashed rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.01);
-    box-shadow: none;
-  }
 
   .slot-visual {
     width: 60%;
@@ -617,8 +641,7 @@ function getItemQty(itemId: string): number {
     justify-content: center;
   }
 
-  .slot-icon-img { width: 100%; height: 100%; object-fit: contain; }
-  .slot-icon-emoji { font-size: 1.1rem; line-height: 1; }
+  :global(.slot-icon-img) { width: 100%; height: 100%; object-fit: contain; }
   .slot-icon-text {
     font-size: 0.58rem;
     font-family: "IBM Plex Mono", monospace;
@@ -626,11 +649,6 @@ function getItemQty(itemId: string): number {
     font-weight: bold;
   }
 
-  .placeholder-rune {
-    font-size: 0.8rem;
-    color: var(--inv-text-muted);
-    opacity: 0.12;
-  }
 
   .qty-label {
     position: absolute;
@@ -702,26 +720,14 @@ function getItemQty(itemId: string): number {
     z-index: 2;
   }
 
-  .core-icon-img { width: 100%; height: 100%; object-fit: contain; }
+  :global(.core-icon-img) { width: 100%; height: 100%; object-fit: contain; }
   .core-icon-emoji { font-size: 1.85rem; line-height: 1; filter: drop-shadow(0 2px 4px black); }
-  .core-icon-text {
-    font-size: 0.6rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-weight: 700;
-    color: var(--inv-text-muted);
-    opacity: 0.5;
-  }
 
   .locked-core {
     font-size: 1.2rem !important;
     opacity: 0.4;
   }
 
-  .idle-core {
-    font-size: 0.52rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
 
   .core-qty-badge {
     position: absolute;
@@ -761,12 +767,33 @@ function getItemQty(itemId: string): number {
   .workspace-details {
     flex: 1;
     min-height: 0;
-    padding-top: 0.6rem;
-    border-top: 1px solid var(--inv-border-muted);
     min-width: 0;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
+    border-left: 1px solid var(--inv-border-muted);
+    padding-left: 1.2rem;
+  }
+
+  .materials-scroll-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    margin-bottom: 0.5rem;
+    padding-right: 0.25rem;
+  }
+
+  .materials-scroll-wrapper::-webkit-scrollbar {
+    width: 4px;
+  }
+  .materials-scroll-wrapper::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+  }
+  .materials-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(185, 155, 98, 0.25);
+    border-radius: 2px;
+  }
+  .materials-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(185, 155, 98, 0.45);
   }
 
   .recipe-info-box {
@@ -896,5 +923,100 @@ function getItemQty(itemId: string): number {
     font-size: 0.75rem;
     color: var(--inv-text-muted);
     opacity: 0.5;
+  }
+
+  .materials-header {
+    font-family: "Cinzel", serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--inv-accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 0.8rem;
+    margin-bottom: 0.4rem;
+    opacity: 0.8;
+    border-bottom: 1px solid var(--inv-border-muted);
+    padding-bottom: 0.2rem;
+  }
+
+  .materials-list {
+    list-style: none;
+    margin: 0 0 0.8rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .material-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    color: var(--inv-text-muted);
+  }
+
+  .material-item.satisfied {
+    color: var(--inv-text);
+  }
+
+  .material-left {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .material-icon-wrapper {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .material-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .material-sources {
+    font-size: 0.6rem;
+    color: rgba(255, 220, 120, 0.45);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 0.25rem;
+    flex: 1;
+  }
+
+  .material-sources.unknown {
+    color: rgba(255, 255, 255, 0.2);
+  }
+
+  .material-qty {
+    font-weight: 700;
+    font-size: 0.7rem;
+    color: var(--inv-accent);
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+  }
+
+  .material-qty.missing {
+    color: #ef4444;
+  }
+
+  .material-item.clickable {
+    cursor: pointer;
+  }
+
+  .material-item.clickable:hover .material-name {
+    text-decoration: underline;
+    color: var(--inv-accent);
   }
 </style>

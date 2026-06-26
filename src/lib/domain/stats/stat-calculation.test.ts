@@ -23,18 +23,18 @@ describe("computeBaseStatsAtLevel", () => {
 
   it("adds one growth step at level 2", () => {
     const stats = computeBaseStatsAtLevel(2);
-    expect(stats.combat.maxHealth).toBe(112);
-    expect(stats.combat.attackDamage).toBeCloseTo(11.4);
-    expect(stats.combat.armor).toBeCloseTo(5.8);
+    expect(stats.combat.maxHealth).toBeCloseTo(664.8);
+    expect(stats.combat.attackDamage).toBeCloseTo(62.88);
+    expect(stats.combat.armor).toBeCloseTo(32.88);
   });
 
   it("matches the spec table at level 18", () => {
     const stats = computeBaseStatsAtLevel(18);
-    expect(stats.combat.maxHealth).toBe(304);
+    expect(stats.combat.maxHealth).toBe(2130);
     expect(stats.combat.maxStamina).toBe(168);
-    expect(stats.combat.attackDamage).toBeCloseTo(33.8);
-    expect(stats.combat.armor).toBeCloseTo(18.6);
-    expect(stats.combat.magicResist).toBeCloseTo(15.2);
+    expect(stats.combat.attackDamage).toBeCloseTo(128);
+    expect(stats.combat.armor).toBeCloseTo(98);
+    expect(stats.combat.magicResist).toBeCloseTo(55.5);
     expect(stats.combat.attackSpeed).toBeCloseTo(1.255);
     expect(stats.combat.techniqueHaste).toBeCloseTo(8.5);
     expect(stats.combat.knockbackChance).toBeCloseTo(2.55);
@@ -67,14 +67,14 @@ describe("applyModifiers", () => {
   });
 
   it("stacks flat, then percentAdd, then mult", () => {
-    const base = computeBaseStatsAtLevel(1); // armor 5
+    const base = computeBaseStatsAtLevel(1); // armor 30
     const mods: StatModifier[] = [
       { stat: "armor", op: "flat", value: 15, source: "equipment" },
       { stat: "armor", op: "percentAdd", value: 0.5, source: "skill" },
       { stat: "armor", op: "mult", value: 0.5, source: "status" },
     ];
-    // (5 + 15) * 1.5 * 0.5 = 15
-    expect(applyModifiers(base, mods).combat.armor).toBeCloseTo(15);
+    // (30 + 15) * 1.5 * 0.5 = 33.75
+    expect(applyModifiers(base, mods).combat.armor).toBeCloseTo(33.75);
   });
 
   it("does not mutate the base", () => {

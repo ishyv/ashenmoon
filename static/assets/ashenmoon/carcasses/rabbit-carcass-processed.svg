@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 90" role="img" aria-label="rabbit processed carcass">
+  <ellipse cx="65.0" cy="78" rx="44.2" ry="8" fill="#080706" opacity=".42"/>
+  <path d="M20.8 64.2c8-34 40-47 72.8-39 23 4 40 18 42 36-17 18-76 22-97.5 3z" fill="#080706"/>
+  <path d="M29.9 62.2c10-21 36-31 58.5-25 18 3 31 13 33 25-16 10-57 13-75.4 0z" fill="#8f7f68" opacity=".7"/>
+  <path d="M41.6 49.2c21-9 48-6 64 9-22 9-46 9-71 1z" fill="#34251a" opacity=".56"/>
+  <path d="M85.0 30.199999999999996c12-18 22-18 15 8" stroke="#080706" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M77.0 28.199999999999996c5-21 16-24 14 2" stroke="#080706" stroke-width="7" fill="none" stroke-linecap="round"/>
+  
+  
+  <circle cx="27.0" cy="50.199999999999996" r="8" fill="#d9c28e" stroke="#080706" stroke-width="4"/>
+  <path d="M45.0 57.199999999999996c28 11 55 9 77-2" stroke="#d9c28e" stroke-width="8" stroke-linecap="round" opacity=".75"/><path d="M72.0 43.199999999999996l9 22M94.0 41.199999999999996l8 21" stroke="#080706" stroke-width="4" opacity=".65"/>
+  <path d="M30.0 75.19999999999999c23 8 60 8 87-2" stroke="#080706" stroke-width="5" stroke-linecap="round" opacity=".5"/>
+</svg>

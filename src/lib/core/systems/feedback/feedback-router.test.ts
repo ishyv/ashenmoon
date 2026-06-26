@@ -61,6 +61,7 @@ describe("FeedbackRouter", () => {
     expect(triggerCameraShake).toHaveBeenCalledWith(vfx, 2.5, 0.12);
     expect(playSound).toHaveBeenCalledWith("combat.hit.enemy", {
       position: { x: 64 + TILE / 2, y: 96 + TILE / 2 },
+      conditions: { targetSpecies: "humanoid" },
     });
   });
 
@@ -98,6 +99,7 @@ describe("FeedbackRouter", () => {
     );
     expect(playSound).toHaveBeenCalledWith("combat.hit.player", {
       position: { x: 10 + TILE / 2, y: 20 + TILE / 2 },
+      conditions: { targetSpecies: "humanoid" },
     });
   });
 });

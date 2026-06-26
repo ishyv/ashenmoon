@@ -1,21 +1,24 @@
 import { Container, Sprite, AnimatedSprite, Texture } from "pixi.js";
 import { world, type Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import { Cell } from "$lib/core/types";
 import { computeRenderZ } from "$lib/domain/collision";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { getPrefabDefinition } from "$lib/domain/definition-registry";
 import { composeEntityFromPrefab } from "$lib/core/runtime/prefabs";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import { spawnBuildingSystem } from "$lib/core/systems/building/building-system";
+import type { UnitColor } from "$lib/core/assets/assets";
 import {
-  getBuildingTexture,
-  getWoodItemTexture,
-  getParticleFXFrames,
-  getWarriorFrames,
-  getShadowTexture,
-  getIconSheetTexture,
-  type UnitColor,
-} from "$lib/core/assets/assets";
+  createActorStandee,
+  createStandeeShadow,
+  getAshenmoonActorFrames,
+  getAshenmoonItemIconKeyForItemId,
+  getAshenmoonItemIconTexture,
+  getAshenmoonLandmarkKeyForKind,
+  getAshenmoonLandmarkTexture,
+  getAshenmoonPropTexture,
+} from "$lib/core/assets/ashenmoon-assets";
 import { getItemDef } from "$lib/domain/items/item-definitions";
 import { EntityId, GameEvent } from "$lib/domain/game-events";
 import { ENGINE_CONFIG } from "$lib/core/engine-config";
@@ -28,7 +31,22 @@ import { makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/e
 import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
 import { ANIMAL_DEFINITIONS, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import { LANDMARK_DEFS, type LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
-import { getStumpVariantTexture, getTreeVariantTexture, getRockVariantTexture } from "$lib/core/assets/assets";
+
+function getBiomeScaling(cellType: Cell): { mult: number; level: number } {
+  switch (cellType) {
+    case Cell.CrimsonGrove:
+      return { mult: 1.8, level: Math.floor(Math.random() * 4) + 4 };
+    case Cell.FungalMire:
+    case Cell.Frostbane:
+      return { mult: 3.0, level: Math.floor(Math.random() * 5) + 8 };
+    case Cell.ScorchedWastes:
+      return { mult: 5.0, level: Math.floor(Math.random() * 6) + 13 };
+    case Cell.Camp:
+    case Cell.Meadows:
+    default:
+      return { mult: 1.0, level: Math.floor(Math.random() * 3) + 1 };
+  }
+}
 
 export function spawnEnemy(
   gx: number,
@@ -46,14 +64,33 @@ export function spawnEnemy(
   const id = `enemy_${enemySeq}`;
   const ex = gx * TILE;
   const ey = gy * TILE;
-  world.add(makeEnemyEntity(id, ex, ey, arch));
+
+  const cellType = map.cells[gy * map.mapW + gx] ?? Cell.Meadows;
+  const scaling = getBiomeScaling(cellType);
+  const hp = Math.round(arch.maxHp * scaling.mult);
+  const dmg = Math.round(arch.damage * scaling.mult);
+  const xp = Math.round(arch.xpReward * scaling.mult);
+
+  const enemyEntity = makeEnemyEntity(id, ex, ey, {
+    ...arch,
+    maxHp: hp,
+    damage: dmg,
+    xpReward: xp,
+  });
+  enemyEntity.interactable = { name: `Wolf (Lvl ${scaling.level})`, action: "examine" };
+
+  world.add(enemyEntity);
   enemyColors.set(id, arch.color);
 
-  const sprite = new AnimatedSprite(getWarriorFrames("idle", arch.color));
+  const shadow = createStandeeShadow(0.62);
+  shadow.x = ex + TILE / 2;
+  shadow.y = ey + TILE - 4;
+  shadow.zIndex = computeRenderZ(shadow.y, -5);
+  entityLayer.addChild(shadow);
+
+  const sprite = createActorStandee("wolf", TILE * 1.3);
   sprite.animationSpeed = ENGINE_CONFIG.NPC_VISUALS.ANIM_SPEED;
   sprite.play();
-  sprite.anchor.set(0.5, 1);
-  sprite.scale.set((TILE * ENGINE_CONFIG.NPC_VISUALS.SCALE) / 192);
   sprite.x = ex + TILE / 2;
   sprite.y = ey + TILE;
   sprite.zIndex = computeRenderZ(sprite.y);
@@ -78,6 +115,13 @@ export function spawnAnimal(
   const id = `animal_${speciesId}_${animalSeq}`;
   const ex = gx * TILE;
   const ey = gy * TILE;
+
+  const cellType = map.cells[gy * map.mapW + gx] ?? Cell.Meadows;
+  const scaling = getBiomeScaling(cellType);
+  const hp = Math.round(def.maxHealth * scaling.mult);
+  const xp = Math.round(def.xpReward * scaling.mult);
+  const dmg = def.damage !== undefined ? Math.round(def.damage * scaling.mult) : undefined;
+
   const entity: Entity = {
     id,
     position: { x: ex, y: ey, targetX: ex, targetY: ey },
@@ -93,11 +137,13 @@ export function spawnAnimal(
       animState: "idle",
       awarenessLevel: "unaware",
       awarenessDecaySec: 0,
+      ...(dmg !== undefined ? { damage: dmg } : {}),
     },
     mover: { speed: def.moveSpeed },
     knockback: { vx: 0, vy: 0, timer: 0 },
-    health: { current: def.maxHealth, max: def.maxHealth, faction: "hostile", invulnTimer: 0 },
-    loot: { xpReward: def.xpReward },
+    health: { current: hp, max: hp, faction: "hostile", invulnTimer: 0 },
+    loot: { xpReward: xp },
+    interactable: { name: `${def.name} (Lvl ${scaling.level})`, action: "examine" },
   };
   world.add(entity);
 
@@ -194,16 +240,6 @@ export function spawnCampSystem(
   campfireContainer.y = startY + TILE / 2;
   campfireContainer.zIndex = computeRenderZ(startY + TILE * ENGINE_CONFIG.CAMPFIRE_VISUALS.Z_OFFSET_TILES);
 
-  const log1 = new Sprite(getWoodItemTexture());
-  log1.anchor.set(0.5, 0.5);
-  log1.rotation = -ENGINE_CONFIG.CAMPFIRE_VISUALS.LOG_ROTATION;
-  log1.scale.set((TILE * ENGINE_CONFIG.CAMPFIRE_VISUALS.LOG_SCALE) / 64);
-
-  const log2 = new Sprite(getWoodItemTexture());
-  log2.anchor.set(0.5, 0.5);
-  log2.rotation = ENGINE_CONFIG.CAMPFIRE_VISUALS.LOG_ROTATION;
-  log2.scale.set((TILE * ENGINE_CONFIG.CAMPFIRE_VISUALS.LOG_SCALE) / 64);
-
   // Add warm campfire light glow behind logs
   const campfireGlow = new Sprite(lightTexture);
   campfireGlow.anchor.set(0.5);
@@ -212,15 +248,12 @@ export function spawnCampSystem(
   campfireGlow.scale.set(1.5);
   campfireContainer.addChild(campfireGlow);
 
-  campfireContainer.addChild(log1);
-  campfireContainer.addChild(log2);
-
-  const fireFrames = getParticleFXFrames("fire1");
+  const fireFrames = [getAshenmoonPropTexture("firepitLit"), getAshenmoonPropTexture("firepitLit")];
   const campfire = new AnimatedSprite(fireFrames);
   campfire.animationSpeed = ENGINE_CONFIG.CAMPFIRE_VISUALS.FIRE_ANIM_SPEED;
   campfire.play();
-  campfire.anchor.set(0.5, 0.75);
-  campfire.scale.set((TILE * ENGINE_CONFIG.CAMPFIRE_VISUALS.FIRE_SCALE) / 48);
+  campfire.anchor.set(0.5, 0.72);
+  campfire.scale.set((TILE * 1.45) / campfire.texture.width);
   campfireContainer.addChild(campfire);
 
   entityLayer.addChild(campfireContainer);
@@ -251,7 +284,13 @@ export function spawnCampSystem(
   });
   setTileFootprint(npcGx, npcGy, CollisionFootprints.npc);
 
-  const vaneFrames = getWarriorFrames("idle", "yellow");
+  const vaneShadow = createStandeeShadow(ENGINE_CONFIG.ACTOR_VISUALS.HUMANOID_SHADOW_SCALE);
+  vaneShadow.x = npcEx + TILE / 2;
+  vaneShadow.y = npcEy + TILE - 4;
+  vaneShadow.zIndex = computeRenderZ(vaneShadow.y, -5);
+  entityLayer.addChild(vaneShadow);
+
+  const vaneFrames = getAshenmoonActorFrames("vane");
   const vaneSprite = new AnimatedSprite(vaneFrames);
   vaneSprite.animationSpeed = ENGINE_CONFIG.NPC_VISUALS.ANIM_SPEED;
   vaneSprite.play();
@@ -259,7 +298,7 @@ export function spawnCampSystem(
   vaneSprite.x = npcEx + TILE / 2;
   vaneSprite.y = npcEy + TILE;
   vaneSprite.zIndex = computeRenderZ(vaneSprite.y);
-  vaneSprite.scale.set((TILE * ENGINE_CONFIG.NPC_VISUALS.SCALE) / 192);
+  vaneSprite.scale.set((TILE * ENGINE_CONFIG.ACTOR_VISUALS.HUMANOID_HEIGHT_TILES) / vaneSprite.texture.height);
   entityLayer.addChild(vaneSprite);
   entitySprites.set(EntityId.NpcVane, vaneSprite);
 
@@ -291,14 +330,7 @@ export function spawnItemDrop(
     pickup: { itemId, qty },
   });
 
-  const iconSheet = def?.iconSheet;
-  const sprite = new Sprite(
-    iconSheet
-      ? getIconSheetTexture(iconSheet)
-      : (def?.iconUrl
-        ? Texture.from(def.iconUrl)
-        : getWoodItemTexture()),
-  );
+  const sprite = new Sprite(getAshenmoonItemTexture(itemId));
   sprite.anchor.set(0.5, 1);
   sprite.x = px + TILE / 2;
   sprite.y = py + TILE;
@@ -308,15 +340,39 @@ export function spawnItemDrop(
   entitySprites.set(id, sprite);
 }
 
-function getLandmarkTexture(kind: LandmarkKind): Texture | null {
-  switch (kind) {
-    case "old_stump":          return getStumpVariantTexture(1);
-    case "fallen_tree":        return getStumpVariantTexture(2);
-    case "huge_dead_tree":     return getTreeVariantTexture(3);
-    case "wolf_den":           return getRockVariantTexture(2);
-    case "ruined_watch_post":  return getTreeVariantTexture(4);
-    default:                   return null;
+interface LandmarkVisual {
+  readonly texture: Texture;
+  readonly heightTiles: number;
+}
+
+function getAshenmoonItemTexture(itemId: string): Texture {
+  const firstPartyKey = getAshenmoonItemIconKeyForItemId(itemId);
+  return firstPartyKey ? getAshenmoonItemIconTexture(firstPartyKey) : getAshenmoonItemIconTexture("stick");
+}
+
+function getLandmarkVisual(kind: LandmarkKind): LandmarkVisual | null {
+  const firstPartyKey = getAshenmoonLandmarkKeyForKind(kind);
+  if (firstPartyKey) {
+    const heightTilesByKind: Partial<Record<LandmarkKind, number>> = {
+      huge_dead_tree: 2.25,
+      ruined_watch_post: 1.55,
+      wolf_den: 1.0,
+      old_road: 0.5,
+      burned_cart: 1.15,
+      fallen_tree: 1.1,
+      old_stump: 0.85,
+      pond: 0.9,
+      river_crossing: 0.65,
+      deer_grazing_area: 0.65,
+      sentry_chest: 1.0,
+      skeleton_remains: 0.85,
+      cursed_monolith: 1.85,
+      bone_pile: 0.9,
+    };
+    return { texture: getAshenmoonLandmarkTexture(firstPartyKey), heightTiles: heightTilesByKind[kind] ?? 1.0 };
   }
+
+  return null;
 }
 
 let landmarkSeq = 0;
@@ -349,14 +405,13 @@ export function spawnLandmark(
     map.solidCoords.add(coordKey(gx, gy));
   }
 
-  const tex = getLandmarkTexture(kind);
-  if (tex) {
-    const sprite = new Sprite(tex);
+  const visual = getLandmarkVisual(kind);
+  if (visual) {
+    const sprite = new Sprite(visual.texture);
     sprite.anchor.set(0.5, 1);
     sprite.x = ex + TILE / 2;
     sprite.y = ey + TILE;
-    const isTall = kind === "huge_dead_tree" || kind === "ruined_watch_post";
-    sprite.scale.set((TILE * (isTall ? 2 : 1)) / tex.height);
+    sprite.scale.set((TILE * visual.heightTiles) / visual.texture.height);
     sprite.zIndex = computeRenderZ(sprite.y);
     entityLayer.addChild(sprite);
     entitySprites.set(entityId, sprite);

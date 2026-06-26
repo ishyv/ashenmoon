@@ -39,6 +39,12 @@ or gathering risk.
 Pixi/core systems may map input and drive visuals. They must not own RPG truth
 or item definitions.
 
+Domain modules (`src/lib/domain/`) are the canonical source of truth for
+constants, types, and pure data (e.g., `CRAFT_RECIPES`, `ITEM_DEFINITIONS`).
+State modules (`src/lib/state/`) consume domain exports; they do not own them.
+Always import domain constants from their domain module, not from a state module
+that happens to re-export them.
+
 ## Feature Standard
 
 Every player-facing mechanic should answer:
@@ -64,6 +70,15 @@ If a mechanic has no readable feedback, it is not finished.
 - Keep changes small, reviewable, and tied to Milestone 1 unless explicitly
   requested otherwise.
 - New pure domain logic needs focused tests.
+- **Audit before planning**: Before declaring that a hook or integration is
+  "missing", grep for *direct call sites* of the underlying function across the
+  full `src/` tree — not just the event-bus routing path. A function may already
+  be called directly via imports in a core system without going through the event
+  queue. `grep -r "functionName" src/` is the minimum check.
+
+## Svelte 5 State & UI Conventions
+
+- **Derived State Capture in Event Handlers**: Svelte 5 `$derived` runes evaluate lazily on-demand. If an event handler mutates state that drives a derived rune (e.g., calling `onClose()` which resets the active entity to `null`), any subsequent reference to that derived rune *within the same handler* or its *asynchronous callbacks* will evaluate using the mutated/fallback state. Always capture derived values in local constants at the very start of your event handlers if they are needed after state modifications or in asynchronous closures.
 
 ## Verification
 

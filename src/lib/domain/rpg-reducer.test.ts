@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultPlayerState } from "$lib/domain/rpg-defaults";
 import type { RpgEnvironmentTickResult } from "$lib/domain/rpg-types";
+import { ITEM_DEFINITIONS, Item, Wearable, Tool, EquippableVisuals, Rarity, Category } from "$lib/domain/items";
 import {
   reduceRpgCommand,
   type RpgReducerCommand,
 } from "$lib/domain/rpg-reducer";
+
+function getSlotItemId(slot: any): string | null {
+  if (!slot) return null;
+  return typeof slot === "string" ? slot : slot.itemId;
+}
 
 describe("RPG reducer", () => {
   it("applies equip then gather against the provided state snapshot", () => {
@@ -127,5 +133,103 @@ describe("RPG reducer", () => {
         slot: "helmet",
       })
     ).toThrow("cannot be equipped in slot helmet");
+  });
+
+  it("enforces two-handed weapon and shield constraints", () => {
+    ITEM_DEFINITIONS.mock_two_handed_pick = Item({
+      id: "mock_two_handed_pick" as any,
+      name: "Mock Two Handed Pick",
+      description: "Two handed mining tool",
+      rarity: Rarity.Common,
+      category: Category.Tool,
+      physical: { carryClass: "pack", weight: 2, stackLimit: 1 }
+    }).with(
+      Tool({ toolKind: "mining", power: 1 }),
+      EquippableVisuals({ slots: ["weapon"], handUsage: "two-handed" })
+    );
+
+    ITEM_DEFINITIONS.mock_shield = Item({
+      id: "mock_shield" as any,
+      name: "Mock Shield",
+      description: "A shield",
+      rarity: Rarity.Uncommon,
+      category: Category.Clothing,
+      physical: { carryClass: "pack", weight: 2, stackLimit: 1 }
+    }).with(
+      Wearable("hands"),
+      EquippableVisuals({ slots: ["shield"], handUsage: "one-handed" })
+    );
+
+    const state = createDefaultPlayerState();
+    state.inventory.slots.mock_two_handed_pick = { qty: 1 };
+    state.inventory.slots.mock_shield = { qty: 1 };
+
+    // 1. Equip shield
+    let step = reduceRpgCommand(state, { type: "equipGear", itemId: "mock_shield", slot: "shield" });
+    expect(getSlotItemId(step.playerState.profile.loadout.shield)).toBe("mock_shield");
+
+    // 2. Equip two-handed weapon -> should unequip shield
+    step = reduceRpgCommand(step.playerState, { type: "equipTool", itemId: "mock_two_handed_pick" });
+    expect(getSlotItemId(step.playerState.profile.loadout.weapon)).toBe("mock_two_handed_pick");
+    expect(step.playerState.profile.loadout.shield).toBeNull();
+    expect(step.playerState.inventory.slots.mock_shield).toEqual({ qty: 1 });
+
+    // 3. Equip shield back -> should unequip weapon
+    step = reduceRpgCommand(step.playerState, { type: "equipGear", itemId: "mock_shield", slot: "shield" });
+    expect(getSlotItemId(step.playerState.profile.loadout.shield)).toBe("mock_shield");
+    expect(step.playerState.profile.loadout.weapon).toBeNull();
+
+    // Clean up
+    delete ITEM_DEFINITIONS.mock_two_handed_pick;
+    delete ITEM_DEFINITIONS.mock_shield;
+  });
+
+  it("enforces multi-slot armor constraints and blocking", () => {
+    ITEM_DEFINITIONS.mock_robe = Item({
+      id: "mock_robe" as any,
+      name: "Mock Robe",
+      description: "Full body robe",
+      rarity: Rarity.Common,
+      category: Category.Clothing,
+      physical: { carryClass: "pack", weight: 1, stackLimit: 1 }
+    }).with(
+      Wearable("body"),
+      EquippableVisuals({ slots: ["chest", "pants"] })
+    );
+
+    ITEM_DEFINITIONS.mock_pants = Item({
+      id: "mock_pants" as any,
+      name: "Mock Pants",
+      description: "Simple trousers",
+      rarity: Rarity.Common,
+      category: Category.Clothing,
+      physical: { carryClass: "pack", weight: 1, stackLimit: 1 }
+    }).with(
+      Wearable("legs" as any), // pants maps to legs in Wearable, but let's pass legs directly
+      EquippableVisuals({ slots: ["pants"] })
+    );
+
+    const state = createDefaultPlayerState();
+    state.inventory.slots.mock_robe = { qty: 1 };
+    state.inventory.slots.mock_pants = { qty: 1 };
+
+    // 1. Equip pants
+    let step = reduceRpgCommand(state, { type: "equipGear", itemId: "mock_pants", slot: "pants" });
+    expect(getSlotItemId(step.playerState.profile.loadout.pants)).toBe("mock_pants");
+
+    // 2. Equip robe -> should auto-unequip pants since robe covers pants slot
+    step = reduceRpgCommand(step.playerState, { type: "equipGear", itemId: "mock_robe", slot: "chest" });
+    expect(getSlotItemId(step.playerState.profile.loadout.chest)).toBe("mock_robe");
+    expect(step.playerState.profile.loadout.pants).toBeNull();
+    expect(step.playerState.inventory.slots.mock_pants).toEqual({ qty: 1 });
+
+    // 3. Try to equip pants while robe is active -> should fail because pants slot is covered by robe
+    expect(() =>
+      reduceRpgCommand(step.playerState, { type: "equipGear", itemId: "mock_pants", slot: "pants" })
+    ).toThrow("blocked by equipped mock_robe");
+
+    // Clean up
+    delete ITEM_DEFINITIONS.mock_robe;
+    delete ITEM_DEFINITIONS.mock_pants;
   });
 });

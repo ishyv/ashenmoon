@@ -134,7 +134,7 @@ export const M3_CARCASS_DEFINITIONS: Readonly<Record<AnimalSpeciesId, AnimalCarc
         action: "remove_hide",
         label: "remove small hide",
         baseDurationSec: 6,
-        yields: [{ itemId: "rabbit_pelt", qty: 1 }],
+        yields: [{ itemId: "raw_hide", qty: 1 }],
       }),
       extract_bone: action({
         action: "extract_bone",
@@ -161,7 +161,7 @@ export const M3_CARCASS_DEFINITIONS: Readonly<Record<AnimalSpeciesId, AnimalCarc
         action: "remove_hide",
         label: "remove hide",
         baseDurationSec: 14,
-        yields: [{ itemId: "deer_hide", qty: 1 }],
+        yields: [{ itemId: "raw_hide", qty: 2 }],
       }),
       extract_bone: action({
         action: "extract_bone",
@@ -188,13 +188,13 @@ export const M3_CARCASS_DEFINITIONS: Readonly<Record<AnimalSpeciesId, AnimalCarc
         action: "harvest_meat",
         label: "harvest meat",
         baseDurationSec: 12,
-        yields: [{ itemId: "raw_large_meat", qty: 2 }],
+        yields: [{ itemId: "fatty_meat", qty: 2 }],
       }),
       remove_hide: action({
         action: "remove_hide",
         label: "remove tough hide",
         baseDurationSec: 14,
-        yields: [{ itemId: "boar_hide", qty: 1 }],
+        yields: [{ itemId: "raw_hide", qty: 2 }],
       }),
       extract_bone: action({
         action: "extract_bone",
@@ -230,7 +230,7 @@ export const M3_CARCASS_DEFINITIONS: Readonly<Record<AnimalSpeciesId, AnimalCarc
         action: "remove_hide",
         label: "remove pelt",
         baseDurationSec: 12,
-        yields: [{ itemId: "wolf_pelt", qty: 1 }],
+        yields: [{ itemId: "raw_hide", qty: 1 }],
       }),
       extract_bone: action({
         action: "extract_bone",
@@ -351,6 +351,7 @@ export function resolveCarcassToolQuality(input: {
     case "crude_knife":
       return "crude_knife";
     case "flint_shard":
+    case "stone_blade":
     case "bone_shard":
       return "sharp_flint";
     default:

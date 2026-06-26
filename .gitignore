@@ -44,6 +44,11 @@ AGENTS.md
 .data
 lore
 
+# Agent skill tooling (npx skills) — not project source
+.agents
+.hermes
+skills-lock.json
+
 AGENTS_MUST_READ_GAMEDEV_GUIDES
 M3_first_hunt
 Animal Assets

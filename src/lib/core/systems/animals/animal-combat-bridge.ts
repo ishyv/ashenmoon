@@ -1,6 +1,8 @@
 import type { World } from "miniplex";
 import type { Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
+import { StatusId } from "$lib/domain/systems/status-types";
 import { applyDamage, despawnEntity, type CombatConfig, type CombatResource } from "$lib/core/systems/combat/combat";
 import { TILE } from "$lib/core/systems/map/map";
 import type { VFXResource } from "$lib/core/vfx/vfx";
@@ -22,12 +24,32 @@ export function tryAnimalAttackPlayer(
 ): void {
   const animal = entity.animal!;
   const def = ANIMAL_DEFINITIONS[animal.speciesId];
-  if (!def.damage || animal.attackCooldownSec > 0) return;
+  const dmg = animal.damage ?? def.damage;
+  if (!dmg || animal.attackCooldownSec > 0) return;
 
   const pos = animalCenter(entity);
-  const hit = applyDamage(player, def.damage, pos.x, pos.y, 120, config, vfx, entityLayer, combat, events, getPlayerStats().combat.armor);
+  const hit = applyDamage(player, dmg, pos.x, pos.y, 120, config, vfx, entityLayer, combat, events, getPlayerStats().combat.armor);
   if (hit) {
-    // Player death/respawn is owned by the engine; this bridge only requests damage.
+    // Apply special moves / status effects
+    if (animal.speciesId === "wolf") {
+      const roll = Math.random();
+      if (roll < 0.25) {
+        applyStatusEffect(StatusId.BiteWound, 15, "hazard:wolf");
+        events?.push({ type: "feedback_requested", channel: "ui", message: "A wolf bit your limb!", tone: "error" });
+      } else if (roll < 0.45) {
+        applyStatusEffect(StatusId.Bleeding, 20, "hazard:wolf");
+        events?.push({ type: "feedback_requested", channel: "ui", message: "You are bleeding!", tone: "error" });
+      }
+    } else if (animal.speciesId === "boar") {
+      const roll = Math.random();
+      if (roll < 0.3) {
+        applyStatusEffect(StatusId.Injured, 15, "hazard:boar");
+        events?.push({ type: "feedback_requested", channel: "ui", message: "The boar gored you!", tone: "error" });
+      } else if (roll < 0.5) {
+        applyStatusEffect(StatusId.Bleeding, 15, "hazard:boar");
+        events?.push({ type: "feedback_requested", channel: "ui", message: "You are bleeding!", tone: "error" });
+      }
+    }
   }
   animal.attackCooldownSec = def.attackCooldownSec ?? 1;
   animal.threatened = false;

@@ -14,7 +14,7 @@ import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import type { InputResource } from "$lib/core/input/input";
-import { spawnEnvFloatingText, spawnShockwaveRing, type VFXResource } from "$lib/core/vfx/vfx";
+import { spawnEnvFloatingText, spawnShockwaveRing, spawnSlashArc, type VFXResource } from "$lib/core/vfx/vfx";
 import { Colors } from "$lib/utils/colors";
 import { stamina, spendStamina } from "$lib/state/rpg/stamina.svelte";
 import { playSound } from "$lib/audio/audio-engine";
@@ -84,10 +84,7 @@ function clearSprites(focused: FocusedGatherResource, entityLayer: Container): v
 }
 
 export interface FocusedGatherDeps {
-  // Matches the loose shapes the interaction/depletion systems already use.
   triggerQuestEvent: (evt: string, val?: any) => void;
-  getTreeFrames: () => any[];
-  getStumpTexture: () => any;
   setPlayerAnim: (state: "idle" | "run" | "attack") => void;
   /** Strong-hit feedback (squash, particles, floating text); quantity drives intensity. */
   onHit: (node: Entity, yieldName: string, quantity: number) => void;
@@ -141,6 +138,21 @@ export function runFocusedGatherSystem(
     if (outcome === "hit") {
       deps.setPlayerAnim("attack");
       faceNode(player, node);
+      const playerCenter = {
+        x: player.position!.x + TILE / 2,
+        y: player.position!.y + TILE / 2,
+      };
+      const nodePos = nodeCenter(node);
+      spawnSlashArc(
+        vfx,
+        entityLayer,
+        playerCenter.x,
+        playerCenter.y,
+        Math.atan2(nodePos.y - playerCenter.y, nodePos.x - playerCenter.x),
+        TILE * 0.85,
+        0.42,
+        Colors.vfx.focusedGather,
+      );
       const def = getGatherableDefinition(node.resource?.gatherableId ?? "");
       deps.onHit(node, def?.yieldTable[0]?.itemId ?? "resource", 2);
       if (aimed) {
@@ -319,8 +331,6 @@ function finalizeAndReward(
     entityLayer,
     entitySprites,
     deps.triggerQuestEvent,
-    deps.getTreeFrames,
-    deps.getStumpTexture,
     deps.map,
   );
   playSound("node.deplete", { position: nodeCenter(node) });

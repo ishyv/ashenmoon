@@ -25,7 +25,7 @@ export const toolRecipes: readonly RecipeInput[] = [
     discoveryText: "You strike and scrape stone until one edge becomes useful.",
     costs: [
       { itemId: "flint_shard", name: "flint shard", required: 1 },
-      { itemId: "flat_stone", name: "flat stone", required: 1 },
+      { itemId: "stone", name: "stone", required: 1 },
     ],
     output: { itemId: "stone_blade", qty: 1 },
     process: "assemble",
@@ -43,7 +43,7 @@ export const toolRecipes: readonly RecipeInput[] = [
     costs: [
       { itemId: "stick", name: "stick", required: 1 },
       { itemId: "flint_shard", name: "flint shard", required: 1 },
-      { itemId: "grass_cord", name: "grass cord", required: 2 },
+      { itemId: "grass_fiber", name: "grass fiber", required: 1 },
     ],
     output: { itemId: "crude_knife", qty: 1 },
     process: "assemble",
@@ -126,7 +126,7 @@ export const toolRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You carve a bone shard into a small hook.",
     costs: [
-      { itemId: "bone_shard", name: "bone shard", required: 1 },
+      { itemId: "small_bone", name: "small bone", required: 1 },
       { itemId: "flint_shard", name: "flint shard", required: 1 },
     ],
     output: { itemId: "bone_hook", qty: 1 },

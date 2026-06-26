@@ -1,6 +1,8 @@
-﻿<script lang="ts">
+<script lang="ts">
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { activeQuests } from "$lib/state/rpg/quests.svelte";
+
+let { onClose }: { onClose?: (() => void) | undefined } = $props();
 
 const currentQuest = $derived(() => {
   const questId = activeQuests.currentQuestId;
@@ -11,7 +13,7 @@ const currentQuest = $derived(() => {
 
 {#if currentQuest()}
   {@const quest = currentQuest()!}
-  <GamePanel id="quest_tracker" title={quest.title} width="280px">
+  <GamePanel id="quest_tracker" title={quest.title} width="280px" {onClose}>
     <div class="quest-tracker-body">
       <p class="quest-desc">{quest.description}</p>
       

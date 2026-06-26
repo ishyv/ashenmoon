@@ -34,9 +34,35 @@ export function inspect(itemId: string): InspectView | null {
   return def ? inspectItem(def, knowledgeState.map) : null;
 }
 
+export const itemSourcesState = $state<{ map: Record<string, string[]> }>({ map: {} });
+
+/** Record that the player discovered a source for a given item ID. */
+export function discoverSource(itemId: string, sourceName: string): void {
+  const normalizedSource = sourceName.toLowerCase().trim();
+  const currentSources = itemSourcesState.map[itemId] || [];
+  if (!currentSources.includes(normalizedSource)) {
+    itemSourcesState.map[itemId] = [...currentSources, normalizedSource];
+    saveItemSources();
+  }
+}
+
+/** Get all discovered unique sources for an item ID. */
+export function getKnownSources(itemId: string): readonly string[] {
+  return itemSourcesState.map[itemId] || [];
+}
+
+export function loadItemSources(): void {
+  itemSourcesState.map = loadSlice<Record<string, string[]>>(StorageKeys.itemSources, {});
+}
+
+function saveItemSources(): void {
+  saveSlice(StorageKeys.itemSources, itemSourcesState.map);
+}
+
 export function loadKnowledge(): void {
   const snapshot = loadSlice<Record<string, readonly string[]>>(StorageKeys.knowledge, {});
   knowledgeState.map = deserializeKnowledge(snapshot);
+  loadItemSources();
 }
 
 function saveKnowledge(): void {

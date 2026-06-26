@@ -54,7 +54,7 @@ describe("checkCraft", () => {
   });
 
   it("enforces station context for work-surface recipes", () => {
-    const inv = slots({ stick: 1, flint_shard: 1, grass_cord: 2 });
+    const inv = slots({ stick: 1, flint_shard: 1, grass_fiber: 1 });
     expect(checkCraft(inv, "crude_knife", away)).toEqual({
       ok: false,
       reason: "requires_station",

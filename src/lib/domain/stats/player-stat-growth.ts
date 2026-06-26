@@ -19,14 +19,14 @@ export const MAX_LEVEL = 18;
 export const BASE_MOVE_SPEED = 384;
 
 export const BASE_COMBAT_STATS: CombatStats = {
-  maxHealth: 100,
-  healthRegenPerSecond: 0.15,
+  maxHealth: 600,
+  healthRegenPerSecond: 1.5,
   maxStamina: 100,
   staminaRegenPerSecond: 8,
-  attackDamage: 10,
+  attackDamage: 60,
   abilityPower: 0,
-  armor: 5,
-  magicResist: 5,
+  armor: 30,
+  magicResist: 30,
   attackSpeed: 1.0,
   moveSpeed: BASE_MOVE_SPEED,
   techniqueHaste: 0,
@@ -36,14 +36,14 @@ export const BASE_COMBAT_STATS: CombatStats = {
 
 /** Added once per level above 1. */
 export const COMBAT_GROWTH_PER_LEVEL: CombatStats = {
-  maxHealth: 12,
-  healthRegenPerSecond: 0.02,
+  maxHealth: 90,
+  healthRegenPerSecond: 0.15,
   maxStamina: 4,
   staminaRegenPerSecond: 0.15,
-  attackDamage: 1.4,
+  attackDamage: 4.0,
   abilityPower: 0,
-  armor: 0.8,
-  magicResist: 0.6,
+  armor: 4.0,
+  magicResist: 1.5,
   attackSpeed: 0.015,
   moveSpeed: 0,
   techniqueHaste: 0.5,
@@ -54,7 +54,7 @@ export const COMBAT_GROWTH_PER_LEVEL: CombatStats = {
 // Seeded from the existing thirst config: 0.15/sec idle drain = 9/min.
 export const BASE_SURVIVAL_STATS: SurvivalStats = {
   maxThirst: 100,
-  thirstDecayPerMinute: 9,
+  thirstDecayPerMinute: 3.5,
   maxHunger: 100,
   hungerDecayPerMinute: 4,
   maxExhaustion: 100,
@@ -85,5 +85,5 @@ export const BASE_UTILITY_STATS: UtilityStats = {
 
 /** XP needed to go from `level` to `level + 1`. Single tuning knob. */
 export function characterXpForLevel(level: number): number {
-  return level * 150;
+  return 280 + (level - 1) * 100;
 }

@@ -128,7 +128,8 @@ function normalizeEquipmentSlot(value: unknown): RpgEquipmentSlot {
 
 export function createDefaultProfile(): RpgPlayerState["profile"] {
   return {
-    hpCurrent: 100,
+    hpCurrent: 600,
+    worldSeed: Math.floor(Math.random() * 1000000),
     stashSize: 20,
     loadout: {
       weapon: null,
@@ -163,6 +164,7 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
             x: building.x,
             y: building.y,
             ...(typeof building.sourceItemId === "string" ? { sourceItemId: building.sourceItemId } : {}),
+            ...(typeof building.stage === "number" ? { stage: building.stage } : {}),
           }];
         }
         return [];
@@ -171,6 +173,8 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
   const gatheredPickups = Array.isArray(value.gatheredPickups)
     ? value.gatheredPickups.filter((id): id is string => typeof id === "string")
     : defaults.gatheredPickups;
+
+  const worldSeedVal = typeof value.worldSeed === "number" && Number.isFinite(value.worldSeed) ? value.worldSeed : defaults.worldSeed;
 
   return {
     hpCurrent: typeof value.hpCurrent === "number" && Number.isFinite(value.hpCurrent) ? value.hpCurrent : defaults.hpCurrent,
@@ -193,6 +197,7 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
     ...(typeof value.characterXp === "number" && Number.isFinite(value.characterXp)
       ? { characterXp: value.characterXp }
       : {}),
+    ...(worldSeedVal !== undefined ? { worldSeed: worldSeedVal } : {}),
   };
 }
 
@@ -410,7 +415,14 @@ function build(type: string, x: number, y: number, sourceItemId?: string): RpgPl
     }
     state.profile.buildings = [
       ...(state.profile.buildings ?? []),
-      { id: `building_${type}_${Date.now()}`, type, x, y, ...(sourceItemId ? { sourceItemId } : {}) },
+      {
+        id: `building_${type}_${Date.now()}`,
+        type,
+        x,
+        y,
+        ...(sourceItemId ? { sourceItemId } : {}),
+        ...(spec.isMultiStage ? { stage: 0 } : {}),
+      },
     ];
   });
 }

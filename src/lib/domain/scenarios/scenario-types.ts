@@ -32,6 +32,8 @@ export interface ScenarioDefinition {
   camp?: boolean;
   /** Scatter the random ambient decorations (rocks, tufts). Default false. */
   decorations?: boolean;
+  /** Generate starting water sources, resources, animal zones, and landmarks. Default false. */
+  firstCampLayout?: boolean;
   /**
    * Tool to auto-equip when the scenario loads, so tool-gated gatherables are
    * reachable immediately. The scenario panel can still switch tools at runtime.

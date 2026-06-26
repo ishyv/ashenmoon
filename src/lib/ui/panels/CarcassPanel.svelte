@@ -45,7 +45,7 @@ onMount(() => {
 const toolQuality = $derived(
   resolveCarcassToolQuality({
     equippedItemId: getEquippedWeaponId(),
-    hasSharpFlint: getItemQty("flint_shard") > 0 || getItemQty("bone_shard") > 0,
+    hasSharpFlint: getItemQty("flint_shard") > 0 || getItemQty("stone_blade") > 0,
   }),
 );
 

@@ -1,8 +1,13 @@
+// legacy: the driving-thrust mechanic is reworked into the wooden spear's `swipe`
+// attack (a capsule thrust + the `spear_close_range_penalty` technique) on the
+// weapon-driven path (weapon-attack-system.ts). This runtime still fires for
+// weapons without an explicit WeaponDefinition; retire it as weapons migrate.
 import type { World } from "miniplex";
 import { Graphics, type AnimatedSprite, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
+import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import { collidesWithSolid, type MovementResource } from "$lib/core/systems/movement/movement";
 import {
   DEFAULT_DRIVING_THRUST_CONFIG,
@@ -41,7 +46,7 @@ const ENEMY_RADIUS = TILE * 0.4;
 function playerCenter(player: Entity): Vec2 {
   return {
     x: player.position!.x + TILE / 2,
-    y: player.position!.y + TILE / 2,
+    y: player.position!.y + TILE - (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES * TILE) / 2,
   };
 }
 
@@ -67,7 +72,8 @@ function startDrivingThrust(args: {
 }): void {
   const center = playerCenter(args.player);
   const body = bodyCenter(args.player);
-  const intendedDistancePx = getDrivingThrustDistancePx(args.config, getCombatLevel());
+  const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
+  const intendedDistancePx = getDrivingThrustDistancePx(args.config, getCombatLevel()) * playerScale;
   const actualDistancePx = computeCollisionClippedTravelDistance({
     origin: body,
     direction: args.direction,
@@ -184,11 +190,12 @@ function advanceDrivingThrust(args: {
   if (state.phase === "windup" && state.elapsedMs >= args.combat.drivingThrustConfig.windupMs) {
     state.phase = "active";
     state.elapsedMs = 0;
+    const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
     const hitbox = {
       origin: state.origin,
       direction: state.direction,
       lengthPx: state.actualDistancePx,
-      widthPx: args.combat.drivingThrustConfig.hitboxWidthPx,
+      widthPx: args.combat.drivingThrustConfig.hitboxWidthPx * playerScale,
     };
     applyDrivingThrustHits({
       world: args.world,
@@ -291,7 +298,8 @@ export function drivingThrustSystem(
       combat.inCombatTimer = config.inCombatTimeout;
       startDrivingThrust({ combat, config: combat.drivingThrustConfig, player, map, movement, direction: pending.direction });
       const state = combat.drivingThrustState;
-      spawnDrivingThrustSlash(vfx, entityLayer, state.origin, state.direction, state.actualDistancePx, combat.drivingThrustConfig.hitboxWidthPx);
+      const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
+      spawnDrivingThrustSlash(vfx, entityLayer, state.origin, state.direction, state.actualDistancePx, combat.drivingThrustConfig.hitboxWidthPx * playerScale);
       spawnEnvFloatingText(vfx, "Driving Thrust", Colors.combat.drivingThrust, player.position!, entityLayer);
       playSound("combo.driving_thrust", { position: state.origin });
       triggerCameraShake(vfx, 3.6, 0.14);
@@ -344,9 +352,10 @@ export function renderDrivingThrustPreview(
   const worldDy = inputs.primarySwipeCurrentWorld.y - inputs.primarySwipeStartWorld.y;
   const len = Math.hypot(worldDx, worldDy) || 1;
   const dir = { x: worldDx / len, y: worldDy / len };
-  const length = getDrivingThrustDistancePx(config, getCombatLevel());
+  const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
+  const length = getDrivingThrustDistancePx(config, getCombatLevel()) * playerScale;
   const cx = playerPos.x + TILE / 2;
-  const cy = playerPos.y + TILE / 2;
+  const cy = playerPos.y + TILE - (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES * TILE) / 2;
   const ex = cx + dir.x * length;
   const ey = cy + dir.y * length;
 
@@ -354,9 +363,8 @@ export function renderDrivingThrustPreview(
   g.clear();
   g.moveTo(cx, cy);
   g.lineTo(ex, ey);
-  g.stroke({ color: Colors.combat.drivingThrustPreview, width: config.hitboxWidthPx, alpha: 0.14 });
+  g.stroke({ color: Colors.combat.drivingThrustPreview, width: config.hitboxWidthPx * playerScale, alpha: 0.14 });
   g.moveTo(cx, cy);
   g.lineTo(ex, ey);
   g.stroke({ color: Colors.combat.drivingThrust, width: 3, alpha: 0.75 });
 }
-

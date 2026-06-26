@@ -30,8 +30,12 @@ const hasFgStam = $derived(stamina.current >= 10);
 const hasFsStam = $derived(stamina.current >= 20);
 const hasDtStam = $derived(stamina.current >= 12);
 const combatSkillLevel = $derived((gameState.rpg.skills as typeof gameState.rpg.skills & { combat?: { level: number } } | null)?.combat?.level ?? 1);
+const hasMeaningfulSkillContext = $derived(
+  evadeCooldown > 0 || fgCooldown > 0 || fsCooldown > 0 || fsCharge > 0 || dtCooldown > 0 || combatSkillLevel > 1,
+);
 </script>
 
+{#if hasMeaningfulSkillContext}
 <div class="hotbar-container">
   <!-- Evade Skill Icon -->
   <div class="skill-slot" class:on-cooldown={evadeCooldown > 0} class:out-of-stamina={!hasEvadeStam}>
@@ -135,6 +139,7 @@ const combatSkillLevel = $derived((gameState.rpg.skills as typeof gameState.rpg.
     </div>
   </div>
 </div>
+{/if}
 
 <style>
   .hotbar-container {

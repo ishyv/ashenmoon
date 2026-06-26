@@ -1,10 +1,9 @@
-import { Category, Rarity, itemId, type IconSheet } from "$lib/domain/items/item-types";
+import { Category, Rarity, itemId } from "$lib/domain/items/item-types";
 import { Item } from "$lib/domain/items/item-builder";
 import { AddStatus, ChanceOfVitals, ClearAllStatuses, RestoreHp, RestoreThirst, TransformInto, ReduceStatus } from "$lib/domain/items/item-effects";
 import { Consumable, Decayable, Absorbent, MedicineIngredient, HandlingRisk, CleaningAgent } from "$lib/domain/items/item-traits";
 import { StatusId } from "$lib/domain/systems/status-types";
 
-const SH = (col: number, row: number): IconSheet => ({ src: "/assets/shikashi-icons/icons.png", col, row, size: 32 });
 
 export const medicineItems = {
   moss: Item({
@@ -14,7 +13,6 @@ export const medicineItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.04, stackLimit: 30 },
-    iconUrl: "/assets/icons/wild_herb.png",
   }).with(Absorbent(1)),
   wild_herb: Item({
     id: itemId("wild_herb"),
@@ -23,8 +21,15 @@ export const medicineItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.03, stackLimit: 50 },
-    iconUrl: "/assets/icons/wild_herb.png",
   }).with(MedicineIngredient("basic_poultice")),
+  red_herb: Item({
+    id: itemId("red_herb"),
+    name: "Red Herb",
+    description: "Grows in soil where essence pools. Saturated with organic vitality and magical stability.",
+    rarity: Rarity.Rare,
+    category: Category.Herb,
+    physical: { carryClass: "pocket", weight: 0.03, stackLimit: 50 },
+  }).with(MedicineIngredient("essence_poultice")),
   yarrow: Item({
     id: itemId("yarrow"),
     name: "Yarrow",
@@ -68,7 +73,6 @@ export const medicineItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.02, stackLimit: 40 },
-    iconUrl: "/assets/icons/wild_herb.png",
   }),
   weak_medicine: Item({
     id: itemId("weak_medicine"),
@@ -77,7 +81,6 @@ export const medicineItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.25, stackLimit: 10 },
-    iconSheet: SH(6, 6),
   }).with(
     Consumable({ verb: "drink", onConsume: [RestoreHp(10), RestoreThirst(10)] })
   ),
@@ -99,7 +102,6 @@ export const medicineItems = {
     rarity: Rarity.Rare,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.03, stackLimit: 10 },
-    iconSheet: SH(4, 9),
   }).with(
     Decayable({ lifespanSec: 60, effect: TransformInto(itemId("volatile_ash")) })
   ),
@@ -110,7 +112,6 @@ export const medicineItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.06, stackLimit: 10 },
-    iconSheet: SH(5, 7),
   }).with(
     Consumable({ verb: "apply", onConsume: [RestoreHp(6)] })
   ),
@@ -154,7 +155,6 @@ export const medicineItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.08, stackLimit: 10 },
-    iconSheet: SH(5, 7),
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(8), ChanceOfVitals(0.15, AddStatus(StatusId.Sickness, 20))] })
   ),
@@ -196,7 +196,6 @@ export const medicineItems = {
     rarity: Rarity.Legendary,
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.1, stackLimit: 5 },
-    iconSheet: SH(0, 7),
   }).with(
     Consumable({ verb: "drink", onConsume: [ClearAllStatuses(), RestoreThirst(100), RestoreHp(100)] })
   ),

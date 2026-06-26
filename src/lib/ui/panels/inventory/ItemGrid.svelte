@@ -1,6 +1,7 @@
 <script lang="ts">
 import { getItemDef, traitOf } from "$lib/domain/items";
 import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
+import { playSound } from "$lib/audio/audio-engine";
 import type { InventoryItemView } from "./types";
 
 let {
@@ -10,6 +11,7 @@ let {
   isEquipped,
   onSelect,
   onHover,
+  onDblClick,
 }: {
   items: InventoryItemView[];
   selectedItem: string | null;
@@ -17,6 +19,7 @@ let {
   isEquipped: (itemId: string) => boolean;
   onSelect: (itemId: string) => void;
   onHover: (itemId: string | null) => void;
+  onDblClick?: (itemId: string) => void;
 } = $props();
 </script>
 
@@ -33,7 +36,11 @@ let {
           class="item-cell {selectedItem === itemId ? 'selected' : ''} {isEquipped(itemId) ? 'equipped' : ''}"
           onmouseenter={() => onHover(itemId)}
           onmouseleave={() => onHover(null)}
-          onclick={() => onSelect(itemId)}
+          onclick={() => {
+            onSelect(itemId);
+            playSound("ui.inventory.click", { conditions: { itemType: meta?.category ?? "component" } });
+          }}
+          ondblclick={() => onDblClick?.(itemId)}
         >
           <div class="item-visual">
             <ItemIcon def={meta} {itemId} />
@@ -101,16 +108,6 @@ let {
     font-weight: 700;
   }
 
-  .item-icon-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-
-  .item-icon-emoji {
-    font-size: 1.4rem;
-    line-height: 1;
-  }
 
   .qty-badge,
   .equipped-tag {

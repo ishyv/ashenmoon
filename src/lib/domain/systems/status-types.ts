@@ -23,6 +23,7 @@ export enum StatusId {
   Damp = "damp",
   Wet = "wet",
   Soaked = "soaked",
+  Starving = "starving",
 }
 
 /** A status currently affecting the player. */
@@ -202,6 +203,17 @@ export const STATUS_DEFINITIONS: Record<StatusId, StatusDefinition> = {
     applyMessage: "You are completely soaked. Movement slows.",
     expireMessage: "You are no longer soaked.",
     modifiers: { moveSpeedMult: 0.9 },
+  },
+  [StatusId.Starving]: {
+    id: StatusId.Starving,
+    label: "Starving",
+    icon: "💀",
+    applyMessage: "Your stomach is completely empty.",
+    pulseMessage: "You are starving to death.",
+    expireMessage: "You are no longer starving.",
+    pulseEverySec: 4,
+    pulse: { hpDelta: -4 },
+    modifiers: { moveSpeedMult: 0.85 },
   },
 };
 

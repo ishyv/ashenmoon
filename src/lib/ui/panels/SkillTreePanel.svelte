@@ -1,34 +1,113 @@
 <script lang="ts">
 /**
  * SkillTreePanel.svelte
- * Renders a glassmorphic visual skill progression dashboard, displaying levels,
- * XP progress bars, and passive/active unlock trees for Lumberjacking, Mining,
- * and Evade.
+ * Field-journal presentation for current skill progression.
+ *
+ * WHY: The Skills menu is expected to grow into a larger RPG progression system,
+ * so this panel keeps current formulas intact while presenting them through a
+ * data-shaped view model instead of one-off markup blocks.
  */
-import { fade } from "svelte/transition";
 import { gameState } from "$lib/state/game-state.svelte";
 
 let { onClose } = $props<{ onClose: () => void }>();
 
 const skills = $derived(gameState.rpg.skills);
 
-// Helper to calculate XP percentages
 function getXpPercent(xp: number, nextXp: number): number {
   if (nextXp <= 0) return 0;
   return Math.min(100, Math.max(0, (xp / nextXp) * 100));
 }
 
-// Tooltip/bonus calculations
-const lumberjackingBonus = $derived(skills ? (skills.lumberjacking.level - 1) * 5 : 0);
-const lumberjackingCrit = $derived(skills ? (skills.lumberjacking.level - 1) * 3 : 0);
-const miningBonus = $derived(skills ? (skills.mining.level - 1) * 5 : 0);
-const miningCrit = $derived(skills ? (skills.mining.level - 1) * 3 : 0);
+type SkillNodeView = {
+  id: string;
+  family: "gathering" | "combat";
+  label: string;
+  sigil: string;
+  level: number;
+  xp: number;
+  nextXp: number;
+  kind: "passive" | "active";
+  summary: string;
+  effects: string[];
+  tone: "forest" | "stone" | "cold" | "blood";
+};
 
-const evadeCooldown = $derived(skills ? Math.max(0.5, 1.0 - (skills.evade.level - 1) * 0.05) : 1.0);
+const skillNodes = $derived.by<SkillNodeView[]>(() => {
+  if (!skills) return [];
 
-const kiteLevel = $derived(skills && skills.kiteCombo ? skills.kiteCombo.level : 1);
-const kiteRangeBonus = $derived(4 + 1.5 * kiteLevel);
-const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
+  const lumberjackingBonus = (skills.lumberjacking.level - 1) * 5;
+  const lumberjackingCrit = (skills.lumberjacking.level - 1) * 3;
+  const miningBonus = (skills.mining.level - 1) * 5;
+  const miningCrit = (skills.mining.level - 1) * 3;
+  const evadeCooldown = Math.max(0.5, 1.0 - (skills.evade.level - 1) * 0.05);
+  const kiteLevel = skills.kiteCombo?.level ?? 1;
+  const kiteRangeBonus = 4 + 1.5 * kiteLevel;
+  const kiteDamageBonus = 5 + 2 * kiteLevel;
+
+  const nodes: SkillNodeView[] = [
+    {
+      id: "lumberjacking",
+      family: "gathering",
+      label: "Lumberjacking",
+      sigil: "AX",
+      level: skills.lumberjacking.level,
+      xp: skills.lumberjacking.xp,
+      nextXp: skills.lumberjacking.nextXp,
+      kind: "passive",
+      summary: "Cleaner chops, fewer wasted edges, better odds at useful timber.",
+      effects: [`Tool decay rate -${lumberjackingBonus}%`, `Critical harvest chance +${lumberjackingCrit}%`],
+      tone: "forest",
+    },
+    {
+      id: "mining",
+      family: "gathering",
+      label: "Mining",
+      sigil: "MN",
+      level: skills.mining.level,
+      xp: skills.mining.xp,
+      nextXp: skills.mining.nextXp,
+      kind: "passive",
+      summary: "Better stone sense and cleaner strikes against hard resources.",
+      effects: [`Tool decay rate -${miningBonus}%`, `Critical harvest chance +${miningCrit}%`],
+      tone: "stone",
+    },
+    {
+      id: "evade",
+      family: "combat",
+      label: "Evade",
+      sigil: "EV",
+      level: skills.evade.level,
+      xp: skills.evade.xp,
+      nextXp: skills.evade.nextXp,
+      kind: "active",
+      summary: "A short, desperate burst of movement when teeth get too close.",
+      effects: [`Cooldown ${evadeCooldown.toFixed(2)}s`, "Base cooldown 1.0s"],
+      tone: "cold",
+    },
+  ];
+
+  if (skills.kiteCombo) {
+    nodes.push({
+      id: "kiteCombo",
+      family: "combat",
+      label: "Kite Specialization",
+      sigil: "KT",
+      level: skills.kiteCombo.level,
+      xp: skills.kiteCombo.xp,
+      nextXp: skills.kiteCombo.nextXp,
+      kind: "active",
+      summary: "Keep pressure while staying just outside the worst of it.",
+      effects: [`Range per stack +${kiteRangeBonus.toFixed(1)}%`, `Damage per stack +${kiteDamageBonus.toFixed(1)}%`],
+      tone: "blood",
+    });
+  }
+
+  return nodes;
+});
+
+const gatheringNodes = $derived(skillNodes.filter((node) => node.family === "gathering"));
+const combatNodes = $derived(skillNodes.filter((node) => node.family === "combat"));
+const selectedNode = $derived(skillNodes[0]);
 </script>
 
 <div
@@ -39,114 +118,116 @@ const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
   aria-modal="true"
   tabindex="-1"
 >
-  <div
-    class="modal-card skill-tree-card"
-    role="presentation"
-  >
+  <div class="modal-card skill-ledger-card" role="presentation">
     <div class="modal-header">
-      <h2>📜 Skill Progression & Tree</h2>
+      <div>
+        <p class="eyebrow">Survivor Ledger</p>
+        <h2>Learned Ways</h2>
+      </div>
       <button class="close-btn" onclick={(e) => { e.preventDefault(); onClose(); }} aria-label="Close Skills">×</button>
     </div>
 
-    <div class="modal-body skill-tree-body">
+    <div class="modal-body skill-ledger-body">
       {#if !skills}
         <div class="loading-state">
-          <span class="spinner">🌀</span> Loading skills state...
+          <span class="spinner" aria-hidden="true"></span>
+          Reading damp pages...
         </div>
       {:else}
-        <div class="tree-layout">
-          <!-- Left Column: Passive Skills -->
-          <div class="column passives-section">
-            <h3 class="column-title">🌳 Gathering Passives</h3>
-            
-            <!-- Lumberjacking -->
-            <div class="skill-card">
-              <div class="card-header">
-                <span class="skill-icon-big">🪓</span>
-                <div class="skill-info">
-                  <div class="skill-name">Lumberjacking</div>
-                  <div class="skill-level">Lvl {skills.lumberjacking.level}</div>
-                </div>
-              </div>
-              
-              <div class="xp-bar-container">
-                <div class="xp-fill lumber-fill" style="width: {getXpPercent(skills.lumberjacking.xp, skills.lumberjacking.nextXp)}%"></div>
-                <div class="xp-text">{skills.lumberjacking.xp} / {skills.lumberjacking.nextXp} XP</div>
-              </div>
-
-              <div class="skill-bonuses">
-                <div class="bonus-item">⚡ Tool Decay Rate: <span class="benefit">-{lumberjackingBonus}%</span></div>
-                <div class="bonus-item">⭐ Critical Harvest Chance: <span class="benefit">+{lumberjackingCrit}%</span></div>
+        <div class="ledger-layout">
+          <aside class="family-rail" aria-label="Skill families">
+            <div class="family-card active">
+              <span class="family-mark">GR</span>
+              <div>
+                <strong>Gathering</strong>
+                <span>{gatheringNodes.length} known</span>
               </div>
             </div>
-
-            <!-- Mining -->
-            <div class="skill-card">
-              <div class="card-header">
-                <span class="skill-icon-big">⛏️</span>
-                <div class="skill-info">
-                  <div class="skill-name">Mining</div>
-                  <div class="skill-level">Lvl {skills.mining.level}</div>
-                </div>
-              </div>
-              
-              <div class="xp-bar-container">
-                <div class="xp-fill mining-fill" style="width: {getXpPercent(skills.mining.xp, skills.mining.nextXp)}%"></div>
-                <div class="xp-text">{skills.mining.xp} / {skills.mining.nextXp} XP</div>
-              </div>
-
-              <div class="skill-bonuses">
-                <div class="bonus-item">⚡ Tool Decay Rate: <span class="benefit">-{miningBonus}%</span></div>
-                <div class="bonus-item">⭐ Critical Harvest Chance: <span class="benefit">+{miningCrit}%</span></div>
+            <div class="family-card active">
+              <span class="family-mark">CB</span>
+              <div>
+                <strong>Combat</strong>
+                <span>{combatNodes.length} known</span>
               </div>
             </div>
-          </div>
-
-          <!-- Vertical Divider -->
-          <div class="tree-divider"></div>
-
-          <!-- Right Column: Active Skills Tree -->
-          <div class="column actives-section">
-            <h3 class="column-title">🏃 Active Abilities</h3>
-            
-            <div class="ability-tree-nodes">
-              <!-- Evade/Dash Node -->
-              <div class="tree-node border-cyan">
-                <div class="node-icon bg-cyan">💨</div>
-                <div class="node-details">
-                  <div class="node-name color-cyan">Evade (Dash)</div>
-                  <div class="node-level">Level {skills.evade.level}</div>
-                  <div class="node-stats">
-                    Cooldown: <span class="benefit">{evadeCooldown.toFixed(2)}s</span> <span class="muted">(Base: 1.0s)</span>
-                  </div>
-                  <div class="xp-bar-container mini-bar">
-                    <div class="xp-fill evade-fill" style="width: {getXpPercent(skills.evade.xp, skills.evade.nextXp)}%"></div>
-                  </div>
-                  <div class="xp-text mini-text">{skills.evade.xp}/{skills.evade.nextXp} XP</div>
-                </div>
+            <div class="family-card sealed">
+              <span class="family-mark">??</span>
+              <div>
+                <strong>Unwritten</strong>
+                <span>future paths</span>
               </div>
-
-              <!-- Kite Specialization Node -->
-              {#if skills.kiteCombo}
-              <div class="tree-node border-orange" style="margin-top: 1rem;">
-                <div class="node-icon bg-orange">🪶</div>
-                <div class="node-details">
-                  <div class="node-name color-orange">Kite Specialization</div>
-                  <div class="node-level">Level {skills.kiteCombo.level}</div>
-                  <div class="node-stats">
-                    Bonus per stack:<br/>
-                    Range: <span class="benefit">+{kiteRangeBonus.toFixed(1)}%</span> |
-                    Damage: <span class="benefit">+{kiteDamageBonus.toFixed(1)}%</span>
-                  </div>
-                  <div class="xp-bar-container mini-bar">
-                    <div class="xp-fill orange-fill" style="width: {getXpPercent(skills.kiteCombo.xp, skills.kiteCombo.nextXp)}%; background: #ffaa00;"></div>
-                  </div>
-                  <div class="xp-text mini-text">{skills.kiteCombo.xp}/{skills.kiteCombo.nextXp} XP</div>
-                </div>
-              </div>
-              {/if}
             </div>
-          </div>
+          </aside>
+
+          <section class="progression-board" aria-label="Current skill progression">
+            <div class="board-section">
+              <h3>Gathering Passives</h3>
+              {#each gatheringNodes as node (node.id)}
+                <article class="skill-node {node.tone}" data-skill-id={node.id}>
+                  <div class="node-sigil">{node.sigil}</div>
+                  <div class="node-content">
+                    <div class="node-title-row">
+                      <div>
+                        <h4>{node.label}</h4>
+                        <p>{node.summary}</p>
+                      </div>
+                      <span class="level-chip">Lvl {node.level}</span>
+                    </div>
+                    <div class="xp-bar-container" aria-label={`${node.label} experience`}>
+                      <div class="xp-fill" style={`width: ${getXpPercent(node.xp, node.nextXp)}%`}></div>
+                      <div class="xp-text">{node.xp} / {node.nextXp} XP</div>
+                    </div>
+                    <div class="effect-list">
+                      {#each node.effects as effect}
+                        <span>{effect}</span>
+                      {/each}
+                    </div>
+                  </div>
+                </article>
+              {/each}
+            </div>
+
+            <div class="board-section">
+              <h3>Active Abilities</h3>
+              {#each combatNodes as node (node.id)}
+                <article class="skill-node {node.tone}" data-skill-id={node.id}>
+                  <div class="node-sigil">{node.sigil}</div>
+                  <div class="node-content">
+                    <div class="node-title-row">
+                      <div>
+                        <h4>{node.label}</h4>
+                        <p>{node.summary}</p>
+                      </div>
+                      <span class="level-chip">Lvl {node.level}</span>
+                    </div>
+                    <div class="xp-bar-container" aria-label={`${node.label} experience`}>
+                      <div class="xp-fill" style={`width: ${getXpPercent(node.xp, node.nextXp)}%`}></div>
+                      <div class="xp-text">{node.xp} / {node.nextXp} XP</div>
+                    </div>
+                    <div class="effect-list">
+                      {#each node.effects as effect}
+                        <span>{effect}</span>
+                      {/each}
+                    </div>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          </section>
+
+          <aside class="node-inspector" aria-label="Skill details">
+            <p class="inspector-label">Selected note</p>
+            {#if selectedNode}
+              <h3>{selectedNode.label}</h3>
+              <p>{selectedNode.summary}</p>
+              <ul>
+                {#each selectedNode.effects as effect}
+                  <li>{effect}</li>
+                {/each}
+              </ul>
+              <div class="inspector-footer">Deeper branches can attach here without changing the saved skill state.</div>
+            {/if}
+          </aside>
         </div>
       {/if}
     </div>
@@ -157,7 +238,7 @@ const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(8, 6, 5, 0.75);
+    background: rgba(8, 6, 5, 0.76);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -167,12 +248,13 @@ const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
   }
 
   .modal-card {
-    background: rgba(18, 14, 12, 0.94);
-    border: 1px solid rgba(255, 220, 120, 0.18);
-    border-radius: 8px;
-    width: 90%;
-    max-width: 780px;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
+    width: min(94vw, 1040px);
+    max-height: 88vh;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(90, 56, 36, 0.18), transparent 32%),
+      linear-gradient(180deg, rgba(28, 22, 17, 0.98), rgba(12, 10, 8, 0.98));
+    border: 1px solid rgba(217, 194, 142, 0.3);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.78), inset 0 0 0 1px rgba(8, 7, 6, 0.85);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -183,39 +265,287 @@ const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.1rem 1.3rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(0, 0, 0, 0.2);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(217, 194, 142, 0.16);
+    background: rgba(8, 7, 6, 0.42);
+  }
+
+  .eyebrow {
+    margin: 0 0 0.15rem;
+    font: 0.62rem "IBM Plex Mono", monospace;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(217, 194, 142, 0.62);
   }
 
   .modal-header h2 {
     margin: 0;
-    font-size: 1.05rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-weight: 600;
-    color: rgba(255, 220, 120, 0.95);
-    letter-spacing: 0.02em;
+    font: 700 1.18rem Georgia, "Times New Roman", serif;
+    color: #d9c28e;
+    letter-spacing: 0.03em;
   }
 
   .close-btn {
-    position: relative;
-    background: transparent;
-    border: none;
-    font-size: 1.8rem;
-    color: rgba(255, 255, 255, 0.4);
+    background: rgba(8, 7, 6, 0.7);
+    border: 1px solid rgba(217, 194, 142, 0.18);
+    color: rgba(217, 194, 142, 0.72);
     cursor: pointer;
+    font-size: 1.5rem;
     line-height: 1;
-    padding: 0.5rem; /* Expand the click hitbox for accessibility */
-    margin: -0.5rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.12s;
-    z-index: 10;
+    min-width: 2.4rem;
+    min-height: 2.4rem;
   }
 
   .close-btn:hover {
-    color: rgba(255, 220, 120, 0.9);
+    color: #d9c28e;
+    border-color: rgba(217, 194, 142, 0.42);
+  }
+
+  .skill-ledger-body {
+    padding: 1rem;
+    overflow: auto;
+  }
+
+  .loading-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.65rem;
+    font: 0.85rem "IBM Plex Mono", monospace;
+    color: rgba(217, 194, 142, 0.7);
+    padding: 3rem 0;
+  }
+
+  .spinner {
+    width: 0.85rem;
+    height: 0.85rem;
+    border: 2px solid rgba(217, 194, 142, 0.18);
+    border-top-color: rgba(217, 194, 142, 0.8);
+    border-radius: 50%;
+    animation: rotate 1.5s linear infinite;
+  }
+
+  .ledger-layout {
+    display: grid;
+    grid-template-columns: 180px minmax(360px, 1fr) 230px;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .family-rail,
+  .progression-board,
+  .node-inspector {
+    background: rgba(8, 7, 6, 0.28);
+    border: 1px solid rgba(217, 194, 142, 0.14);
+    box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.28);
+  }
+
+  .family-rail {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .family-card {
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: 0.55rem;
+    align-items: center;
+    padding: 0.65rem;
+    border: 1px solid rgba(217, 194, 142, 0.13);
+    background: rgba(22, 19, 16, 0.76);
+  }
+
+  .family-card strong {
+    display: block;
+    color: #d9c28e;
+    font-size: 0.78rem;
+  }
+
+  .family-card span:not(.family-mark) {
+    display: block;
+    color: rgba(170, 160, 145, 0.7);
+    font: 0.62rem "IBM Plex Mono", monospace;
+    text-transform: uppercase;
+  }
+
+  .family-card.sealed {
+    opacity: 0.55;
+    border-style: dashed;
+  }
+
+  .family-mark,
+  .node-sigil {
+    display: grid;
+    place-items: center;
+    border: 2px solid #080706;
+    background: #34251a;
+    color: #d9c28e;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.55);
+    font: 700 0.68rem "IBM Plex Mono", monospace;
+  }
+
+  .family-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .progression-board {
+    padding: 0.75rem;
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .board-section h3,
+  .node-inspector h3 {
+    margin: 0 0 0.6rem;
+    font: 700 0.82rem "IBM Plex Mono", monospace;
+    color: rgba(217, 194, 142, 0.86);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .skill-node {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    margin-bottom: 0.65rem;
+    background: linear-gradient(180deg, rgba(36, 28, 21, 0.86), rgba(20, 16, 12, 0.9));
+    border: 1px solid rgba(217, 194, 142, 0.13);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.32);
+  }
+
+  .skill-node:hover {
+    border-color: rgba(217, 194, 142, 0.32);
+  }
+
+  .node-sigil {
+    width: 2.8rem;
+    height: 2.8rem;
+    align-self: start;
+  }
+
+  .skill-node.forest .node-sigil { background: #263326; color: #d9c28e; }
+  .skill-node.stone .node-sigil { background: #34322d; color: #d9c28e; }
+  .skill-node.cold .node-sigil { background: #17242a; color: #87a9ad; }
+  .skill-node.blood .node-sigil { background: #34251a; color: #c54f2f; }
+
+  .node-title-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .node-title-row h4 {
+    margin: 0;
+    color: #f0dfad;
+    font-size: 0.95rem;
+  }
+
+  .node-title-row p,
+  .node-inspector p {
+    margin: 0.15rem 0 0.55rem;
+    color: rgba(222, 210, 188, 0.68);
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+
+  .level-chip {
+    flex: none;
+    padding: 0.2rem 0.45rem;
+    border: 1px solid rgba(217, 194, 142, 0.22);
+    color: #d9c28e;
+    background: rgba(8, 7, 6, 0.5);
+    font: 700 0.62rem "IBM Plex Mono", monospace;
+  }
+
+  .xp-bar-container {
+    position: relative;
+    height: 0.78rem;
+    margin: 0.35rem 0 0.5rem;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(217, 194, 142, 0.12);
+    overflow: hidden;
+  }
+
+  .xp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #58613c, #d9c28e);
+    box-shadow: 0 0 10px rgba(217, 194, 142, 0.16);
+    transition: width 0.3s ease-out;
+  }
+
+  .xp-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: rgba(255, 248, 220, 0.86);
+    font: 700 0.56rem "IBM Plex Mono", monospace;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+
+  .effect-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .effect-list span,
+  .node-inspector li {
+    color: rgba(217, 194, 142, 0.78);
+    font: 0.62rem "IBM Plex Mono", monospace;
+  }
+
+  .effect-list span {
+    padding: 0.18rem 0.4rem;
+    border: 1px solid rgba(217, 194, 142, 0.12);
+    background: rgba(8, 7, 6, 0.42);
+  }
+
+  .node-inspector {
+    padding: 0.85rem;
+  }
+
+  .inspector-label {
+    margin: 0 0 0.4rem !important;
+    font: 0.6rem "IBM Plex Mono", monospace !important;
+    color: rgba(170, 160, 145, 0.62) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .node-inspector ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1rem;
+  }
+
+  .inspector-footer {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed rgba(217, 194, 142, 0.18);
+    color: rgba(170, 160, 145, 0.68);
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  @media (max-width: 900px) {
+    .ledger-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .family-rail {
+      flex-direction: row;
+      overflow-x: auto;
+    }
+
+    .family-card {
+      min-width: 150px;
+    }
   }
 
   @keyframes fadeIn {
@@ -228,271 +558,7 @@ const kiteDamageBonus = $derived(5 + 2 * kiteLevel);
     to { transform: scale(1); opacity: 1; }
   }
 
-  .skill-tree-card {
-    max-width: 780px !important;
-    border: 1px solid rgba(255, 170, 0, 0.22) !important;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.75), 0 0 25px rgba(255, 170, 0, 0.04) !important;
-  }
-
-  .skill-tree-body {
-    padding: 1.5rem !important;
-  }
-
-  .loading-state {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 0.5rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.6);
-    padding: 3rem 0;
-  }
-
-  .spinner {
-    display: inline-block;
-    animation: rotate 1.5s linear infinite;
-  }
-
   @keyframes rotate {
     to { transform: rotate(360deg); }
   }
-
-  .tree-layout {
-    display: flex;
-    gap: 1.5rem;
-  }
-
-  .column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 1.2rem;
-  }
-
-  .column-title {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.85rem;
-    font-weight: bold;
-    color: rgba(255, 220, 120, 0.82);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin: 0 0 0.2rem 0;
-    border-bottom: 1px dashed rgba(255, 220, 120, 0.15);
-    padding-bottom: 0.35rem;
-  }
-
-  .tree-divider {
-    width: 1px;
-    background: linear-gradient(180deg, rgba(255,220,120,0.15), rgba(255,220,120,0.02));
-  }
-
-  /* Skill Card (Left Column) */
-  .skill-card {
-    background: rgba(30, 24, 20, 0.6);
-    border: 1px solid rgba(255, 220, 120, 0.08);
-    border-radius: 6px;
-    padding: 0.85rem 1rem;
-    transition: all 0.15s ease;
-  }
-
-  .skill-card:hover {
-    border-color: rgba(255, 170, 0, 0.25);
-    background: rgba(30, 24, 20, 0.8);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-  }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.6rem;
-  }
-
-  .skill-icon-big {
-    font-size: 1.8rem;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-  }
-
-  .skill-info {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .skill-name {
-    font-family: system-ui, -apple-system, sans-serif;
-    font-weight: bold;
-    font-size: 0.95rem;
-    color: #ffffff;
-  }
-
-  .skill-level {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.72rem;
-    color: #ffa500;
-    font-weight: bold;
-  }
-
-  /* XP Progress bar */
-  .xp-bar-container {
-    position: relative;
-    height: 16px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 0.6rem;
-  }
-
-  .xp-fill {
-    height: 100%;
-    border-radius: 8px;
-    transition: width 0.3s ease-out;
-  }
-
-  .lumber-fill {
-    background: linear-gradient(90deg, #2e6930, #55aa58);
-    box-shadow: 0 0 6px rgba(85, 170, 88, 0.4);
-  }
-
-  .mining-fill {
-    background: linear-gradient(90deg, #8c6a2c, #cca355);
-    box-shadow: 0 0 6px rgba(204, 163, 85, 0.4);
-  }
-
-  .evade-fill {
-    background: linear-gradient(90deg, #2c688c, #559ec8);
-    box-shadow: 0 0 4px rgba(85, 158, 200, 0.4);
-  }
-
-  .xp-text {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.62rem;
-    font-weight: bold;
-    color: rgba(255, 255, 255, 0.85);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
-  }
-
-  .skill-bonuses {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding-top: 0.2rem;
-  }
-
-  .bonus-item {
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 0.68rem;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .benefit {
-    color: #55ff55;
-    font-weight: bold;
-  }
-
-  /* Active Skills tree (Right Column) */
-  .ability-tree-nodes {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    padding-top: 0.5rem;
-  }
-
-  .tree-node {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    width: 90%;
-    background: rgba(30, 24, 20, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    padding: 0.75rem 0.9rem;
-    transition: all 0.15s ease;
-  }
-
-  .border-cyan { border-color: rgba(0, 170, 255, 0.18) !important; }
-  .border-orange { border-color: rgba(255, 170, 0, 0.18) !important; }
-
-  .tree-node:hover {
-    background: rgba(30, 24, 20, 0.8);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
-  }
-
-  .tree-node:hover.border-cyan { border-color: rgba(0, 170, 255, 0.45) !important; }
-  .tree-node:hover.border-orange { border-color: rgba(255, 170, 0, 0.45) !important; }
-
-  .node-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.4rem;
-    user-select: none;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.6);
-  }
-
-  .bg-cyan {
-    background: rgba(0, 170, 255, 0.15);
-    border: 1px solid rgba(0, 170, 255, 0.4);
-  }
-  .bg-orange {
-    background: rgba(255, 170, 0, 0.15);
-    border: 1px solid rgba(255, 170, 0, 0.4);
-  }
-
-  .node-details {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-  }
-
-  .node-name {
-    font-family: system-ui, -apple-system, sans-serif;
-    font-weight: bold;
-    font-size: 0.85rem;
-  }
-
-  .color-cyan { color: #55c8ff; }
-  .color-orange { color: #ffaa33; }
-
-  .node-level {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.65rem;
-    color: rgba(255, 255, 255, 0.55);
-    margin-bottom: 0.2rem;
-  }
-
-  .node-stats {
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 0.68rem;
-    color: rgba(255, 255, 255, 0.72);
-    margin-bottom: 0.4rem;
-  }
-
-  .muted {
-    font-size: 0.62rem;
-    color: rgba(255, 255, 255, 0.35);
-  }
-
-  .mini-bar {
-    height: 8px !important;
-    margin-bottom: 0.15rem !important;
-  }
-
-  .mini-text {
-    font-size: 0.55rem !important;
-    text-align: right;
-    color: rgba(255,255,255,0.4);
-  }
-
 </style>

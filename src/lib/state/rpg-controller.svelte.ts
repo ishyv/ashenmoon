@@ -21,7 +21,7 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { playerRpgEntityId, rpgEventQueue } from "$lib/state/rpg/rpg-feedback-router";
 
 export type RpgCommand =
-  | { type: "equipTool"; itemId: string | null }
+  | { type: "equipTool"; itemId: string | null; auto?: boolean }
   | {
       type: "equipGear";
       itemId: string | null;
@@ -34,6 +34,7 @@ export type RpgCommand =
   | { type: "studyBlueprint"; itemId: string }
   | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
+  | { type: "upgradeBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number }
   | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
 
@@ -47,6 +48,7 @@ type CommandData = {
   studyBlueprint: StudySync;
   build: { playerState: RpgPlayerState };
   destroyBuilding: { playerState: RpgPlayerState };
+  upgradeBuilding: { playerState: RpgPlayerState };
   placeItem: { playerState: RpgPlayerState };
   environmentTick: RpgEnvironmentTickResult;
 };
@@ -119,6 +121,8 @@ function emitCommandFailure(command: RpgCommand, reason: string): void {
  * ordering. This queue makes rapid fire-and-forget commands behave like one
  * serialized transaction stream over the current reactive RPG state.
  */
+import { recordManualEquip } from "$lib/state/rpg/inventory-api";
+
 export function dispatchRpgCommand<C extends RpgCommand>(command: C): Promise<RpgCommandResult<C>> {
   const execution = commandQueue.then(() => {
     try {
@@ -126,6 +130,11 @@ export function dispatchRpgCommand<C extends RpgCommand>(command: C): Promise<Rp
       applyRpgState(playerStateFromResult(data));
       saveLocalRpgState(playerStateFromResult(data));
       emitCommandEvents(command, data);
+      
+      if (command.type === "equipTool" && !command.auto) {
+        recordManualEquip(command.itemId);
+      }
+
       return { ok: true, data } satisfies RpgCommandResult<C>;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

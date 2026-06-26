@@ -146,16 +146,6 @@ const blueprintAlreadyKnown = $derived(blueprintTrait ? recipeKnown(blueprintTra
     font-weight: 700;
   }
 
-  .inspect-icon-emoji {
-    font-size: 1.8rem;
-    line-height: 1;
-  }
-
-  .item-icon-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
 
   .inspect-name {
     font-family: "Cinzel", serif;

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="352" viewBox="0 0 320 352">
+  <!-- Soft ground drop shadow -->
+  <ellipse cx="160" cy="340" rx="140" ry="12" fill="#080706" opacity="0.45"/>
+  
+  <!-- Main building group -->
+  <g stroke="#080706" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Stone foundation slab -->
+    <path d="M16 312 L304 312 L296 344 L24 344 Z" fill="#4a4c4e" stroke-width="6"/>
+    <!-- Foundation stone block separations -->
+    <line x1="72" y1="312" x2="70" y2="344" stroke="#252627" stroke-width="4"/>
+    <line x1="128" y1="312" x2="128" y2="344" stroke="#252627" stroke-width="4"/>
+    <line x1="192" y1="312" x2="192" y2="344" stroke="#252627" stroke-width="4"/>
+    <line x1="248" y1="312" x2="250" y2="344" stroke="#252627" stroke-width="4"/>
+
+    <!-- Main Timber Wall log body -->
+    <rect x="36" y="160" width="248" height="152" fill="#583d28" stroke-width="6"/>
+    <!-- Horizontal Log lines -->
+    <line x1="36" y1="190" x2="284" y2="190" stroke="#1d120a" stroke-width="4"/>
+    <line x1="36" y1="220" x2="284" y2="220" stroke="#1d120a" stroke-width="4"/>
+    <line x1="36" y1="250" x2="284" y2="250" stroke="#1d120a" stroke-width="4"/>
+    <line x1="36" y1="280" x2="284" y2="280" stroke="#1d120a" stroke-width="4"/>
+
+    <!-- Wooden Corner Uprights -->
+    <rect x="24" y="152" width="20" height="160" fill="#3a2517" stroke-width="5"/>
+    <rect x="276" y="152" width="20" height="160" fill="#3a2517" stroke-width="5"/>
+
+    <!-- Left window (amber glowing) -->
+    <rect x="68" y="196" width="36" height="36" rx="4" fill="#ffb03a" stroke-width="4"/>
+    <line x1="86" y1="196" x2="86" y2="232" stroke="#1d120a" stroke-width="2"/>
+    <line x1="68" y1="214" x2="104" y2="214" stroke="#1d120a" stroke-width="2"/>
+
+    <!-- Right window (amber glowing) -->
+    <rect x="216" y="196" width="36" height="36" rx="4" fill="#ffb03a" stroke-width="4"/>
+    <line x1="234" y1="196" x2="234" y2="232" stroke="#1d120a" stroke-width="2"/>
+    <line x1="216" y1="214" x2="252" y2="214" stroke="#1d120a" stroke-width="2"/>
+
+    <!-- Centered arched doorway (Door width 64, x=128 to 192) -->
+    <path d="M128 312 V248 A32 32 0 0 1 192 248 V312 Z" fill="#20150e" stroke-width="5"/>
+    <!-- Door details (plank divide) -->
+    <line x1="160" y1="216" x2="160" y2="312" stroke="#100b07" stroke-width="3"/>
+    <!-- Door iron studs -->
+    <circle cx="140" cy="260" r="2" fill="#7a8288"/>
+    <circle cx="180" cy="260" r="2" fill="#7a8288"/>
+    <circle cx="140" cy="285" r="2" fill="#7a8288"/>
+    <circle cx="180" cy="285" r="2" fill="#7a8288"/>
+    <circle cx="150" cy="275" r="3" fill="#3a3d40"/> <!-- Iron door ring -->
+
+    <!-- Roof Attic/Gable Triangle -->
+    <polygon points="20 152, 160 20, 300 152" fill="#3a2517" stroke-width="6"/>
+    <!-- Vertical Attic planks -->
+    <line x1="90" y1="152" x2="90" y2="85" stroke="#1d120a" stroke-width="3"/>
+    <line x1="125" y1="152" x2="125" y2="52" stroke="#1d120a" stroke-width="3"/>
+    <line x1="160" y1="152" x2="160" y2="20" stroke="#1d120a" stroke-width="3"/>
+    <line x1="195" y1="152" x2="195" y2="52" stroke="#1d120a" stroke-width="3"/>
+    <line x1="230" y1="152" x2="230" y2="85" stroke="#1d120a" stroke-width="3"/>
+
+    <!-- Left Roof Eave -->
+    <line x1="12" y1="160" x2="160" y2="12" stroke="#66462c" stroke-width="12"/>
+    <!-- Right Roof Eave -->
+    <line x1="308" y1="160" x2="160" y2="12" stroke="#66462c" stroke-width="12"/>
+
+    <!-- Moss patches on roof -->
+    <path d="M120 70 Q130 55 140 60" fill="none" stroke="#5d7249" stroke-width="8"/>
+    <path d="M180 80 Q190 70 200 85" fill="none" stroke="#5d7249" stroke-width="6"/>
+    <path d="M130 110 Q145 95 155 105" fill="none" stroke="#5d7249" stroke-width="10" opacity="0.8"/>
+  </g>
+</svg>

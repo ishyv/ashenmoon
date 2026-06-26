@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100" role="img" aria-label="boar processed carcass">
+  <ellipse cx="80.0" cy="88" rx="54.4" ry="8" fill="#080706" opacity=".42"/>
+  <path d="M25.6 70.0c8-34 40-47 89.6-39 23 4 40 18 42 36-17 18-76 22-120.0 3z" fill="#080706"/>
+  <path d="M36.8 68.0c10-21 36-31 72.0-25 18 3 31 13 33 25-16 10-57 13-92.8 0z" fill="#4f3a30" opacity=".7"/>
+  <path d="M51.2 55.0c21-9 48-6 64 9-22 9-46 9-71 1z" fill="#161310" opacity=".56"/>
+  
+  
+  <path d="M125.0 60.99999999999999c13 2 18 9 21 18-11-1-20-6-27-15z" fill="#d9c28e" stroke="#080706" stroke-width="3"/>
+  
+  <path d="M60.0 62.99999999999999c28 11 55 9 77-2" stroke="#d9c28e" stroke-width="8" stroke-linecap="round" opacity=".75"/><path d="M87.0 48.99999999999999l9 22M109.0 46.99999999999999l8 21" stroke="#080706" stroke-width="4" opacity=".65"/>
+  <path d="M45.0 81.0c23 8 60 8 87-2" stroke="#080706" stroke-width="5" stroke-linecap="round" opacity=".5"/>
+</svg>

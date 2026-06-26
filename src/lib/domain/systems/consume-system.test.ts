@@ -7,6 +7,8 @@ const dirtyWater = ITEM_DEFINITIONS.dirty_water!;
 const cleanWater = ITEM_DEFINITIONS.clean_water!;
 const panacea = ITEM_DEFINITIONS.debug_panacea!;
 const stone = ITEM_DEFINITIONS.stone!;
+const cookedMeat = ITEM_DEFINITIONS.cooked_meat!;
+const berries = ITEM_DEFINITIONS.berries!;
 
 describe("resolveConsume", () => {
   it("returns null for non-consumable items", () => {
@@ -40,5 +42,19 @@ describe("resolveConsume", () => {
     expect(outcome.holderCommands).toContainEqual({ kind: "clear_all_statuses" });
     expect(outcome.holderCommands).toContainEqual({ kind: "restore_thirst", amount: 100 });
     expect(outcome.holderCommands).toContainEqual({ kind: "restore_hp", amount: 100 });
+  });
+
+  it("cooked meat restores hp and hunger", () => {
+    const outcome = resolveConsume(cookedMeat, () => 0.0)!;
+    expect(outcome.verb).toBe("eat");
+    expect(outcome.holderCommands).toContainEqual({ kind: "restore_hp", amount: 12 });
+    expect(outcome.holderCommands).toContainEqual({ kind: "restore_hunger", amount: 30 });
+  });
+
+  it("berries restore hp and hunger", () => {
+    const outcome = resolveConsume(berries, () => 0.0)!;
+    expect(outcome.verb).toBe("eat");
+    expect(outcome.holderCommands).toContainEqual({ kind: "restore_hp", amount: 2 });
+    expect(outcome.holderCommands).toContainEqual({ kind: "restore_hunger", amount: 5 });
   });
 });

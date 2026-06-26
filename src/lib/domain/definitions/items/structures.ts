@@ -1,4 +1,4 @@
-import { Category, Rarity, itemId, type IconSheet } from "$lib/domain/items/item-types";
+import { Category, Rarity, itemId } from "$lib/domain/items/item-types";
 import { Item } from "$lib/domain/items/item-builder";
 import { Placeable, RestQuality } from "$lib/domain/items/item-traits";
 

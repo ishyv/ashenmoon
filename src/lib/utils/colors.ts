@@ -82,6 +82,9 @@ export const Colors = {
   world: {
     dirt: 0x5a4232,
     camp: 0x8b7355,
+    campDryGrass: 0x8f805f,
+    campAsh: 0x5f5546,
+    campPath: 0x6f5d45,
   },
   /** skill level-up announcement text, per skill family. */
   skillLevel: {

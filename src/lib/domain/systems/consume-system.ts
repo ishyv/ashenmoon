@@ -12,6 +12,7 @@ import type { StatusId } from "./status-types";
 
 export type HolderCommand =
   | { kind: "restore_thirst"; amount: number }
+  | { kind: "restore_hunger"; amount: number }
   | { kind: "restore_hp"; amount: number }
   | { kind: "damage"; amount: number }
   | { kind: "add_status"; status: StatusId; durationSec: number }
@@ -55,6 +56,9 @@ function collectHolderCommands(
   switch (effect.kind) {
     case "restore_thirst":
       out.push({ kind: "restore_thirst", amount: effect.amount });
+      return;
+    case "restore_hunger":
+      out.push({ kind: "restore_hunger", amount: effect.amount });
       return;
     case "restore_hp":
       out.push({ kind: "restore_hp", amount: effect.amount });

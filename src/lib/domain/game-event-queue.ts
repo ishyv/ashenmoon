@@ -1,3 +1,5 @@
+import type { ReactionKind } from "$lib/domain/systems/item-reactions";
+
 export type DamageEventType = "physical" | "magic" | "true" | string;
 
 export type QueuedGameEvent =
@@ -109,6 +111,79 @@ export type QueuedGameEvent =
       readonly tone: "info" | "success" | "warning" | "error" | "danger" | "good";
       /** Optional sound id to play alongside this feedback message. */
       readonly sound?: string;
+    }
+  | {
+      /**
+       * An item in the player's inventory just underwent an environmental reaction
+       * (temperature transform, ignition, or decay). The feedback router teaches
+       * the matching KnowledgeProperty via `learnAbout(itemId, propertyFromReaction(reactionKind))`.
+       */
+      readonly type: "item_reacted";
+      readonly actorId: string;
+      readonly itemId: string;
+      readonly reactionKind: ReactionKind;
+    }
+  | {
+      /**
+       * The player harvested or picked up an item from a world node. Carries the
+       * node's display name so the feedback router can call `discoverSource` without
+       * coupling to gatherable definitions. Kept separate from `item_gained` to
+       * avoid ambiguity (item_gained is also emitted for crafting output).
+       */
+      readonly type: "item_gathered";
+      readonly actorId: string;
+      readonly itemId: string;
+      /** Human-readable name of the source (gatherable displayName, "carcass", etc.). */
+      readonly sourceName: string;
+      readonly qty: number;
+    }
+  // --- weapon-driven combat lifecycle (see domain/combat/weapons) ---
+  | {
+      readonly type: "attack_started";
+      readonly attackerId: string;
+      readonly weaponDefId: string;
+      readonly attackId: string;
+      readonly animationProfile: string;
+      readonly soundProfile: string;
+      readonly direction: { readonly x: number; readonly y: number };
+      /** Attacker centre, for drawing the swing arc. */
+      readonly origin: { readonly x: number; readonly y: number };
+      readonly aimAngle: number;
+      readonly reachPx: number;
+      readonly arcDegrees: number;
+      readonly windupMs: number;
+      readonly activeMs: number;
+      readonly recoveryMs: number;
+    }
+  | {
+      readonly type: "attack_active";
+      readonly attackerId: string;
+      readonly weaponDefId: string;
+      readonly attackId: string;
+    }
+  | {
+      readonly type: "attack_hit";
+      readonly attackerId: string;
+      readonly targetId: string;
+      readonly weaponDefId: string;
+      readonly attackId: string;
+      readonly damageType: string;
+      readonly amount: number;
+      readonly soundProfile: string;
+      readonly position: { readonly x: number; readonly y: number };
+    }
+  | {
+      readonly type: "attack_missed";
+      readonly attackerId: string;
+      readonly weaponDefId: string;
+      readonly attackId: string;
+      readonly soundProfile: string;
+    }
+  | {
+      readonly type: "attack_recovered";
+      readonly attackerId: string;
+      readonly weaponDefId: string;
+      readonly attackId: string;
     };
 
 export interface GameEventQueue {

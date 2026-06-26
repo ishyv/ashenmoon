@@ -20,13 +20,6 @@ vi.mock("$lib/state/rpg/stats.svelte", () => ({
   awardCharacterXp: vi.fn(() => 0),
 }));
 
-vi.mock("$lib/core/assets/assets", async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, unknown>;
-  return {
-    ...actual,
-    getAnimalFrames: vi.fn(() => []),
-  };
-});
 
 function clearWorld(): void {
   for (const entity of [...world.entities]) world.remove(entity);

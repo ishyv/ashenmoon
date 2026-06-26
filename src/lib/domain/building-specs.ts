@@ -1,24 +1,12 @@
 /**
- * Per-building footprint, texture, and sprite-size table. WHY: the type→texture
- * `if/else` chain and the `type === "wall" ? 1 : 2` footprint math were each
- * duplicated across building.ts and engine.ts. One table keeps placement,
- * collision, and rendering agreeing on the same numbers.
+ * Per-building footprint, and sprite-size table.
+ * One table keeps placement, collision, and rendering agreeing on the same numbers.
  *
  * Units are tiles; multiply `sprite` dimensions by TILE at render time. `sprite`
  * height can exceed the footprint (e.g. a tower's art is taller than its base).
  */
 import { ITEM_DEFINITIONS } from "$lib/domain/items";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
-
-export type BuildingTextureType =
-  | "archery"
-  | "barracks"
-  | "castle"
-  | "house1"
-  | "house2"
-  | "house3"
-  | "monastery"
-  | "tower";
 
 export interface BuildingSpec {
   /** lowercase player-facing label. */
@@ -27,14 +15,18 @@ export interface BuildingSpec {
   description: string;
   /** collision + placement footprint, in tiles. */
   footprint: { w: number; h: number };
-  /** which building art to draw (some types reuse another's texture). */
-  textureType: BuildingTextureType;
   /** rendered sprite size, in tiles. */
   sprite: { w: number; h: number };
   /** inventory cost paid before the building is recorded. */
   cost?: Record<string, number>;
   /** optional station unlocked by this building. */
   stationId?: StationId;
+  /** is this building constructed in stages? */
+  isMultiStage?: boolean;
+  /** specific solid cells relative to building origin (if undefined, entire footprint is solid) */
+  solidCells?: { x: number; y: number }[];
+  /** cost and names for each upgrade stage */
+  constructionStages?: { stage: number; name: string; cost: Record<string, number> }[];
 }
 
 export const M3_BUILDABLE_IDS = [
@@ -54,35 +46,59 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "wall",
     description: "a one-tile barrier.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
   },
   house1: {
     displayName: "outpost house",
     description: "a compact shelter from the older outpost kit.",
-    footprint: { w: 2, h: 2 },
-    textureType: "house1",
-    sprite: { w: 2, h: 2 },
+    footprint: { w: 5, h: 5 },
+    sprite: { w: 5, h: 5.5 },
+    cost: { stick: 2 },
+    isMultiStage: true,
+    solidCells: [
+      { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }, { x: 4, y: 0 },
+      { x: 0, y: 1 },                                                 { x: 4, y: 1 },
+      { x: 0, y: 2 },                                                 { x: 4, y: 2 },
+      { x: 0, y: 3 },                                                 { x: 4, y: 3 },
+      { x: 0, y: 4 }, { x: 1, y: 4 },                 { x: 3, y: 4 }, { x: 4, y: 4 },
+    ],
+    constructionStages: [
+      { stage: 1, name: "foundation", cost: { stone: 12, clay: 6 } },
+      { stage: 2, name: "columns", cost: { wood: 8 } },
+      { stage: 3, name: "frame", cost: { wood: 8, bark_rope: 4 } },
+      { stage: 4, name: "walls", cost: { clay: 10, stick: 16 } },
+      { stage: 5, name: "completed", cost: { leaves: 20 } },
+    ],
   },
   tower: {
     displayName: "tower",
     description: "a tall watch structure from the older outpost kit.",
     footprint: { w: 2, h: 2 },
-    textureType: "tower",
     sprite: { w: 2, h: 3 },
+    cost: { stick: 2 },
+    isMultiStage: true,
+    solidCells: [
+      { x: 0, y: 0 }, { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ],
+    constructionStages: [
+      { stage: 1, name: "foundation", cost: { stone: 6, clay: 2 } },
+      { stage: 2, name: "columns", cost: { wood: 6 } },
+      { stage: 3, name: "frame", cost: { wood: 6, bark_rope: 4 } },
+      { stage: 4, name: "walls", cost: { wood: 4, bark_rope: 2 } },
+      { stage: 5, name: "completed", cost: { leaves: 6 } },
+    ],
   },
   barracks: {
     displayName: "barracks",
     description: "a larger old outpost structure.",
     footprint: { w: 2, h: 2 },
-    textureType: "barracks",
     sprite: { w: 2, h: 2 },
   },
   storage_pile: {
     displayName: "storage pile",
     description: "a rough place to keep gathered supplies off the wet ground.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { branch: 3, bark: 4, vine: 2 },
     stationId: "storage_pile",
@@ -91,7 +107,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "campfire",
     description: "a stone-ringed fire for warmth, light, boiling, cooking, and burning.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { stone: 3, stick: 4, leaves: 2, branch: 1 },
     stationId: "campfire",
@@ -100,7 +115,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "drying rack",
     description: "a simple rack for one slow camp process.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { stick: 6, grass_fiber: 4 },
     stationId: "drying_rack",
@@ -109,7 +123,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "primitive work surface",
     description: "a flat work spot for careful experiments.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { branch: 2, bark: 4 },
     stationId: "primitive_work_surface",
@@ -118,7 +131,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "lean-to",
     description: "a crude shelter to rest and hide from the cold.",
     footprint: { w: 1, h: 1 },
-    textureType: "house1",
     sprite: { w: 1, h: 1 },
     cost: { branch: 4, leaves: 8 },
   },
@@ -126,7 +138,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "crude shelter",
     description: "branch and leaf cover that cuts the worst of rain and night cold.",
     footprint: { w: 1, h: 1 },
-    textureType: "house1",
     sprite: { w: 1, h: 1 },
     cost: { branch: 5, green_leaves: 8, bark_rope: 2, vine: 2 },
   },
@@ -134,7 +145,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "marker sign",
     description: "a rough camp marker for wayfinding.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { stick: 1, bark: 2, charcoal: 1 },
   },
@@ -142,7 +152,6 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "spike barrier",
     description: "sharpened stakes lashed into a crude argument against teeth.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { stick: 8, branch: 3, bark_rope: 2, flint_shard: 1 },
   },
@@ -150,15 +159,13 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "rain catcher",
     description: "a hide-stretched frame that catches rainwater.",
     footprint: { w: 1, h: 1 },
-    textureType: "house2",
     sprite: { w: 1, h: 1 },
-    cost: { branch: 4, cured_hide: 1, bark_rope: 2, sealing_paste: 1 },
+    cost: { branch: 4, cured_hide: 1, bark_rope: 2, clay: 2 },
   },
   meat_smoking_rack: {
     displayName: "meat smoking rack",
     description: "a rack that feeds smoke around meat instead of direct flame.",
     footprint: { w: 1, h: 1 },
-    textureType: "house3",
     sprite: { w: 1, h: 1 },
     cost: { branch: 5, grass_cord: 4, clay: 2, stone: 4 },
     stationId: "meat_smoking_rack",
@@ -167,18 +174,16 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     displayName: "simple bedroll",
     description: "layered leaves, hide, and fiber for a barely civilized rest.",
     footprint: { w: 1, h: 1 },
-    textureType: "house1",
     sprite: { w: 1, h: 1 },
-    cost: { dried_hide: 1, green_leaves: 8, grass_cord: 6, feather: 4 },
+    cost: { dried_hide: 1, green_leaves: 8, grass_cord: 6, moss: 4 },
   },
 };
 
-/** Fallback for any type without an explicit spec (matches the old house1 default). */
+/** Fallback for any type without an explicit spec. */
 export const DEFAULT_BUILDING_SPEC: BuildingSpec = {
   displayName: "unknown structure",
   description: "a fallback structure.",
   footprint: { w: 2, h: 2 },
-  textureType: "house1",
   sprite: { w: 2, h: 2 },
 };
 

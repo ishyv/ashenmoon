@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ItemDefinition } from "$lib/domain/items/item-types";
+import { ASHENMOON_ITEM_ICON_PATHS, getAshenmoonItemIconKeyForItemId } from "$lib/core/assets/ashenmoon-assets";
 
 interface Props {
   def: ItemDefinition | undefined;
@@ -8,21 +9,21 @@ interface Props {
 }
 let { def, itemId, class: cls = "" }: Props = $props();
 
-const sheet = $derived(def?.iconSheet);
-const iconUrl = $derived(def?.iconUrl);
+const ashenmoonIconUrl = $derived(ashenmoonIconFor(itemId));
+
+function ashenmoonIconFor(id: string): string {
+  const key = getAshenmoonItemIconKeyForItemId(id) ?? "stick";
+  return ASHENMOON_ITEM_ICON_PATHS[key];
+}
 </script>
 
-{#if sheet}
-  <div
-    class="icon-sheet {cls}"
-    style="background-image:url({sheet.src});background-position:-{sheet.col * sheet.size}px -{sheet.row * sheet.size}px;width:{sheet.size}px;height:{sheet.size}px;background-repeat:no-repeat;image-rendering:pixelated;"
-    role="img"
-    aria-label={def?.name ?? itemId}
-  ></div>
-{:else if iconUrl}
-  <img src={iconUrl} alt={def?.name ?? itemId} class="item-icon-img {cls}" />
-{:else if def?.icon}
-  <span class="item-icon-emoji {cls}">{def.icon}</span>
-{:else}
-  <span class={cls}>{(def?.name ?? itemId).slice(0, 2).toLowerCase()}</span>
-{/if}
+<img src={ashenmoonIconUrl} alt={def?.name ?? itemId} title={def?.name ?? itemId} class="item-icon-img ashenmoon-item-icon {cls}" />
+
+<style>
+  .ashenmoon-item-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.55));
+  }
+</style>

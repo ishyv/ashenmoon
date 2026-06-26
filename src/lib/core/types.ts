@@ -46,7 +46,7 @@ export interface AABB {
   maxY: number;
 }
 
-export type AnimState = "idle" | "run" | "attack";
+export type AnimState = "idle" | "walk" | "run" | "attack" | "gather" | "gather_tired";
 
 /**
  * Which side an entity fights on. The damage system only lets an attack harm the
@@ -85,7 +85,7 @@ export interface SlashArc {
   reach: number;
   /** half the cone angle in radians (arc spans angle ± halfAngle). */
   halfAngle: number;
-  variant?: "arc" | "crosscut" | "driving_thrust" | "wheel_slash" | "falling_wheel" | "rising_wheel" | "crosswind_cut" | "starburst_cross" | "vortex_slice" | "fell_sweep_cleave" | "fell_sweep_whirl";
+  variant?: "arc" | "crosscut" | "driving_thrust" | "wheel_slash" | "falling_wheel" | "rising_wheel" | "crosswind_cut" | "starburst_cross" | "vortex_slice" | "fell_sweep_cleave" | "fell_sweep_whirl" | "level_shockwave";
   grade?: "excellent" | "good" | "weak";
   stacks?: number;
   color?: number;

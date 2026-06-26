@@ -55,6 +55,8 @@ export enum InputAction {
   FocusedGather = "FOCUSED_GATHER",
   Console = "CONSOLE",
   Sprint = "SPRINT",
+  /** Held weapon-stance modifier (Ctrl by default); unlocks stance attacks. */
+  StanceModifier = "STANCE_MODIFIER",
 }
 
 /** localStorage keys (note: the persisted prefix is "ashenmoor", not -moon). */
@@ -69,4 +71,5 @@ export const StorageKeys = {
   recipes: "ashenmoor_recipes",
   audio: "ashenmoor_audio",
   panelPositions: "ashenmoor_panel_positions",
+  itemSources: "ashenmoor_item_sources",
 } as const;

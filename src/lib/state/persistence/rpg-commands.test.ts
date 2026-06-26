@@ -24,7 +24,7 @@ describe("local RPG commands", () => {
     });
 
     expect(normalized.inventory.slots.stick).toEqual({ qty: 2 });
-    expect(normalized.profile.hpCurrent).toBe(100);
+    expect(normalized.profile.hpCurrent).toBe(600);
     expect(normalized.skills.lumberjacking).toEqual({ level: 2, xp: 5, nextXp: 200 });
   });
 

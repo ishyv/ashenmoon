@@ -19,11 +19,11 @@ export interface GatherRiskContext {
 
 /** Per-node chance [0,1] of a wound when gathered bare-handed. */
 const WOUND_CHANCE: Record<GatherNodeKind, number> = {
-  stone: 0.35,
-  ore: 0.35,
-  forage: 0.15,
-  twig: 0.15,
-  tree: 0.1,
+  stone: 0.15,
+  ore: 0.15,
+  forage: 0.04,
+  twig: 0.05,
+  tree: 0.05,
 };
 
 export function gatherWoundChance(kind: GatherNodeKind): number {

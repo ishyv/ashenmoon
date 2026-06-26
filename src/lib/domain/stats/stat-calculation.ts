@@ -36,9 +36,10 @@ export interface StatModifier {
 export function computeBaseStatsAtLevel(level: number): PlayerStats {
   const lv = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, Math.floor(level)));
   const steps = lv - 1;
+  const growthFactor = steps * (0.7025 + 0.0175 * steps);
   const combat = { ...BASE_COMBAT_STATS };
   for (const key of Object.keys(combat) as (keyof typeof combat)[]) {
-    combat[key] = BASE_COMBAT_STATS[key] + COMBAT_GROWTH_PER_LEVEL[key] * steps;
+    combat[key] = BASE_COMBAT_STATS[key] + COMBAT_GROWTH_PER_LEVEL[key] * growthFactor;
   }
   return {
     combat,

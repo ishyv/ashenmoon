@@ -1,10 +1,9 @@
-import { Category, Rarity, itemId, type IconSheet } from "$lib/domain/items/item-types";
+import { Category, Rarity, itemId } from "$lib/domain/items/item-types";
 import { Item } from "$lib/domain/items/item-builder";
-import { AddStatus, ChanceOfVitals, RestoreHp, RestoreThirst, TransformInto } from "$lib/domain/items/item-effects";
+import { AddStatus, ChanceOfVitals, RestoreHp, RestoreThirst, RestoreHunger, TransformInto } from "$lib/domain/items/item-effects";
 import { Boilable, Consumable, Decayable, Flammable } from "$lib/domain/items/item-traits";
 import { StatusId } from "$lib/domain/systems/status-types";
 
-const SH = (col: number, row: number): IconSheet => ({ src: "/assets/shikashi-icons/icons.png", col, row, size: 32 });
 
 export const foodWaterItems = {
   berries: Item({
@@ -14,9 +13,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
-    iconUrl: "/assets/icons/berries.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(2)] }),
+    Consumable({ verb: "eat", onConsume: [RestoreHp(2), RestoreHunger(5)] }),
     Decayable({ lifespanSec: 240, effect: TransformInto(itemId("volatile_ash")) })
   ),
   mushroom: Item({
@@ -26,9 +24,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.08, stackLimit: 20 },
-    iconUrl: "/assets/icons/mushroom.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(1), ChanceOfVitals(0.35, AddStatus(StatusId.Poison, 45))] }),
+    Consumable({ verb: "eat", onConsume: [RestoreHp(1), RestoreHunger(8), ChanceOfVitals(0.35, AddStatus(StatusId.Poison, 45))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("volatile_ash")) })
   ),
   raw_meat: Item({
@@ -38,9 +35,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.4, stackLimit: 12 },
-    iconSheet: SH(7, 12),
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(4), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 45))] }),
+    Consumable({ verb: "eat", onConsume: [RestoreHp(4), RestoreHunger(15), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 45))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) })
   ),
   raw_small_meat: Item({
@@ -50,9 +46,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.25, stackLimit: 16 },
-    iconSheet: SH(7, 12),
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(3), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 35))] }),
+    Consumable({ verb: "eat", onConsume: [RestoreHp(3), RestoreHunger(10), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 35))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) })
   ),
   raw_large_meat: Item({
@@ -62,9 +57,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.65, stackLimit: 8 },
-    iconSheet: SH(7, 12),
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(5), ChanceOfVitals(0.35, AddStatus(StatusId.Sickness, 50))] }),
+    Consumable({ verb: "eat", onConsume: [RestoreHp(5), RestoreHunger(25), ChanceOfVitals(0.35, AddStatus(StatusId.Sickness, 50))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) })
   ),
   fatty_meat: Item({
@@ -76,7 +70,7 @@ export const foodWaterItems = {
     icon: "🥩",
     physical: { carryClass: "pack", weight: 0.6, stackLimit: 16 },
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(4)] }),
+    Consumable({ verb: "eat", onConsume: [RestoreHp(4), RestoreHunger(20)] }),
     Decayable({ lifespanSec: 600, effect: TransformInto(itemId("spoiled_meat")) })
   ),
   spoiled_meat: Item({
@@ -86,7 +80,6 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pack", weight: 0.35, stackLimit: 16 },
-    iconSheet: SH(8, 12),
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(1), ChanceOfVitals(0.75, AddStatus(StatusId.Sickness, 80))] }),
     Decayable({ lifespanSec: 240, effect: TransformInto(itemId("rotten_meat")) })
@@ -98,7 +91,6 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Reagent,
     physical: { carryClass: "pack", weight: 0.3, stackLimit: 16 },
-    iconSheet: SH(8, 12),
   }).with(
     Consumable({ verb: "eat", onConsume: [ChanceOfVitals(0.95, AddStatus(StatusId.Sickness, 120))] })
   ),
@@ -109,9 +101,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.35, stackLimit: 12 },
-    iconSheet: SH(6, 12),
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(12)] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(12), RestoreHunger(30)] })
   ),
   dried_meat: Item({
     id: itemId("dried_meat"),
@@ -120,9 +111,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.25, stackLimit: 20 },
-    iconSheet: SH(9, 12),
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(8)] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(8), RestoreHunger(20)] })
   ),
   smoked_meat: Item({
     id: itemId("smoked_meat"),
@@ -133,7 +123,7 @@ export const foodWaterItems = {
     icon: "🍖",
     physical: { carryClass: "pocket", weight: 0.3, stackLimit: 30 },
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(16)] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(16), RestoreHunger(40)] })
   ),
   animal_fat: Item({
     id: itemId("animal_fat"),
@@ -155,7 +145,7 @@ export const foodWaterItems = {
     icon: "🍄",
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 40 },
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(2), ChanceOfVitals(0.15, AddStatus(StatusId.Poison, 30))] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(2), RestoreHunger(10), ChanceOfVitals(0.15, AddStatus(StatusId.Poison, 30))] })
   ),
   dried_berries: Item({
     id: itemId("dried_berries"),
@@ -164,9 +154,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.03, stackLimit: 40 },
-    iconUrl: "/assets/icons/berries.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(4)] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(4), RestoreHunger(8)] })
   ),
   clean_water: Item({
     id: itemId("clean_water"),
@@ -175,7 +164,6 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.25, stackLimit: 10 },
-    iconSheet: SH(9, 15),
   }).with(
     Consumable({ verb: "drink", onConsume: [RestoreThirst(60)] })
   ),
@@ -197,7 +185,6 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Component,
     physical: { carryClass: "pocket", weight: 0.25, stackLimit: 10 },
-    iconSheet: SH(5, 15),
   }).with(
     Consumable({ verb: "drink", onConsume: [RestoreThirst(35), ChanceOfVitals(0.45, AddStatus(StatusId.Sickness, 60))] }),
     Boilable({ minTemp: 80, durationSec: 4, effect: TransformInto(itemId("clean_water")) })
@@ -209,9 +196,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.06, stackLimit: 30 },
-    iconUrl: "/assets/icons/berries.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(1), ChanceOfVitals(0.2, AddStatus(StatusId.Sickness, 30))] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(1), RestoreHunger(3), ChanceOfVitals(0.2, AddStatus(StatusId.Sickness, 30))] })
   ),
   wild_root: Item({
     id: itemId("wild_root"),
@@ -220,9 +206,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.15, stackLimit: 20 },
-    iconUrl: "/assets/icons/wild_herb.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(2), ChanceOfVitals(0.25, AddStatus(StatusId.Sickness, 30))] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(2), RestoreHunger(6), ChanceOfVitals(0.25, AddStatus(StatusId.Sickness, 30))] })
   ),
   roasted_root: Item({
     id: itemId("roasted_root"),
@@ -231,9 +216,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.12, stackLimit: 20 },
-    iconUrl: "/assets/icons/wild_herb.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(10)] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(10), RestoreHunger(15)] })
   ),
   roasted_acorn: Item({
     id: itemId("roasted_acorn"),
@@ -242,9 +226,8 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 30 },
-    iconUrl: "/assets/icons/berries.png",
   }).with(
-    Consumable({ verb: "eat", onConsume: [RestoreHp(5)] })
+    Consumable({ verb: "eat", onConsume: [RestoreHp(5), RestoreHunger(8)] })
   ),
   bone_broth: Item({
     id: itemId("bone_broth"),
@@ -255,6 +238,6 @@ export const foodWaterItems = {
     icon: "🥣",
     physical: { carryClass: "pack", weight: 0.5, stackLimit: 10 },
   }).with(
-    Consumable({ verb: "drink", onConsume: [RestoreHp(8), RestoreThirst(15)] })
+    Consumable({ verb: "drink", onConsume: [RestoreHp(8), RestoreThirst(15), RestoreHunger(20)] })
   ),
 };

@@ -16,6 +16,7 @@ export type VitalsEffect =
   | AddStatusEffect
   | ReduceStatusEffect
   | RestoreThirstEffect
+  | RestoreHungerEffect
   | RestoreHpEffect
   | ClearAllStatusesEffect
   | ChanceVitalsEffect;
@@ -58,6 +59,14 @@ export interface AddStatusEffect {
  */
 export interface RestoreThirstEffect {
   kind: "restore_thirst";
+  amount: number;
+}
+
+/**
+ * Restores the holder's hunger pool (consumables).
+ */
+export interface RestoreHungerEffect {
+  kind: "restore_hunger";
   amount: number;
 }
 
@@ -153,6 +162,16 @@ export function AddStatus(status: StatusId, durationSec: number): AddStatusEffec
 export function RestoreThirst(amount: number): RestoreThirstEffect {
   return {
     kind: "restore_thirst",
+    amount,
+  };
+}
+
+/**
+ * DSL Helper: Define a hunger restoration effect.
+ */
+export function RestoreHunger(amount: number): RestoreHungerEffect {
+  return {
+    kind: "restore_hunger",
     amount,
   };
 }

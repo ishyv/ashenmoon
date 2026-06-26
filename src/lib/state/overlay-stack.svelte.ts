@@ -64,6 +64,10 @@ export const OverlayId = {
   Station:   "station",
   ObjectActions: "object-actions",
   Carcass:   "carcass",
+  Medicine:  "medicine",
+  Construction: "construction",
+  Equipment: "equipment",
+  Quests:    "quests",
 } as const;
 
 export type OverlayId = (typeof OverlayId)[keyof typeof OverlayId];
@@ -114,6 +118,11 @@ export const overlayStack = {
    */
   popTop(): OverlayId | undefined {
     return _stack.pop();
+  },
+
+  /** Clear all overlays on the stack. */
+  clear(): void {
+    _stack.length = 0;
   },
 
   /** True if the given overlay is currently registered as open. */

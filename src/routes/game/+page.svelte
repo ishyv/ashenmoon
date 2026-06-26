@@ -8,7 +8,7 @@ import { registerDevCommands } from "$lib/ui/debug/dev-commands";
 import DevConsole from "$lib/ui/debug/DevConsole.svelte";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import GameHud from "$lib/ui/hud/GameHud.svelte";
-import InputConfigHub, { type Bindings } from "$lib/ui/debug/InputConfigHub.svelte";
+import SettingsMenu, { type Bindings } from "$lib/ui/panels/SettingsMenu.svelte";
 import EquipmentPanel from "$lib/ui/panels/EquipmentPanel.svelte";
 import InventoryGrid from "$lib/ui/panels/InventoryGrid.svelte";
 import EnvironmentGauge from "$lib/ui/hud/EnvironmentGauge.svelte";
@@ -29,7 +29,11 @@ import { dialogueState, activeQuests } from "$lib/state/rpg/quests.svelte";
 import StationPanel from "$lib/ui/panels/StationPanel.svelte";
 import CarcassPanel from "$lib/ui/panels/CarcassPanel.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
+import TreatmentPanel from "$lib/ui/panels/TreatmentPanel.svelte";
+import ConstructionOverlay from "$lib/ui/elements/ConstructionOverlay.svelte";
+import { StorageKeys } from "$lib/domain/game-events";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
+import TopHudActions from "$lib/ui/hud/TopHudActions.svelte";
 
 let containerEl = $state<HTMLDivElement | null>(null);
 let engine     = $state<GameEngine | null>(null);
@@ -44,7 +48,12 @@ const showSkills    = $derived(overlayStack.has(OverlayId.Skills));
 const showScenario  = $derived(overlayStack.has(OverlayId.Scenario));
 const showStation   = $derived(overlayStack.has(OverlayId.Station));
 const showCarcass   = $derived(overlayStack.has(OverlayId.Carcass));
+const showMedicine  = $derived(overlayStack.has(OverlayId.Medicine));
+const showConstruction = $derived(overlayStack.has(OverlayId.Construction));
+const showEquipment = $derived(overlayStack.has(OverlayId.Equipment));
+const showQuests    = $derived(overlayStack.has(OverlayId.Quests));
 let activeScenarioId = $state<string | null>(null);
+const showDevHud = $derived(activeScenarioId !== null);
 let activeStationEntity = $state<Entity | null>(null);
 let carcassPanelTargetId = $state<string | null>(null);
 let contextMenu   = $state<WorldContextMenuTarget | null>(null);
@@ -78,6 +87,14 @@ function toggleSkills() {
   showSkills ? overlayStack.close(OverlayId.Skills) : overlayStack.push(OverlayId.Skills);
 }
 
+function toggleEquipment() {
+  showEquipment ? overlayStack.close(OverlayId.Equipment) : overlayStack.push(OverlayId.Equipment);
+}
+
+function toggleQuests() {
+  showQuests ? overlayStack.close(OverlayId.Quests) : overlayStack.push(OverlayId.Quests);
+}
+
 let inventoryTab = $state<"stash" | "crafting" | "building">("stash");
 
 function toggleInventory() {
@@ -98,13 +115,15 @@ function toggleCrafting() {
   }
 }
 
-function openSettings() {
-  overlayStack.push(OverlayId.Settings);
+function toggleSettings() {
+  showSettings ? overlayStack.close(OverlayId.Settings) : overlayStack.push(OverlayId.Settings);
 }
 
 function toggleScenario() {
   showScenario ? overlayStack.close(OverlayId.Scenario) : overlayStack.push(OverlayId.Scenario);
 }
+
+let lastEscapeTime = 0;
 
 function handleGlobalKeyDown(e: KeyboardEvent) {
   if (devConsole.open) return;
@@ -118,10 +137,19 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
       e.preventDefault();
       return;
     }
-    if (!overlayStack.isEmpty) {
-      overlayStack.popTop();
+    const now = performance.now();
+    if (now - lastEscapeTime < 300) {
+      // Double press: close all menus
+      overlayStack.clear();
       e.preventDefault();
+    } else {
+      // Single press: close topmost menu
+      if (!overlayStack.isEmpty) {
+        overlayStack.popTop();
+        e.preventDefault();
+      }
     }
+    lastEscapeTime = now;
     return;
   }
 
@@ -136,6 +164,14 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
   }
   if (e.key === "c" || e.key === "C") {
     toggleSkills();
+    return;
+  }
+  if (e.key === "i" || e.key === "I") {
+    toggleEquipment();
+    return;
+  }
+  if (e.key === "j" || e.key === "J") {
+    toggleQuests();
     return;
   }
 }
@@ -159,16 +195,52 @@ $effect(() => {
 });
 
 // --- Station Panel â†” stack sync ------------------------------------------
+// --- Station & Construction Panel ↔ stack sync ----------------------------
 $effect(() => {
-  if (!overlayStack.has(OverlayId.Station) && activeStationEntity) {
+  const hasStation = overlayStack.has(OverlayId.Station);
+  const hasConstruction = overlayStack.has(OverlayId.Construction);
+  console.log("[DEBUG SVELTE EFFECT] Station/Construction Stack sync:", {
+    hasStation,
+    hasConstruction,
+    activeStationEntityId: activeStationEntity?.id ?? null
+  });
+  if (!hasStation && !hasConstruction && activeStationEntity) {
+    console.log("[DEBUG SVELTE EFFECT] Clearing activeStationEntity");
     activeStationEntity = null;
   }
 });
 
-// --- Carcass Panel â†” stack sync ------------------------------------------
+// --- Carcass Panel ↔ stack sync ------------------------------------------
 $effect(() => {
-  if (!overlayStack.has(OverlayId.Carcass) && carcassPanelTargetId) {
+  const hasCarcass = overlayStack.has(OverlayId.Carcass);
+  console.log("[DEBUG SVELTE EFFECT] Carcass Stack sync:", {
+    hasCarcass,
+    carcassPanelTargetId
+  });
+  if (!hasCarcass && carcassPanelTargetId) {
+    console.log("[DEBUG SVELTE EFFECT] Clearing carcassPanelTargetId");
     carcassPanelTargetId = null;
+  }
+});
+
+// --- Equipment Panel ↔ inventory sync preference --------------------------
+$effect(() => {
+  if (uiPreferences.equipOnlyWithStash) {
+    if (showInventory) {
+      overlayStack.push(OverlayId.Equipment);
+    } else {
+      overlayStack.close(OverlayId.Equipment);
+    }
+  }
+});
+
+// --- Quest Tracker ↔ quest state change sync ------------------------------
+let lastQuestId = $state<string | null>(null);
+$effect(() => {
+  const current = activeQuests.currentQuestId;
+  if (current && current !== "completed_all" && current !== lastQuestId) {
+    lastQuestId = current;
+    overlayStack.push(OverlayId.Quests);
   }
 });
 
@@ -181,6 +253,7 @@ $effect(() => {
     const dy = coords.gy - py;
     if (Math.hypot(dx, dy) > 4.5) {
       overlayStack.close(OverlayId.Station);
+      overlayStack.close(OverlayId.Construction);
       activeStationEntity = null;
     }
   }
@@ -202,19 +275,28 @@ onMount(async () => {
   loadGameState();
   loadPanelPositions();
   if (!containerEl) return;
-  const scenarioParam = new URLSearchParams(window.location.search).get("scenario") ?? undefined;
-  activeScenarioId = scenarioParam ?? null;
+  const hasSave = typeof window !== "undefined" && window.localStorage && window.localStorage.getItem(StorageKeys.rpg);
+  const scenarioParam = new URLSearchParams(window.location.search).get("scenario") ?? (hasSave ? "normal" : "alpha_start");
+  activeScenarioId = scenarioParam === "normal" ? null : scenarioParam;
   engine = new GameEngine({
     container: containerEl,
     onInteract: handleInteract,
     onHudUpdate,
     onContextMenu: handleContextMenu,
-    ...(scenarioParam !== undefined ? { scenarioId: scenarioParam } : {}),
+    ...(activeScenarioId ? { scenarioId: activeScenarioId } : {}),
     onStationInteract: (target) => {
+      console.log("[DEBUG SVELTE] onStationInteract called with target:", { id: target.id, building: target.building });
       activeStationEntity = target;
-      overlayStack.push(OverlayId.Station);
+      if (target.building && target.building.stage < 5) {
+        console.log("[DEBUG SVELTE] Pushing Construction overlay");
+        overlayStack.push(OverlayId.Construction);
+      } else {
+        console.log("[DEBUG SVELTE] Pushing Station overlay");
+        overlayStack.push(OverlayId.Station);
+      }
     },
     onOpenCarcassPanel: (id) => {
+      console.log("[DEBUG SVELTE] onOpenCarcassPanel called with id:", id);
       carcassPanelTargetId = id;
       overlayStack.push(OverlayId.Carcass);
     },
@@ -294,9 +376,9 @@ onDestroy(() => {
 </svelte:head>
 
 <svelte:window
-  on:mousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
-  on:keydown={handleGlobalKeyDown}
-  on:contextmenu={(e) => e.preventDefault()}
+  onmousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
+  onkeydown={handleGlobalKeyDown}
+  oncontextmenu={(e) => e.preventDefault()}
 />
 
 <div class="shell">
@@ -304,23 +386,21 @@ onDestroy(() => {
   <div class="vignette"></div>
 
   <!-- Top-Right Settings Gear Button -->
-  <div class="top-bar">
-    <button class="settings-trigger-btn" onclick={toggleSkills} title="Open Skill Progression">
-      skills
-    </button>
-    <button class="settings-trigger-btn" class:active-scenario={showInventory && inventoryTab === "stash"} onclick={toggleInventory} title="Open Stash Inventory">
-      stash
-    </button>
-    <button class="settings-trigger-btn" class:active-scenario={showInventory && inventoryTab === "crafting"} onclick={toggleCrafting} title="Open Crafting Panel">
-      craft
-    </button>
-    <button class="settings-trigger-btn" onclick={openSettings} title="Configure Controls">
-      controls
-    </button>
-    <button class="settings-trigger-btn" class:active-scenario={activeScenarioId !== null} onclick={toggleScenario} title="Scenario tools">
-      scenario
-    </button>
-  </div>
+  <TopHudActions
+    {showInventory}
+    {inventoryTab}
+    showScenarioTools={showDevHud}
+    activeScenario={activeScenarioId !== null}
+    showEquipment={showEquipment}
+    showQuests={showQuests}
+    onSkills={toggleSkills}
+    onInventory={toggleInventory}
+    onCrafting={toggleCrafting}
+    onEquipment={toggleEquipment}
+    onQuests={toggleQuests}
+    onSettings={toggleSettings}
+    onScenario={toggleScenario}
+  />
 
   {#if activeScenarioId}
     <div class="scenario-badge">scenario: {activeScenarioId}</div>
@@ -328,29 +408,30 @@ onDestroy(() => {
 
   <div class="hud-corner">
     {#if lookAt}
-      <div class="look-at">
-        <span class="look-icon">◈</span> {lookAt} <kbd>E</kbd>
+      <div class="look-at focused-hint">
+        <span class="look-icon">◈</span>
+        <kbd>E</kbd>
+        <span>{lookAt}</span>
+      </div>
+    {:else}
+      <div class="legend subtle-hint">
+        <kbd>WASD</kbd> move
+        <span class="sep">·</span>
+        <kbd>Tab</kbd> stash
       </div>
     {/if}
     {#if coords}
       <div class="coords">{coords.gx}, {coords.gy}</div>
     {/if}
-    <div class="legend">
-      <kbd>WASD</kbd> move
-      <span class="sep">·</span>
-      <kbd>E</kbd> harvest
-      <span class="sep">·</span>
-      <kbd>/</kbd> console
-      <span class="sep">·</span>
-      <span>scroll zoom</span>
-    </div>
   </div>
 
   <div class="left-panels-container">
-    {#if !uiPreferences.equipOnlyWithStash || showInventory}
-      <EquipmentPanel />
+    {#if showEquipment}
+      <EquipmentPanel onClose={() => overlayStack.close(OverlayId.Equipment)} />
     {/if}
-    <QuestTracker />
+    {#if showQuests}
+      <QuestTracker onClose={() => overlayStack.close(OverlayId.Quests)} />
+    {/if}
   </div>
 
   {#if showInventory}
@@ -372,6 +453,17 @@ onDestroy(() => {
         if (!overlayStack.has(OverlayId.Inventory)) {
           overlayStack.push(OverlayId.Inventory);
         }
+      }}
+    />
+  {/if}
+
+  {#if showConstruction && activeStationEntity}
+    <ConstructionOverlay
+      entity={activeStationEntity}
+      {engine}
+      onClose={() => {
+        overlayStack.close(OverlayId.Construction);
+        activeStationEntity = null;
       }}
     />
   {/if}
@@ -402,7 +494,7 @@ onDestroy(() => {
   <DevConsole />
 
   {#if showSettings}
-    <InputConfigHub
+    <SettingsMenu
       onClose={() => overlayStack.close(OverlayId.Settings)}
       onUpdate={handleBindingsUpdate}
     />
@@ -410,6 +502,10 @@ onDestroy(() => {
 
   {#if showSkills}
     <SkillTreePanel onClose={() => overlayStack.close(OverlayId.Skills)} />
+  {/if}
+
+  {#if showMedicine}
+    <TreatmentPanel onClose={() => overlayStack.close(OverlayId.Medicine)} />
   {/if}
 
   {#if contextMenu}
@@ -498,6 +594,10 @@ onDestroy(() => {
     gap: 0.4rem;
     font-size: 0.78rem;
     color: rgba(255, 220, 120, 0.9);
+    background: rgba(8, 7, 6, 0.42);
+    border: 1px solid rgba(255, 220, 120, 0.22);
+    border-radius: 4px;
+    padding: 0.22rem 0.4rem;
   }
 
   .look-icon {
@@ -515,8 +615,20 @@ onDestroy(() => {
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.25);
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(8, 7, 6, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 0.2rem 0.35rem;
+  }
+
+  .subtle-hint {
+    opacity: 0.55;
+  }
+
+  .focused-hint {
+    color: rgba(255, 220, 120, 0.9);
   }
 
   kbd {
@@ -561,36 +673,6 @@ onDestroy(() => {
     color: rgba(255, 255, 255, 0.82);
     pointer-events: auto;
     animation: pop 0.12s ease;
-  }
-
-  /* Top bar for configuration hubs */
-  .top-bar {
-    position: absolute;
-    top: 1.1rem;
-    right: 1.1rem;
-    display: flex;
-    gap: 0.5rem;
-    z-index: 10;
-  }
-
-  .settings-trigger-btn {
-    background: rgba(18, 14, 12, 0.72);
-    border: 1px solid rgba(255, 220, 120, 0.25);
-    border-radius: 4px;
-    padding: 0.4rem 0.8rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.72rem;
-    color: rgba(255, 220, 120, 0.9);
-    cursor: pointer;
-    backdrop-filter: blur(2px);
-    transition: all 0.12s;
-  }
-
-  .settings-trigger-btn:hover {
-    background: rgba(255, 220, 120, 0.15);
-    border-color: rgba(255, 220, 120, 0.75);
-    box-shadow: 0 0 8px rgba(255, 220, 120, 0.15);
-    color: var(--color-text, white);
   }
 
   @keyframes pop {
@@ -656,11 +738,6 @@ onDestroy(() => {
     color: var(--color-danger, tomato);
   }
 
-  .settings-trigger-btn.active-scenario {
-    border-color: rgba(255, 220, 120, 0.6);
-    background: rgba(255, 220, 120, 0.12);
-  }
-
   .scenario-badge {
     position: absolute;
     top: 3.7rem;
@@ -683,6 +760,11 @@ onDestroy(() => {
     gap: 1rem;
     z-index: 90;
     pointer-events: none;
+  }
+
+  .left-panels-container :global(.game-panel-wrapper),
+  :global(.inventory-container) :global(.game-panel-wrapper) {
+    position: relative !important;
   }
 </style>
 

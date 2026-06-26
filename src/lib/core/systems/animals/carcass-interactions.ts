@@ -1,5 +1,9 @@
 import type { Container } from "pixi.js";
-import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import { world, type Entity } from "$lib/core/ecs/ecs-miniplex";
+import { despawnEntity } from "$lib/core/systems/combat/combat";
+import { TILE } from "$lib/core/systems/map/map";
+import { buildCarcassSprite } from "$lib/core/systems/animals/carcass-runtime";
+import { computeRenderZ } from "$lib/domain/collision";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import type { VFXResource } from "$lib/core/vfx/vfx";
 import { spawnEnvParticles } from "$lib/core/vfx/vfx";
@@ -11,9 +15,11 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
 import { applyWound } from "$lib/state/rpg/wounds.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
+import { discoverSource } from "$lib/state/rpg/knowledge.svelte";
 import {
   resolveCarcassProcessing,
   resolveCarcassToolQuality,
+  M3_CARCASS_DEFINITIONS,
   type CarcassProcessAction,
 } from "$lib/domain/animals/carcass-processing";
 import { actionsForCarcass, type WorldActionOption } from "$lib/domain/world-actions";
@@ -50,6 +56,7 @@ export function completeCarcassWorldAction(
   runtime: WorldActionRuntime,
   vfx: VFXResource,
   entityLayer: Container,
+  entitySprites: Map<string, Container>,
   events?: GameEventQueue,
 ): void {
   const carcass = target.carcass;
@@ -61,7 +68,7 @@ export function completeCarcassWorldAction(
 
   const toolQuality = resolveCarcassToolQuality({
     equippedItemId: getEquippedWeaponId(),
-    hasSharpFlint: getItemQty("flint_shard") > 0 || getItemQty("bone_shard") > 0,
+    hasSharpFlint: getItemQty("flint_shard") > 0 || getItemQty("stone_blade") > 0,
   });
   const result = resolveCarcassProcessing({
     carcass,
@@ -79,15 +86,66 @@ export function completeCarcassWorldAction(
   carcass.processedActions = [...carcass.processedActions, result.action];
   carcass.state = result.nextState;
 
-  void (async () => {
-    for (const yieldItem of result.yields) {
-      const sync = await syncPickup(yieldItem.itemId, `${target.id}:${result.action}:${yieldItem.itemId}`, yieldItem.qty);
-      if (sync.ok) {
-        applyRpgState(sync.data.playerState);
-        events?.push({ type: "item_gained", itemId: yieldItem.itemId, qty: yieldItem.qty, source: "carcass" });
+  const definition = M3_CARCASS_DEFINITIONS[carcass.speciesId];
+  const allActions: Exclude<CarcassProcessAction, "inspect">[] = [
+    "harvest_meat",
+    "remove_hide",
+    "extract_bone",
+    "collect_sinew",
+  ];
+  const isFullyProcessed = allActions.every((act) => {
+    const actDef = definition?.actions[act];
+    return !actDef || actDef.yields.length === 0 || carcass.processedActions.includes(act);
+  });
+
+  if (isFullyProcessed) {
+    despawnEntity(world, target, entityLayer, entitySprites, vfx);
+    const yieldText = result.yields
+      .map((yieldItem) => `+${yieldItem.qty} ${getItemDef(yieldItem.itemId)?.name.toLowerCase() ?? yieldItem.itemId}`)
+      .join(", ");
+    events?.push({ type: "feedback_requested", channel: "ui", message: (yieldText ? yieldText + " · " : "") + "carcass fully harvested", tone: "success" });
+    spawnEnvParticles(vfx, Colors.combat.enemyDeath, 5, "sizzle", player.position, entityLayer);
+
+    void (async () => {
+      for (const yieldItem of result.yields) {
+        const sync = await syncPickup(yieldItem.itemId, `${target.id}:${result.action}:${yieldItem.itemId}`, yieldItem.qty);
+        if (sync.ok) {
+          applyRpgState(sync.data.playerState);
+          events?.push({ type: "item_gained", itemId: yieldItem.itemId, qty: yieldItem.qty, source: "carcass" });
+          if (target.interactable?.name) {
+            discoverSource(yieldItem.itemId, target.interactable.name);
+          }
+        }
       }
+    })();
+  } else {
+    if (target.position) {
+      const oldSprite = entitySprites.get(target.id);
+      if (oldSprite) {
+        entityLayer.removeChild(oldSprite);
+        oldSprite.destroy({ children: true });
+      }
+      const cx = target.position.x + TILE / 2;
+      const cy = target.position.y + TILE * 0.72;
+      const sprite = buildCarcassSprite(carcass.speciesId, carcass.state, cx, cy);
+      sprite.zIndex = computeRenderZ(cy);
+      entityLayer.addChild(sprite);
+      entitySprites.set(target.id, sprite);
     }
-  })();
+
+    void (async () => {
+      for (const yieldItem of result.yields) {
+        const sync = await syncPickup(yieldItem.itemId, `${target.id}:${result.action}:${yieldItem.itemId}`, yieldItem.qty);
+        if (sync.ok) {
+          applyRpgState(sync.data.playerState);
+          events?.push({ type: "item_gained", itemId: yieldItem.itemId, qty: yieldItem.qty, source: "carcass" });
+          if (target.interactable?.name) {
+            discoverSource(yieldItem.itemId, target.interactable.name);
+          }
+        }
+      }
+    })();
+  }
 
   for (const risk of result.risks) {
     if (Math.random() < risk.chance) {

@@ -9,13 +9,13 @@
  * SSR/test safe: with no AudioContext available, every call is a silent no-op.
  */
 
-import { SOUNDS, type Bus, type SoundId, type AmbientBiome } from "./sound-manifest";
+import { SOUNDS, type Bus, type SoundId, type AmbientBiome, type SoundDef } from "./sound-manifest";
 import { RECIPES } from "./recipes";
 import { getSampleBuffer, preloadSamples } from "./sample-loader";
 import { shouldThrottle, spatialGainPan, type Vec2 } from "./spatial";
 import type { RecipeParams } from "./recipes";
 
-const ORDERED_BUSES: Bus[] = ["sfx", "ambient", "ui", "music"];
+const ORDERED_BUSES: Bus[] = ["music", "sfx", "ui", "ambient", "entities"];
 /** Soft cap: at most this many voices may start within VOICE_WINDOW_MS. */
 const VOICE_WINDOW_MS = 60;
 const MAX_VOICES_PER_WINDOW = 16;
@@ -29,8 +29,14 @@ interface Engine {
 let engine: Engine | null = null;
 let initFailed = false;
 let muted = false;
-let masterVolume = 1;
-const busVolumes: Record<Bus, number> = { sfx: 1, ambient: 0.6, ui: 0.9, music: 0.7 };
+let masterVolume = 0.8;
+const busVolumes: Record<Bus, number> = {
+  music: 0.5,
+  sfx: 0.8,
+  ui: 0.7,
+  ambient: 0.65,
+  entities: 0.8,
+};
 const listener: Vec2 = { x: 0, y: 0 };
 const lastPlayed = new Map<string, number>();
 const recentVoices: number[] = [];
@@ -103,6 +109,47 @@ export interface PlayOpts {
   pitch?: number;
   /** Forwarded to the recipe (e.g. combo `stacks`). */
   params?: RecipeParams;
+  /** Key-value pairs for conditional sound variations. */
+  conditions?: Record<string, string | number | boolean>;
+}
+
+/** Evaluate current conditions against variations defined in SoundDef. First match wins. */
+export function resolveSoundDef(
+  def: SoundDef,
+  conditions?: Record<string, string | number | boolean>,
+) {
+  const pitchJitter = def.pitchJitter ?? 0;
+  const gainJitter = def.gainJitter ?? 0;
+  const baseGain = def.gain ?? 1;
+
+  if (def.variations && conditions) {
+    for (const variant of def.variations) {
+      let matches = true;
+      for (const [key, value] of Object.entries(variant.conditions)) {
+        if (conditions[key] !== value) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return {
+          recipe: variant.recipe ?? def.recipe,
+          sample: variant.sample ?? def.sample,
+          gain: variant.gain ?? baseGain,
+          pitchJitter: variant.pitchJitter ?? pitchJitter,
+          gainJitter: variant.gainJitter ?? gainJitter,
+        };
+      }
+    }
+  }
+
+  return {
+    recipe: def.recipe,
+    sample: def.sample,
+    gain: baseGain,
+    pitchJitter,
+    gainJitter,
+  };
 }
 
 /** Play a sound by event id. Silent no-op when muted, throttled, or capped. */
@@ -119,6 +166,9 @@ export function playSound(id: SoundId, opts: PlayOpts = {}): void {
   while (recentVoices.length > 0 && nowMs - (recentVoices[0] ?? nowMs) > VOICE_WINDOW_MS) recentVoices.shift();
   if (recentVoices.length >= MAX_VOICES_PER_WINDOW) return;
 
+  // Resolve conditional overrides
+  const resolved = resolveSoundDef(def, opts.conditions);
+
   const voiceGain = ctx.createGain();
   let spatialGain = 1;
   if (def.spatial && opts.position) {
@@ -132,20 +182,34 @@ export function playSound(id: SoundId, opts: PlayOpts = {}): void {
   } else {
     voiceGain.connect(e.buses[def.bus]);
   }
-  voiceGain.gain.value = (opts.gain ?? def.gain ?? 1) * spatialGain;
+
+  // Calculate final gain with options, resolved base, and random volume jitter
+  let finalGain = (opts.gain ?? resolved.gain) * spatialGain;
+  if (resolved.gainJitter > 0) {
+    const jitter = (Math.random() * 2 - 1) * resolved.gainJitter;
+    finalGain *= (1 + jitter);
+  }
+  voiceGain.gain.value = finalGain;
 
   lastPlayed.set(id, nowMs);
   recentVoices.push(nowMs);
 
-  const buffer = getSampleBuffer(id);
+  const buffer = getSampleBuffer(resolved.sample);
   if (buffer) {
     const src = ctx.createBufferSource();
     src.buffer = buffer;
-    if (opts.pitch) src.detune.value = opts.pitch;
+    
+    // Apply pitch detune + random pitch jitter detune
+    let detuneValue = opts.pitch ?? 0;
+    if (resolved.pitchJitter > 0) {
+      detuneValue += (Math.random() * 2 - 1) * resolved.pitchJitter;
+    }
+    src.detune.value = detuneValue;
+    
     src.connect(voiceGain);
     src.start();
   } else {
-    RECIPES[def.recipe]({ ctx, out: voiceGain, now: ctx.currentTime, rng: Math.random }, opts.params);
+    RECIPES[resolved.recipe]({ ctx, out: voiceGain, now: ctx.currentTime, rng: Math.random }, opts.params);
   }
 }
 

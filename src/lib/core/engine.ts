@@ -11,32 +11,16 @@ import {
 } from "pixi.js";
 import {
   generateCampfireGlowTexture,
-  getStumpTexture,
-  getTreeFrames,
-  getWarriorFrames,
   loadGameAssets,
-  getBiomeTileTexture,
-  getShadowTexture,
-  getParticleFXFrames,
-  loadAssets,
-  pawnBundleForColor,
-  getPawnFrames,
-  type PawnTool,
-  type PawnAnim,
-  getWoodItemTexture,
-  BUNDLE_BUILDINGS,
-  getBuildingTexture,
-  getBushTexture,
-  getCloudTexture,
-  BUNDLE_TERRAIN_DECO,
-  BUNDLE_PARTICLES,
-  BUNDLE_RESOURCES,
-  BUNDLE_WARRIORS,
-  BUNDLE_SHIKASHI,
-  BUNDLE_ICONS32,
   type UnitColor,
-  type WarriorAnimKey,
 } from "$lib/core/assets/assets";
+import {
+  createStandeeShadow,
+  getAshenmoonActorFrames,
+  getAshenmoonStructureKeyForBuildingType,
+  getAshenmoonStructureTexture,
+  getAshenmoonTextureByKey,
+} from "$lib/core/assets/ashenmoon-assets";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import { type Entity, world } from "$lib/core/ecs/ecs-miniplex";
 import {
@@ -104,6 +88,7 @@ import {
   drivingThrustSystem,
   renderDrivingThrustPreview,
 } from "$lib/core/systems/combat/driving-thrust";
+import { weaponAttackSystem } from "$lib/core/systems/combat/weapon-attack-system";
 import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
 import { animalEcologySystem, spawnInitialAnimalsSystem } from "$lib/core/systems/animals/animal-ecology-system";
 import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
@@ -130,8 +115,10 @@ import {
   updatePlacementPreviewSystem,
   placeBuildingSystem,
   spawnBuildingSystem,
+  upgradeBuildingSystem,
   isValidPlacement,
 } from "$lib/core/systems/building/building-system";
+import { runBuildingInteriorSystem } from "$lib/core/systems/building/building-interior-system";
 import { createStationProcessRuntime, stationProcessVerb, STATION_PROCESSES } from "$lib/domain/systems/station-process";
 import {
   actionsForCarcass,
@@ -156,7 +143,7 @@ import { setRpgProfile, equipLocalWeapon, applyRpgState } from "$lib/state/rpg-a
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 import { tickStamina, stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
-import { tickThirst, loadSurvival } from "$lib/state/rpg/survival.svelte";
+import { tickThirst, tickHunger, loadSurvival } from "$lib/state/rpg/survival.svelte";
 import {
   tickStatusEffects,
   getStatusModifiers,
@@ -170,6 +157,7 @@ import { tickWetnessState, wetnessState } from "$lib/state/rpg/wetness.svelte";
 import { setColdAccumulator } from "$lib/state/rpg/cold-exposure.svelte";
 import { tickExposureSystem } from "$lib/core/systems/exposure/exposure-system";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
+import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import {
   ItemPlacementResource,
   updateItemPlacementPreviewSystem,
@@ -187,7 +175,7 @@ import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId, SkillKey, InputAction, GameEvent } from "$lib/domain/game-events";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/state/rpg/skill-xp";
-import { awardCharacterXp, getPlayerStats } from "$lib/state/rpg/stats.svelte";
+import { awardCharacterXp, getPlayerStats, getCharacterLevel, levelUpEvent } from "$lib/state/rpg/stats.svelte";
 import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { getPrefabDefinition } from "$lib/domain/definition-registry";
@@ -226,6 +214,16 @@ import {
 } from "$lib/domain/collision";
 import { createGameEventQueue, type QueuedGameEvent } from "$lib/domain/game-event-queue";
 import { routeGameEventsToFeedback } from "$lib/core/systems/feedback/feedback-router";
+import { getDiscoveryBark, type DiscoveryBarkId } from "$lib/domain/discovery/discovery-barks";
+import { getActionFeedback } from "$lib/domain/feedback/action-feedback";
+import {
+  createFirstCampPresentationState,
+  initFirstCampPresentation,
+  updateFirstCampPresentation,
+  type FirstCampPresentationState,
+} from "$lib/core/systems/first-camp/first-camp-presentation";
+import { FIRST_NIGHT_OMENS } from "$lib/domain/events/omen-events";
+import { firstLoopProgress } from "$lib/state/rpg/quests.svelte";
 
 export class GameEngine {
   private app!: Application;
@@ -259,10 +257,19 @@ export class GameEngine {
   private playerFacing: { x: number; y: number } = { x: 0, y: 1 };
   private playerAnimState: AnimState = "idle";
   private lastEquippedWeapon: string | null = null;
+  private lastObservedLevelUpSeq = 0;
 
   private enemySeq = 1;
   private animalSeq = 1;
   private devSpawnSeq = 1;
+  private buildingChannel: {
+    buildingId: string;
+    nextStage: number;
+    timer: number;
+    duration: number;
+    cost: Record<string, number>;
+    onComplete: () => Promise<boolean>;
+  } | null = null;
 
   private runtimeRegistry = createRuntimeRegistry([defaultRuntimeFeature]);
   private scheduler = new RuntimeScheduler([
@@ -301,6 +308,8 @@ export class GameEngine {
   private playerEntity!: Entity;
   private playerSprite!: AnimatedSprite;
   private playerShadow!: Sprite;
+  private attachmentSprites = new Map<string, Sprite>();
+  private lastEquippedLoadout: Record<string, string | null> = {};
 
   // Campfire glow
   private campfireGlow!: Sprite;
@@ -332,6 +341,9 @@ export class GameEngine {
   private scenarioId: string | null = null;
   private collisionOverrides = new Map<string, CollisionFootprint>();
 
+  // First-camp experience presentation state.
+  private firstCampState: FirstCampPresentationState = createFirstCampPresentationState();
+
   constructor(config: GameEngineConfig) {
     this.containerEl = config.container;
     this.onInteract = config.onInteract;
@@ -340,6 +352,7 @@ export class GameEngine {
     this.onStationInteract = config.onStationInteract;
     this.onOpenCarcassPanel = config.onOpenCarcassPanel;
     this.scenarioId = config.scenarioId ?? null;
+    this.lastObservedLevelUpSeq = levelUpEvent.seq;
   }
 
   public async init(): Promise<void> {
@@ -357,17 +370,8 @@ export class GameEngine {
       });
       this.containerEl.appendChild(this.app.canvas);
 
-      // Load static bundles
+      // Load first-party Ashenmoon bundle only; old sprite-pack bundles must not be eagerly preloaded.
       await loadGameAssets();
-      await loadAssets(BUNDLE_WARRIORS);
-      await loadAssets(pawnBundleForColor("blue"));
-      await loadAssets(pawnBundleForColor("yellow"));
-      await loadAssets(BUNDLE_BUILDINGS);
-      await loadAssets(BUNDLE_TERRAIN_DECO);
-      await loadAssets(BUNDLE_PARTICLES);
-      await loadAssets(BUNDLE_RESOURCES);
-      await loadAssets(BUNDLE_SHIKASHI);
-      await loadAssets(BUNDLE_ICONS32);
 
       // Setup listeners via input resource
       const canvas = this.app.canvas as HTMLCanvasElement;
@@ -391,13 +395,17 @@ export class GameEngine {
       if (this.scenarioId) {
         const sc = getScenario(this.scenarioId);
         if (sc) {
-          loadScenarioIntoMap(this.mapResource, sc);
+          if (sc.firstCampLayout) {
+            buildMapSystem(this.mapResource, gameState.rpg.profile?.worldSeed ?? 12345, { carveCamp: sc.camp });
+          } else {
+            loadScenarioIntoMap(this.mapResource, sc);
+          }
         } else {
           console.warn(`[scenario] unknown id "${this.scenarioId}", falling back to procedural`);
-          buildMapSystem(this.mapResource);
+          buildMapSystem(this.mapResource, gameState.rpg.profile?.worldSeed ?? 12345);
         }
       } else {
-        buildMapSystem(this.mapResource);
+        buildMapSystem(this.mapResource, gameState.rpg.profile?.worldSeed ?? 12345);
       }
 
       // Attach layers to stage
@@ -432,6 +440,15 @@ export class GameEngine {
 
       // Populate entities
       this.spawnEntities();
+
+      // Trigger the cold-firepit discovery bark once on init.
+      initFirstCampPresentation({
+        map: this.mapResource,
+        playerTile: { x: Math.floor(this.mapResource.mapW / 2), y: Math.floor(this.mapResource.mapH / 2) },
+        emitBark: (id) => this.emitDiscoveryBark(id),
+        emitOmen: () => this.emitFirstNightOmen(),
+        state: this.firstCampState,
+      });
 
       // Survival state: restore persisted thirst/statuses and hook the
       // feedback + hp sinks so state modules can reach the canvas/player.
@@ -533,6 +550,24 @@ export class GameEngine {
 
   private tickFrame(dt: number): void {
     try {
+      this.checkLoadoutChanged();
+
+      // Check if player cancels building channeling by trying to move
+      if (this.buildingChannel) {
+        const isMovingInput =
+          this.inputResource.isActionPressed(InputAction.MoveUp) ||
+          this.inputResource.isActionPressed(InputAction.MoveDown) ||
+          this.inputResource.isActionPressed(InputAction.MoveLeft) ||
+          this.inputResource.isActionPressed(InputAction.MoveRight) ||
+          this.movementResource.isDashing;
+
+        if (isMovingInput) {
+          spawnEnvFloatingText(this.vfxResource, "building cancelled", Colors.ui.error, this.playerEntity.position!, this.entityLayer);
+          this.buildingChannel = null;
+          this.setPlayerAnim("idle");
+        }
+      }
+
       // Run player movement system
       const wasSprinting = playerMovementSystem(
         world,
@@ -604,8 +639,6 @@ export class GameEngine {
         dt,
         {
           triggerQuestEvent,
-          getTreeFrames,
-          getStumpTexture,
           setPlayerAnim: (state) => this.setPlayerAnim(state),
           onHit: (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
           zeroCooldowns: gameState.rpg.profile === null,
@@ -670,7 +703,6 @@ export class GameEngine {
               this.vfxResource,
               this.entityLayer,
               this.entitySprites,
-              getBuildingTexture,
               triggerQuestEvent,
               () => this.cancelBuildingPlacement(),
               this.buildingResource.onPlacementCompleteCb
@@ -739,10 +771,6 @@ export class GameEngine {
           (txt) => devConsole.log(txt),
           triggerQuestEvent,
           dialogueState,
-          getParticleFXFrames,
-          getWoodItemTexture,
-          getTreeFrames,
-          getStumpTexture,
           this.buildingResource.isPlacementMode,
           this.movementResource.isDashing,
           (entity, yieldName, quantity) => this.handleHit(entity, yieldName, quantity),
@@ -753,6 +781,9 @@ export class GameEngine {
           this.eventQueue,
         );
       }
+
+      // Run building interior fading system
+      runBuildingInteriorSystem(world, this.entitySprites, dt);
 
       // --- Combat ---
       // Evade (neutral dash) also dodges enemy strikes: mirror the movement
@@ -772,6 +803,32 @@ export class GameEngine {
       // The player's own swings pause during a focused-gathering session; clicks
       // belong to the minigame.
       if (!focusedGatherActive) {
+        // Weapon-driven path first: it claims the gesture for weapons that have an
+        // explicit definition and clears the legacy pending flags so the old combo
+        // systems below stay dormant for those weapons.
+        weaponAttackSystem({
+          world,
+          inputs: this.inputResource,
+          combat: this.combatResource,
+          config: this.combatConfig,
+          vfx: this.vfxResource,
+          entityLayer: this.entityLayer,
+          dt,
+          player: this.playerEntity,
+          setPlayerAnim: (state) => this.setPlayerAnim(state),
+          isPlacementMode: this.buildingResource.isPlacementMode,
+          isDashing: this.movementResource.isDashing,
+          onEnemyKilled: (enemy) => handleEnemyDeathSystem(
+            enemy,
+            this.vfxResource,
+            this.entityLayer,
+            this.entitySprites,
+            this.enemyColors,
+            this.playerEntity.position!
+          ),
+          events: this.eventQueue,
+        });
+
         drivingThrustSystem(
           world,
           this.inputResource,
@@ -859,11 +916,11 @@ export class GameEngine {
         this.vfxResource,
         this.entityLayer,
         this.entitySprites,
-        (entity, state) => getWarriorFrames(state as WarriorAnimKey, this.enemyColors.get(entity.id) ?? "red"),
+        (_entity, state) => getAshenmoonActorFrames("wolf", state as AnimState),
         this.eventQueue
       );
 
-      animalEcologySystem(
+      this.animalSeq = animalEcologySystem(
         world,
         this.mapResource,
         dt,
@@ -876,6 +933,7 @@ export class GameEngine {
         findLitCampfires(world),
         this.worldEventTimeOfDay(),
         this.weatherResource.state.raining,
+        this.animalSeq,
         this.eventQueue,
       );
       tickEnemyBleedSystem(
@@ -901,12 +959,18 @@ export class GameEngine {
       // Pin the player sprite after any knockback displacement.
       this.playerSprite.x = this.playerEntity.position!.x + TILE / 2;
       this.playerSprite.y = this.playerEntity.position!.y + TILE;
+      this.updatePlayerVisualFeedback(dt);
 
       // --- Survival ---
       // Thirst drains with activity; statuses tick once per accumulated second
       // and hand back any pulse damage (bleeding, sickness fever).
       tickThirst(dt, {
-        moving: this.playerAnimState === "run",
+        moving: this.playerAnimState === "run" || this.playerAnimState === "walk",
+        laboring: this.interactionResource.gatheringTarget !== null,
+        raining: this.weatherResource.state.raining,
+      });
+      tickHunger(dt, {
+        moving: this.playerAnimState === "run" || this.playerAnimState === "walk",
         laboring: this.interactionResource.gatheringTarget !== null,
       });
 
@@ -997,6 +1061,16 @@ export class GameEngine {
       });
       this.lastFrameEvents = frameEvents;
 
+      if (levelUpEvent.seq > this.lastObservedLevelUpSeq) {
+        this.lastObservedLevelUpSeq = levelUpEvent.seq;
+        if (this.playerEntity.position) {
+          const pcx = this.playerEntity.position.x + TILE / 2;
+          const pcy = this.playerEntity.position.y + TILE / 2;
+          spawnLevelUpBurst(this.vfxResource, this.entityLayer, pcx, pcy);
+          playSound("player.levelup");
+        }
+      }
+
       // Pin shadow to player feet
       const shadowPos = this.playerEntity.position!;
       this.playerShadow.x = shadowPos.x + TILE / 2;
@@ -1022,7 +1096,13 @@ export class GameEngine {
         isMoving,
         this.movementResource.isDashing,
         isSprinting,
-        this.entityLayer
+        this.entityLayer,
+        (speed) => {
+          const terrain = this.currentFootstepTerrain();
+          playSound("player.footstep", {
+            conditions: { terrain, speed }
+          });
+        }
       );
 
       // Node shakes and squash recoveries updates
@@ -1040,13 +1120,105 @@ export class GameEngine {
       tickAmbient(dt, this.currentAmbientBiome());
 
       // Render targeting circles
-      gatherRingUpdateSystem(
-        this.vfxResource,
-        this.playerEntity.position!,
-        this.interactionResource.gatheringTarget,
-        this.interactionResource.currentGatherInterval,
-        this.interactionResource.gatherCooldownTimer
-      );
+      // Process building channeling tick
+      if (this.buildingChannel) {
+        // Face the player towards the building site
+        const building = world.entities.find((e) => e.id === this.buildingChannel!.buildingId);
+        if (building && building.position && this.playerEntity.position) {
+          const dx = building.position.x - this.playerEntity.position.x;
+          if (dx < 0) this.playerSprite.scale.x = -Math.abs(this.playerSprite.scale.x);
+          else if (dx > 0) this.playerSprite.scale.x = Math.abs(this.playerSprite.scale.x);
+        }
+
+        this.buildingChannel.timer += dt;
+
+        // Every 0.4 seconds, play a hit animation/sound/VFX
+        const prevHitIndex = Math.floor((this.buildingChannel.timer - dt) / 0.4);
+        const currentHitIndex = Math.floor(this.buildingChannel.timer / 0.4);
+        if (currentHitIndex > prevHitIndex && this.buildingChannel.timer < this.buildingChannel.duration) {
+          // Play hit animation
+          this.setPlayerAnim("gather");
+          
+          if (building && building.position) {
+            const spec = getBuildingSpec(building.building?.type ?? "");
+            const buildingCenter = {
+              x: building.position.x + (spec.footprint.w * TILE) / 2,
+              y: building.position.y + (spec.footprint.h * TILE) / 2,
+            };
+            
+            // Sound: stone clink for foundation/slab, wood chop/strike for others
+            const stageName = spec.constructionStages?.[this.buildingChannel.nextStage - 1]?.name ?? "";
+            const soundId = (stageName.includes("foundation") || stageName.includes("slab")) ? "gather.strike" : "gather.chop";
+            playSound(soundId);
+
+            // Particles & Shake
+            spawnEnvParticles(this.vfxResource, Colors.building.particle, 6, "smoke", buildingCenter, this.entityLayer);
+            this.vfxResource.cameraShake = {
+              intensity: 1.5,
+              duration: 0.15,
+              time: 0,
+            };
+          }
+        }
+
+        if (this.buildingChannel.timer >= this.buildingChannel.duration) {
+          const channel = this.buildingChannel;
+          this.buildingChannel = null;
+          this.setPlayerAnim("idle");
+
+          channel.onComplete().then((success) => {
+            if (success) {
+              playSound("build.place");
+              if (building && building.position) {
+                const spec = getBuildingSpec(building.building?.type ?? "");
+                const buildingCenter = {
+                  x: building.position.x + (spec.footprint.w * TILE) / 2,
+                  y: building.position.y + (spec.footprint.h * TILE) / 2,
+                };
+                spawnEnvParticles(this.vfxResource, 0xffdc78, 25, "smoke", buildingCenter, this.entityLayer);
+                spawnEnvFloatingText(this.vfxResource, "stage complete!", 0xffdc78, building.position, this.entityLayer);
+              }
+            } else {
+              playSound("player.fellsweep.denied");
+            }
+          });
+        }
+      }
+
+      // Render progress ring
+      if (this.buildingChannel) {
+        this.vfxResource.gatherRing.visible = true;
+        this.vfxResource.gatherRing.x = this.playerEntity.position!.x + TILE / 2;
+        this.vfxResource.gatherRing.y = this.playerEntity.position!.y + TILE / 2;
+        const progress = this.buildingChannel.timer / this.buildingChannel.duration;
+        this.vfxResource.gatherRing.clear();
+        this.vfxResource.gatherRing.circle(0, 0, 26).stroke({ color: Colors.ui.stroke, width: 3, alpha: 0.22 });
+        if (progress > 0.01) {
+          const endAngle = -Math.PI / 2 + progress * Math.PI * 2;
+          this.vfxResource.gatherRing.arc(0, 0, 26, -Math.PI / 2, endAngle);
+          this.vfxResource.gatherRing.stroke({ color: 0xffdc78, width: 3, alpha: 0.85 });
+        }
+      } else if (this.interactionResource.activeWorldAction) {
+        this.vfxResource.gatherRing.visible = true;
+        this.vfxResource.gatherRing.x = this.playerEntity.position!.x + TILE / 2;
+        this.vfxResource.gatherRing.y = this.playerEntity.position!.y + TILE / 2;
+        const progress = this.interactionResource.activeWorldAction.elapsedSec / this.interactionResource.activeWorldAction.durationSec;
+        this.vfxResource.gatherRing.clear();
+        this.vfxResource.gatherRing.circle(0, 0, 26).stroke({ color: Colors.ui.stroke, width: 3, alpha: 0.22 });
+        if (progress > 0.01) {
+          const endAngle = -Math.PI / 2 + progress * Math.PI * 2;
+          this.vfxResource.gatherRing.arc(0, 0, 26, -Math.PI / 2, endAngle);
+          this.vfxResource.gatherRing.stroke({ color: 0xd9534f, width: 3, alpha: 0.85 });
+        }
+      } else {
+        gatherRingUpdateSystem(
+          this.vfxResource,
+          this.playerEntity.position!,
+          this.interactionResource.gatheringTarget,
+          this.interactionResource.currentGatherInterval,
+          this.interactionResource.gatherCooldownTimer
+        );
+      }
 
       renderFellSweepChargeFeedback(
         this.combatResource,
@@ -1135,6 +1307,21 @@ export class GameEngine {
       this.updateRenderOrder();
       this.drawCollisionOverlay();
 
+      // First-camp presentation: pond proximity barks + omen.
+      if (this.playerEntity.position) {
+        const gx = Math.floor(this.playerEntity.position.x / TILE);
+        const gy = Math.floor(this.playerEntity.position.y / TILE);
+        this.firstCampState.cleanWaterDrunk = firstLoopProgress.cleanWaterDrunk;
+        this.firstCampState.campfireWoken = firstLoopProgress.campfireWoken;
+        updateFirstCampPresentation({
+          map: this.mapResource,
+          playerTile: { x: gx, y: gy },
+          emitBark: (id) => this.emitDiscoveryBark(id),
+          emitOmen: () => this.emitFirstNightOmen(),
+          state: this.firstCampState,
+        });
+      }
+
       // Push coordinates and lookAt entity HUD update
       this.pushHudUpdate();
     } catch (err: unknown) {
@@ -1184,10 +1371,7 @@ export class GameEngine {
     world.add(this.playerEntity);
 
     // Spawn shadow under player
-    this.playerShadow = new Sprite(getShadowTexture());
-    this.playerShadow.anchor.set(0.5, 0.5);
-    this.playerShadow.scale.set(0.55);
-    this.playerShadow.alpha = 0.35;
+    this.playerShadow = createStandeeShadow(ENGINE_CONFIG.ACTOR_VISUALS.HUMANOID_SHADOW_SCALE);
     this.playerShadow.x = startX + TILE / 2;
     this.playerShadow.y = startY + 2 * TILE;
     this.playerShadow.zIndex = computeRenderZ(this.playerShadow.y, -5);
@@ -1197,19 +1381,11 @@ export class GameEngine {
     const startW = gameState.rpg.profile?.loadout?.weapon;
     this.lastEquippedWeapon = startW ? (typeof startW === "string" ? startW : startW.itemId) : null;
 
-    // Load matching player frames depending on starting loadout
-    const pConfig = this.getPlayerSpriteConfig();
-    let initialFrames;
-    if (pConfig.isWarrior) {
-      initialFrames = getWarriorFrames("idle");
-    } else {
-      initialFrames = getPawnFrames("idle", "blue", pConfig.tool);
-    }
-
-    this.playerSprite = new AnimatedSprite(initialFrames);
+    this.playerSprite = new AnimatedSprite(getAshenmoonActorFrames("player"));
     this.playerSprite.animationSpeed = 0.12;
     this.playerSprite.play();
-    const scale = (TILE * 1.1) / 192;
+    const scale = (TILE * ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES) / this.playerSprite.texture.height;
+    this.playerBaseScale = scale;
     this.playerSprite.scale.set(scale);
     this.playerSprite.anchor.set(0.5, 1);
     this.playerSprite.x = startX + TILE / 2;
@@ -1265,7 +1441,7 @@ export class GameEngine {
           this.mapResource,
           this.entityLayer,
           this.entitySprites,
-          getBuildingTexture
+          b.stage
         );
       }
     }
@@ -1455,13 +1631,11 @@ export class GameEngine {
       this.interactionResource,
       this.vfxResource,
       this.entityLayer,
-      this.entitySprites,
-      getParticleFXFrames,
-      getWoodItemTexture
+      this.entitySprites
     );
   }
 
-  private spawnBuilding(id: string, type: string, gx: number, gy: number): void {
+  private spawnBuilding(id: string, type: string, gx: number, gy: number, stage?: number): void {
     spawnBuildingSystem(
       id,
       type,
@@ -1471,42 +1645,36 @@ export class GameEngine {
       this.mapResource,
       this.entityLayer,
       this.entitySprites,
-      getBuildingTexture
+      stage
     );
   }
 
   // Holds the attack pose briefly so a swing reads even while the movement
   // system is requesting "run"/"idle" every frame.
   private attackAnimLockTimer = 0;
-
-  private getPlayerSpriteConfig(): { isWarrior: boolean; tool: PawnTool } {
-    const w = gameState.rpg.profile?.loadout?.weapon;
-    const itemId = w ? (typeof w === "string" ? w : w.itemId) : null;
-    if (!itemId) {
-      return { isWarrior: false, tool: null };
-    }
-    if (itemId.includes("pickaxe")) {
-      return { isWarrior: false, tool: "pickaxe" };
-    }
-    if (itemId.includes("axe")) {
-      return { isWarrior: false, tool: "axe" };
-    }
-    if (itemId.includes("hammer")) {
-      return { isWarrior: false, tool: "hammer" };
-    }
-    return { isWarrior: true, tool: null };
-  }
+  private playerBaseScale = 1;
+  private playerVisualClock = 0;
 
   private setPlayerAnim(state: AnimState): void {
-    // While the swing pose is locked, ignore idle/run requests from movement.
-    if (state !== "attack" && this.attackAnimLockTimer > 0) return;
-    if (state === "attack") this.attackAnimLockTimer = 0.28;
-
     const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
     const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
+    const weaponDef = currentWeaponId ? ITEM_DEFINITIONS[currentWeaponId] : undefined;
+    const weaponVisual = weaponDef ? traitOf(weaponDef, "equippable_visuals") : undefined;
+
+    let lockDuration = state === "gather_tired" ? 0.65 : (state === "gather" ? 0.35 : 0.28);
+    const animOverride = weaponVisual?.animationOverrides?.[state as "attack" | "gather" | "gather_tired"];
+    if (animOverride?.lockDuration !== undefined) {
+      lockDuration = animOverride.lockDuration;
+    }
+
+    // While the swing pose is locked, ignore idle/run requests from movement.
+    if (state !== "attack" && state !== "gather" && state !== "gather_tired" && this.attackAnimLockTimer > 0) return;
+    if (state === "attack") this.attackAnimLockTimer = lockDuration;
+    if (state === "gather") this.attackAnimLockTimer = lockDuration;
+    if (state === "gather_tired") this.attackAnimLockTimer = lockDuration;
 
     if (this.playerAnimState === state && this.lastEquippedWeapon === currentWeaponId) {
-      if (state === "attack") {
+      if (state === "attack" || state === "gather" || state === "gather_tired") {
         this.playerSprite.gotoAndPlay(0);
       }
       return;
@@ -1514,31 +1682,14 @@ export class GameEngine {
     this.playerAnimState = state;
     this.lastEquippedWeapon = currentWeaponId;
 
-    const config = this.getPlayerSpriteConfig();
-    let frames: Texture[];
-    if (config.isWarrior) {
-      frames = getWarriorFrames(state);
-    } else {
-      let pawnAnim: PawnAnim = "idle";
-      if (state === "run") {
-        pawnAnim = "run";
-      } else if (state === "attack") {
-        const interactTools = new Set<PawnTool>(["axe", "hammer", "knife", "pickaxe"]);
-        if (interactTools.has(config.tool)) {
-          pawnAnim = "interact";
-        } else {
-          pawnAnim = "idle";
-        }
-      }
-      frames = getPawnFrames(pawnAnim, "blue", config.tool);
-    }
+    const frames = getAshenmoonActorFrames("player", state);
     this.playerSprite.textures = frames;
 
-    if (state === "attack") {
+    if (state === "attack" || state === "gather" || state === "gather_tired") {
       this.playerSprite.loop = false;
-      this.playerSprite.animationSpeed = 0.18;
+      this.playerSprite.animationSpeed = state === "gather_tired" ? 0.08 : 0.18;
       this.playerSprite.onComplete = () => {
-        if (this.playerAnimState === "attack") {
+        if (this.playerAnimState === "attack" || this.playerAnimState === "gather" || this.playerAnimState === "gather_tired") {
           this.setPlayerAnim("idle");
         }
       };
@@ -1549,6 +1700,237 @@ export class GameEngine {
     }
 
     this.playerSprite.play();
+  }
+
+  private updatePlayerVisualFeedback(dt: number): void {
+    this.playerVisualClock += dt;
+
+    const facing = this.playerSprite.scale.x < 0 ? -1 : 1;
+    let scaleX = 1;
+    let scaleY = 1;
+    let yOffset = 0;
+    let xOffset = 0;
+    let rotation = 0;
+
+    const weaponId = this.lastEquippedWeapon;
+    const def = weaponId ? ITEM_DEFINITIONS[weaponId] : undefined;
+    const visual = def ? traitOf(def, "equippable_visuals") : undefined;
+
+    if (this.playerAnimState === "run") {
+      const stride = Math.sin(this.playerVisualClock * 16);
+      yOffset = -Math.abs(stride) * ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_RUN_BOB_PX;
+      scaleX = 1 + Math.abs(stride) * 0.035;
+      scaleY = 1 - Math.abs(stride) * 0.045;
+      rotation = facing * Math.sin(this.playerVisualClock * 8) * 0.045;
+
+      // Spawn extra dust puff when running at random intervals
+      if (Math.random() < 0.22 && this.playerEntity.position) {
+        const dust = new Graphics();
+        const size = 2 + Math.random() * 2;
+        dust.circle(0, 0, size).fill({ color: 0xcccccc, alpha: 0.6 });
+        dust.x = this.playerEntity.position.x + TILE / 2 + (Math.random() - 0.5) * 8;
+        dust.y = this.playerEntity.position.y + TILE - 2;
+
+        this.vfxResource.particles.push({
+          graphic: dust,
+          vx: -facing * (15 + Math.random() * 20),
+          vy: -10 - Math.random() * 15,
+          gravity: -10,
+          life: 0,
+          maxLife: 0.25 + Math.random() * 0.2,
+        });
+        this.entityLayer.addChild(dust);
+      }
+    } else if (this.playerAnimState === "walk") {
+      const stride = Math.sin(this.playerVisualClock * 10);
+      yOffset = -Math.abs(stride) * (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_RUN_BOB_PX * 0.5);
+      scaleX = 1 + Math.abs(stride) * 0.02;
+      scaleY = 1 - Math.abs(stride) * 0.025;
+      rotation = facing * Math.sin(this.playerVisualClock * 5) * 0.025;
+    } else if (this.playerAnimState === "attack" || (this.attackAnimLockTimer > 0 && this.playerAnimState !== "gather" && this.playerAnimState !== "gather_tired")) {
+      const level = getCharacterLevel();
+      const powerFactor = 1 + (level - 1) * 0.05; // scales lunge and stretch by level
+      const override = visual?.animationOverrides?.attack;
+      const lockDuration = override?.lockDuration ?? 0.28;
+      const t = 1 - Math.max(0, Math.min(1, this.attackAnimLockTimer / lockDuration));
+      const strike = Math.sin(t * Math.PI);
+      xOffset = facing * strike * 5 * powerFactor;
+      yOffset = -strike * 2 * powerFactor;
+      scaleX = 1 + strike * 0.08 * powerFactor;
+      scaleY = 1 - strike * 0.055 * powerFactor;
+      rotation = facing * ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_ATTACK_LEAN_RAD * (0.35 + strike) * (0.8 + (level - 1) * 0.03);
+    } else if (this.playerAnimState === "gather") {
+      const override = visual?.animationOverrides?.gather;
+      const lockDuration = override?.lockDuration ?? 0.35;
+      const t = 1 - Math.max(0, Math.min(1, this.attackAnimLockTimer / lockDuration));
+      const strike = Math.sin(t * Math.PI);
+      xOffset = facing * strike * 6; // lunges forward slightly
+      yOffset = strike * 2; // strikes downward
+      scaleX = 1 + strike * 0.05;
+      scaleY = 1 - strike * 0.07;
+      rotation = facing * 0.28 * strike;
+    } else if (this.playerAnimState === "gather_tired") {
+      const override = visual?.animationOverrides?.gather_tired;
+      const lockDuration = override?.lockDuration ?? 0.65;
+      const t = 1 - Math.max(0, Math.min(1, this.attackAnimLockTimer / lockDuration));
+      // Sluggish heavy swing: lift, crash, long tired recovery
+      if (t < 0.4) {
+        const liftT = t / 0.4;
+        yOffset = -liftT * 4;
+        rotation = -facing * 0.12 * liftT;
+        scaleY = 1 + liftT * 0.04;
+      } else if (t < 0.6) {
+        const fallT = (t - 0.4) / 0.2;
+        yOffset = -4 + fallT * 10;
+        rotation = facing * 0.35 * fallT;
+        scaleX = 1 + fallT * 0.08;
+        scaleY = 1 - fallT * 0.14;
+        xOffset = facing * fallT * 3;
+      } else {
+        const recoverT = (t - 0.6) / 0.4;
+        yOffset = 6 - recoverT * 6;
+        rotation = facing * 0.35 * (1 - recoverT);
+        scaleX = 1.08 - recoverT * 0.08;
+        scaleY = 0.86 + recoverT * 0.14;
+        xOffset = facing * 3 * (1 - recoverT);
+      }
+    } else {
+      const breath = Math.sin(this.playerVisualClock * 2.2);
+      yOffset = breath * 0.55;
+      scaleX = 1 - breath * 0.006;
+      scaleY = 1 + breath * 0.01;
+      rotation = breath * 0.008;
+    }
+
+    // --- Weapon rotation & lunge override animation ---
+    const weaponSprite = this.attachmentSprites.get("weapon");
+    if (weaponSprite) {
+      if (this.playerAnimState === "attack" || this.playerAnimState === "gather" || this.playerAnimState === "gather_tired") {
+        const override = visual?.animationOverrides?.[this.playerAnimState as "attack" | "gather" | "gather_tired"];
+        const lockDuration = override?.lockDuration ?? (this.playerAnimState === "gather_tired" ? 0.65 : (this.playerAnimState === "gather" ? 0.35 : 0.28));
+        const t = 1 - Math.max(0, Math.min(1, this.attackAnimLockTimer / lockDuration));
+
+        const startArc = override?.swingArcStart ?? -1.0;
+        const endArc = override?.swingArcEnd ?? 1.2;
+        const lunge = override?.lungeFactor ?? 1.0;
+
+        const swing = Math.sin(t * Math.PI);
+        weaponSprite.rotation = startArc + swing * (endArc - startArc);
+        xOffset *= lunge;
+      } else {
+        weaponSprite.rotation = visual?.visualAsset?.rotation ?? 0.2; // resting angle
+      }
+    }
+
+    this.playerSprite.scale.set(facing * this.playerBaseScale * scaleX, this.playerBaseScale * scaleY);
+    this.playerSprite.x += xOffset;
+    this.playerSprite.y += yOffset;
+    this.playerSprite.rotation = rotation;
+  }
+
+  private checkLoadoutChanged(): void {
+    const loadout = gameState.rpg.profile?.loadout;
+    if (!loadout) return;
+    let changed = false;
+    for (const key of Object.keys(loadout) as (keyof typeof loadout)[]) {
+      const val = loadout[key];
+      const itemId = val ? (typeof val === "string" ? val : val.itemId) : null;
+      if (this.lastEquippedLoadout[key] !== itemId) {
+        this.lastEquippedLoadout[key] = itemId;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.rebuildPlayerAttachments();
+    }
+  }
+
+  private rebuildPlayerAttachments(): void {
+    for (const sprite of this.attachmentSprites.values()) {
+      if (sprite.parent) {
+        sprite.parent.removeChild(sprite);
+      }
+      sprite.destroy();
+    }
+    this.attachmentSprites.clear();
+
+    const loadout = gameState.rpg.profile?.loadout;
+    if (!loadout) return;
+
+    this.playerSprite.sortableChildren = true;
+
+    const SLOT_Z_INDEX: Record<string, number> = {
+      cloak: 1,
+      boots: 2,
+      pants: 3,
+      chest: 4,
+      helmet: 5,
+      shield: 6,
+      weapon: 7,
+    };
+
+    const SLOT_Y_OFFSETS: Record<string, number> = {
+      helmet: -135,
+      chest: -90,
+      pants: -45,
+      boots: -10,
+      shield: -65,
+      weapon: -65,
+    };
+
+    const SLOT_X_OFFSETS: Record<string, number> = {
+      helmet: 0,
+      chest: 0,
+      pants: 0,
+      boots: 0,
+      shield: -25,
+      weapon: 25,
+    };
+
+    for (const key of Object.keys(loadout) as (keyof typeof loadout)[]) {
+      const val = loadout[key];
+      if (!val) continue;
+      const itemId = typeof val === "string" ? val : val.itemId;
+      const def = ITEM_DEFINITIONS[itemId];
+      if (!def) continue;
+
+      const visual = traitOf(def, "equippable_visuals");
+      if (!visual || !visual.visualAsset) continue;
+
+      const texture = getAshenmoonTextureByKey(visual.visualAsset.textureKey);
+      if (!texture) continue;
+
+      const sprite = new Sprite(texture);
+      sprite.anchor.set(visual.visualAsset.anchorX ?? 0.5, visual.visualAsset.anchorY ?? 0.5);
+      if (visual.visualAsset.rotation !== undefined) {
+        sprite.rotation = visual.visualAsset.rotation;
+      }
+
+      const zIndex = SLOT_Z_INDEX[key] ?? 10;
+      sprite.zIndex = zIndex;
+
+      const baseX = SLOT_X_OFFSETS[key] ?? 0;
+      const baseY = SLOT_Y_OFFSETS[key] ?? 0;
+
+      const customX = visual.visualAsset.offsetX ?? 0;
+      const customY = visual.visualAsset.offsetY ?? 0;
+
+      sprite.x = baseX + customX;
+      sprite.y = baseY + customY;
+
+      let targetHeight = 32;
+      if (key === "helmet") targetHeight = 24;
+      else if (key === "chest") targetHeight = 48;
+      else if (key === "pants") targetHeight = 36;
+      else if (key === "boots") targetHeight = 16;
+      else if (key === "weapon" || key === "shield") targetHeight = 40;
+
+      const visualScale = targetHeight / texture.height;
+      sprite.scale.set(visualScale);
+
+      this.playerSprite.addChild(sprite);
+      this.attachmentSprites.set(key, sprite);
+    }
   }
 
 
@@ -1723,10 +2105,17 @@ export class GameEngine {
     const spec = getBuildingSpec(building.type);
     const { w, h } = spec.footprint;
 
-    for (let dy = 0; dy < h; dy++) {
-      for (let dx = 0; dx < w; dx++) {
-        this.mapResource.solidCoords.delete(coordKey(building.x + dx, building.y + dy));
-        this.mapResource.customSolids.delete(coordKey(building.x + dx, building.y + dy));
+    if (spec.solidCells) {
+      for (const cell of spec.solidCells) {
+        this.mapResource.solidCoords.delete(coordKey(building.x + cell.x, building.y + cell.y));
+        this.mapResource.customSolids.delete(coordKey(building.x + cell.x, building.y + cell.y));
+      }
+    } else {
+      for (let dy = 0; dy < h; dy++) {
+        for (let dx = 0; dx < w; dx++) {
+          this.mapResource.solidCoords.delete(coordKey(building.x + dx, building.y + dy));
+          this.mapResource.customSolids.delete(coordKey(building.x + dx, building.y + dy));
+        }
       }
     }
 
@@ -1744,6 +2133,31 @@ export class GameEngine {
       if (result.ok) applyRpgState(result.data.playerState);
     });
     playSound("build.place");
+  }
+
+  public startBuildingChannel(
+    buildingId: string,
+    nextStage: number,
+    cost: Record<string, number>,
+    onComplete: () => Promise<boolean>
+  ): void {
+    // Cancel gathering if any
+    this.interactionResource.gatheringTarget = null;
+
+    this.buildingChannel = {
+      buildingId,
+      nextStage,
+      timer: 0,
+      duration: 1.8,
+      cost,
+      onComplete,
+    };
+
+    playSound("ui.inventory.equip");
+  }
+
+  public upgradeBuilding(buildingId: string, stage: number): void {
+    upgradeBuildingSystem(buildingId, stage, world, this.mapResource, this.entitySprites);
   }
 
   public isNearCampfire(): boolean {
@@ -1827,7 +2241,8 @@ export class GameEngine {
     }
 
     const spec = getBuildingSpec(type);
-    const tex = getBuildingTexture("yellow", spec.textureType);
+    const structureKey = getAshenmoonStructureKeyForBuildingType(type);
+    const tex = getAshenmoonStructureTexture(structureKey ?? "legacyHouse");
 
     const { w, h } = spec.footprint;
     const indicator = new Graphics();
@@ -1976,13 +2391,18 @@ export class GameEngine {
       }
       
       playSound("station.boil");
+      const campfireWakeFeedback = getActionFeedback("campfire_wake");
       spawnEnvFloatingText(
         this.vfxResource,
-        "campfire refueled",
-        Colors.vfx.campfireMsg,
+        campfireWakeFeedback?.floatingText ?? "campfire refueled",
+        campfireWakeFeedback?.color ?? Colors.vfx.campfireMsg,
         this.playerEntity.position!,
         this.entityLayer
       );
+      if (campfireWakeFeedback) {
+        emitPlayerFeedback(campfireWakeFeedback.toast, "good");
+        spawnEnvParticles(this.vfxResource, campfireWakeFeedback.color, 10, "smoke", this.playerEntity.position!, this.entityLayer);
+      }
       const campfire = world.with("position").entities.find((entity) => entity.id === entityId);
       if (campfire) refuelCampfireEntity(campfire, fuel.fuelMs);
       triggerQuestEvent(GameEvent.Refuel);
@@ -2034,6 +2454,24 @@ export class GameEngine {
       this.playerEntity.position!,
       this.entityLayer
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // First-camp presentation helpers
+  // ---------------------------------------------------------------------------
+
+  private emitDiscoveryBark(id: DiscoveryBarkId): void {
+    const bark = getDiscoveryBark(id);
+    if (!bark) return;
+    const toneMap = { warning: "warning", relief: "good", unease: "info" } as const;
+    emitPlayerFeedback(bark.text, toneMap[bark.tone]);
+  }
+
+  private emitFirstNightOmen(): void {
+    const omen = FIRST_NIGHT_OMENS.wolf_howl;
+    emitPlayerFeedback(omen.text, "warning");
+    playSound("wolf.howl.distant");
+    triggerCameraShake(this.vfxResource, 1.5, 0.25);
   }
 
   // ---------------------------------------------------------------------------
@@ -2137,8 +2575,12 @@ export class GameEngine {
     // previously gathered tree/rock coords are restored before re-spawning.
     const sc = this.scenarioId ? getScenario(this.scenarioId) : null;
     if (sc) {
-      loadScenarioIntoMap(this.mapResource, sc);
-      // Re-add the campfire and NPC Vane solids that spawnCamp set up â€” but only
+      if (sc.firstCampLayout) {
+        buildMapSystem(this.mapResource, gameState.rpg.profile?.worldSeed ?? 12345, { carveCamp: sc.camp });
+      } else {
+        loadScenarioIntoMap(this.mapResource, sc);
+      }
+      // Re-add the campfire and NPC Vane solids that spawnCamp set up — but only
       // for scenarios that actually have a camp, matching spawnEntities.
       if (sc.camp) {
         const spawnX = sc.spawnPoint.gx;
@@ -2267,6 +2709,31 @@ export class GameEngine {
 
   private spawnEnemy(gx: number, gy: number, arch: EnemyArchetype = GRUNT): string | null {
     return spawnEnemy(gx, gy, this.entityLayer, this.entitySprites, this.enemyColors, this.mapResource, this.enemySeq++, arch);
+  }
+
+  /** The terrain type the player is standing on, for footsteps SFX. */
+  private currentFootstepTerrain(): string {
+    const pos = this.playerEntity.position;
+    if (!pos) return "none";
+    const gx = Math.round(pos.x / TILE);
+    const gy = Math.round(pos.y / TILE);
+    const cells = this.mapResource.cells;
+    const mapW = this.mapResource.mapW;
+    if (gx < 0 || gy < 0 || gx >= mapW || gy >= cells.length / mapW) return "none";
+    switch (cells[gy * mapW + gx]) {
+      case Cell.Meadows:
+      case Cell.CrimsonGrove:
+      case Cell.Camp:
+        return "grass";
+      case Cell.Frostbane:
+      case Cell.ScorchedWastes:
+        return "snow";
+      case Cell.Water:
+      case Cell.FungalMire:
+        return "mud";
+      default:
+        return "none";
+    }
   }
 
   /** The biome the player currently stands in, for the ambient scheduler. */

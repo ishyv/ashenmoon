@@ -60,8 +60,7 @@ export const clothingRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You join larger hide pieces into a cloak against cold nights.",
     costs: [
-      { itemId: "deer_hide", name: "deer hide", required: 1 },
-      { itemId: "dried_hide", name: "dried hide", required: 1 },
+      { itemId: "dried_hide", name: "dried hide", required: 2 },
       { itemId: "bark_rope", name: "bark rope", required: 1 },
       { itemId: "bone_needle", name: "bone needle", required: 1 },
     ],
@@ -78,8 +77,7 @@ export const clothingRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You layer warm pelt against hide to keep the cold from chewing so deeply.",
     costs: [
-      { itemId: "wolf_pelt", name: "wolf pelt", required: 1 },
-      { itemId: "cured_hide", name: "cured hide", required: 1 },
+      { itemId: "cured_hide", name: "cured hide", required: 2 },
       { itemId: "dried_tendon", name: "dried tendon", required: 2 },
       { itemId: "bone_needle", name: "bone needle", required: 1 },
     ],

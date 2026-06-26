@@ -1,4 +1,4 @@
-import { AnimatedSprite, Container, Graphics, Text, TextStyle, type Texture } from "pixi.js";
+import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE } from "$lib/core/systems/map/map";
 import { type VFXResource, triggerCameraShake } from "$lib/core/vfx/vfx";
@@ -6,7 +6,6 @@ import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { Colors } from "$lib/utils/colors";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
-import type { ParticleFXKey } from "$lib/core/assets/assets";
 
 export function handleHitFeedbackSystem(
   entity: Entity,
@@ -15,8 +14,6 @@ export function handleHitFeedbackSystem(
   vfx: VFXResource,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
-  getParticleFXFrames: (key: ParticleFXKey) => Texture[],
-  _getWoodItemTexture: () => Texture,
 ): void {
   const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
   const isTree = gatherable?.solidKind === "tree";
@@ -79,30 +76,8 @@ export function handleHitFeedbackSystem(
     });
     entityLayer.addChild(textObj);
 
-    // Sprite particle puffs
-    const fxFrames = getParticleFXFrames(isTree ? "dust1" : "dust2");
-    const fxCount = isSuper ? 4 : 2;
-    for (let i = 0; i < fxCount; i++) {
-      const ps = new AnimatedSprite(fxFrames);
-      ps.animationSpeed = 0.18 + Math.random() * 0.12;
-      ps.loop = false;
-      ps.play();
-      ps.anchor.set(0.5, 0.5);
-      ps.scale.set(0.28 + Math.random() * 0.2);
-      ps.x = contactX + (Math.random() - 0.5) * 20;
-      ps.y = contactY + (Math.random() - 0.5) * 14;
-      const angle = (Math.random() - 0.5) * Math.PI * 0.8 - Math.PI / 2;
-      const spd = 30 + Math.random() * 50;
-      vfx.spriteParticles.push({
-        sprite: ps,
-        vx: Math.cos(angle) * spd,
-        vy: Math.sin(angle) * spd,
-        gravity: 120,
-        life: 0,
-        maxLife: 0.42 + Math.random() * 0.22,
-      });
-      entityLayer.addChild(ps);
-    }
+    // First-party/procedural particle puffs live below as Graphics debris.
+    // WHY: runtime feedback must not pull old sprite-pack particle sheets.
 
     // Debris graphic particles
     let particleColor: number = isTree ? Colors.particle.woodDebris : Colors.particle.oreDebris;

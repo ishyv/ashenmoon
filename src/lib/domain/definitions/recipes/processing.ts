@@ -146,8 +146,8 @@ export const processingRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You boil oak bark into a bitter liquid for treating hides and washing wounds.",
     costs: [
-      { itemId: "oak_bark", name: "oak bark", required: 2 },
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "bark", name: "bark", required: 2 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
     ],
     output: { itemId: "tannin_brew", qty: 1 },
     process: "boil",
@@ -162,7 +162,7 @@ export const processingRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You work mud, ash, and fiber into something that can seal gaps.",
     costs: [
-      { itemId: "mud", name: "mud", required: 1 },
+      { itemId: "clay", name: "clay", required: 1 },
       { itemId: "ash", name: "ash", required: 1 },
       { itemId: "grass_fiber", name: "grass fiber", required: 2 },
     ],

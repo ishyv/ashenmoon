@@ -4,6 +4,8 @@ import {
   createDefaultProfile,
   createDefaultSkills,
 } from "$lib/domain/rpg-defaults";
+import { StorageKeys } from "$lib/domain/game-events";
+import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 
 /**
  * Unified, reactive root for all persistent game data.
@@ -18,10 +20,13 @@ export interface GameState {
   survival: {
     thirst: number;
     wasParched: boolean;
+    hunger: number;
+    wasStarving: boolean;
   };
 }
 
 const INITIAL_THIRST = 100;
+const INITIAL_HUNGER = 100;
 
 function createInitialState(): GameState {
   return {
@@ -33,6 +38,8 @@ function createInitialState(): GameState {
     survival: {
       thirst: INITIAL_THIRST,
       wasParched: false,
+      hunger: INITIAL_HUNGER,
+      wasStarving: false,
     },
   };
 }
@@ -55,6 +62,15 @@ export function loadGameState(): void {
   gameState.rpg.profile = rpg.profile;
   gameState.rpg.inventory = rpg.inventory;
   gameState.rpg.skills = rpg.skills;
+
+  const savedSurvival = loadSlice<any>(StorageKeys.survival, null);
+  if (savedSurvival) {
+    gameState.survival.thirst = savedSurvival.thirst ?? INITIAL_THIRST;
+    gameState.survival.wasParched = savedSurvival.wasParched ?? false;
+    gameState.survival.hunger = savedSurvival.hunger ?? INITIAL_HUNGER;
+    gameState.survival.wasStarving = savedSurvival.wasStarving ?? false;
+  }
+
   markGameStateHydrated();
 }
 
@@ -63,6 +79,7 @@ export function loadGameState(): void {
  * Watches RPG state for deep changes and writes a debounced local save.
  */
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+let survivalSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const AUTO_SAVE_DEBOUNCE_MS = 500;
 
@@ -77,6 +94,20 @@ $effect.root(() => {
         saveLocalRpgState(snapshot);
       } catch (e) {
         console.error("GameState: Local RPG auto-save failed:", e);
+      }
+    }, AUTO_SAVE_DEBOUNCE_MS);
+  });
+
+  $effect(() => {
+    const snapshot = $state.snapshot(gameState.survival);
+    if (!persistenceHydrated) return;
+
+    if (survivalSaveTimeout) clearTimeout(survivalSaveTimeout);
+    survivalSaveTimeout = setTimeout(() => {
+      try {
+        saveSlice(StorageKeys.survival, snapshot);
+      } catch (e) {
+        console.error("GameState: Survival auto-save failed:", e);
       }
     }, AUTO_SAVE_DEBOUNCE_MS);
   });

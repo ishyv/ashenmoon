@@ -22,7 +22,7 @@ describe("M3 carcass processing", () => {
     const rabbit = M3_CARCASS_DEFINITIONS.rabbit;
 
     expect(rabbit.actions.harvest_meat.yields).toContainEqual({ itemId: "raw_small_meat", qty: 1 });
-    expect(rabbit.actions.remove_hide.yields).toContainEqual({ itemId: "rabbit_pelt", qty: 1 });
+    expect(rabbit.actions.remove_hide.yields).toContainEqual({ itemId: "raw_hide", qty: 1 });
     expect(rabbit.actions.extract_bone.yields).toContainEqual({ itemId: "small_bone", qty: 1 });
   });
 
@@ -89,6 +89,7 @@ describe("M3 carcass processing", () => {
 
   it("resolves carcass tool quality from equipped tool and available sharp flint", () => {
     expect(resolveCarcassToolQuality({ equippedItemId: "crude_knife", hasSharpFlint: false })).toBe("crude_knife");
+    expect(resolveCarcassToolQuality({ equippedItemId: "stone_blade", hasSharpFlint: false })).toBe("sharp_flint");
     expect(resolveCarcassToolQuality({ equippedItemId: null, hasSharpFlint: true })).toBe("sharp_flint");
     expect(resolveCarcassToolQuality({ equippedItemId: null, hasSharpFlint: false })).toBe("bare_hands");
   });

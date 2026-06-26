@@ -1,4 +1,4 @@
-﻿import type { AnimatedSprite, Container } from "pixi.js";
+import { AnimatedSprite, type Container } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -15,6 +15,7 @@ import { SkillKey, InputAction } from "$lib/domain/game-events";
 import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
 import { fellSweepMoveMultiplier } from "$lib/domain/combat/fell-sweep";
+import type { AnimState } from "$lib/core/types";
 
 // Hitbox configuration constants
 const HITBOX_X = TILE * 0.45;
@@ -229,7 +230,7 @@ export function playerMovementSystem(
   map: MapResource,
   dt: number,
   playerSprite: AnimatedSprite,
-  setPlayerAnim: (state: "idle" | "run" | "attack") => void,
+  setPlayerAnim: (state: AnimState) => void,
   entityLayer: Container,
   combat?: CombatResource
 ): boolean {
@@ -304,6 +305,29 @@ export function playerMovementSystem(
 
     playerSprite.x = pos.x + TILE / 2;
     playerSprite.y = pos.y + TILE;
+
+    // Spawn ghost trail after-image
+    if (Math.random() < 0.35) {
+      const ghost = new AnimatedSprite(playerSprite.textures);
+      ghost.gotoAndStop(playerSprite.currentFrame);
+      ghost.anchor.copyFrom(playerSprite.anchor);
+      ghost.x = playerSprite.x;
+      ghost.y = playerSprite.y;
+      ghost.scale.copyFrom(playerSprite.scale);
+      ghost.rotation = playerSprite.rotation;
+      ghost.tint = movement.isInvulnerable ? Colors.evade.flash : Colors.evade.dashParticle;
+      ghost.alpha = 0.55;
+
+      vfx.spriteParticles.push({
+        sprite: ghost,
+        vx: 0,
+        vy: 0,
+        gravity: 0,
+        life: 0,
+        maxLife: 0.28,
+      });
+      entityLayer.addChild(ghost);
+    }
 
     if (movement.dashActiveTimer <= 0) {
       movement.isDashing = false;
@@ -405,7 +429,7 @@ export function playerMovementSystem(
     if (dirX > 0) playerSprite.scale.x = Math.abs(playerSprite.scale.x);
   }
 
-  setPlayerAnim("run");
+  setPlayerAnim(isSprinting ? "run" : "walk");
   playerSprite.x = pos.x + TILE / 2;
   playerSprite.y = pos.y + TILE;
 

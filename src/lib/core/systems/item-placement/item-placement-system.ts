@@ -19,12 +19,9 @@ import { syncPlaceItem } from "$lib/state/persistence/remote-sync";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { isValidItemPlacement, type ItemPlacementContext } from "$lib/domain/items/item-placement";
 import {
-  getWoodItemTexture,
-  getRockVariantTexture,
-  getToolTexture,
-  getBushTexture,
-  getMeatItemTexture
-} from "$lib/core/assets/assets";
+  getAshenmoonItemIconKeyForItemId,
+  getAshenmoonItemIconTexture,
+} from "$lib/core/assets/ashenmoon-assets";
 
 export class ItemPlacementResource {
   public isPlacementMode = false;
@@ -36,44 +33,8 @@ export class ItemPlacementResource {
 }
 
 export function getItemTexture(itemId: string): Texture {
-  const def = getItemDef(itemId);
-  if (!def) return getWoodItemTexture();
-
-  // Try to use a preloaded Tiny Swords asset first for consistency and rendering guarantees
-  if (itemId === "stone" || itemId === "copper_ore" || itemId === "iron_ore" || itemId === "silver_ore") {
-    return getRockVariantTexture(1);
-  }
-  if (itemId === "flint_shard") {
-    return getRockVariantTexture(2);
-  }
-  if (itemId === "clay" || itemId === "hardened_clay") {
-    return getRockVariantTexture(1);
-  }
-  if (itemId.includes("pickaxe")) {
-    return getToolTexture(1);
-  }
-  if (itemId.includes("axe")) {
-    return getToolTexture(2);
-  }
-  if (itemId === "meat" || itemId.includes("raw_meat")) {
-    return getMeatItemTexture();
-  }
-  if (def.category === "timber" || itemId.includes("wood") || itemId.includes("plank") || itemId.includes("stick")) {
-    return getWoodItemTexture();
-  }
-  if (itemId === "moss" || itemId === "grass_fiber" || itemId === "leaves") {
-    return getBushTexture(2);
-  }
-  if (def.category === "herb" || itemId.includes("berries") || itemId.includes("mushroom")) {
-    return getBushTexture(1);
-  }
-
-  // Fallback to iconUrl if nothing else matches
-  if (def.iconUrl) {
-    return Texture.from(def.iconUrl);
-  }
-
-  return getWoodItemTexture();
+  const firstPartyKey = getAshenmoonItemIconKeyForItemId(itemId);
+  return getAshenmoonItemIconTexture(firstPartyKey ?? "stick");
 }
 
 function itemPlacementContext(map: MapResource, playerPos: { x: number; y: number }): ItemPlacementContext {

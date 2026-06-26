@@ -121,7 +121,7 @@ export const foodRecipes: readonly RecipeInput[] = [
     discoveryText: "You boil bones in water until the pot gives you something warm back.",
     costs: [
       { itemId: "small_bone", name: "small bone", required: 2 },
-      { itemId: "boiled_water", name: "boiled water", required: 1 },
+      { itemId: "clean_water", name: "clean water", required: 1 },
     ],
     output: { itemId: "bone_broth", qty: 1 },
     process: "boil",

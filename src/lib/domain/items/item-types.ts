@@ -76,19 +76,8 @@ export interface ItemDefinition {
   category: Category;
   physical: ItemPhysicalProperties;
   traits: ItemTrait[];
-  /** Spritesheet slice — takes priority over iconUrl when present. */
-  iconSheet?: IconSheet;
-  /** Path to a sprite icon. Preferred when present. */
-  iconUrl?: string;
   /** Emoji placeholder, shown when no iconUrl is set. Lets items read at a glance before art exists. */
   icon?: string;
-}
-
-export interface IconSheet {
-  src: string;
-  col: number;
-  row: number;
-  size: number;
 }
 
 /**

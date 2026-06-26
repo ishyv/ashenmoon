@@ -1,5 +1,5 @@
 import { Cell } from "$lib/core/types";
-import { type MapResource, type SpawnNode } from "$lib/core/systems/map/map";
+import { type MapResource, type SpawnNode, applyFirstCampForestPass } from "$lib/core/systems/map/map";
 import { coordKey } from "$lib/utils/coord-utils";
 import { GATHERABLE_DEFINITIONS } from "$lib/domain/gathering/gatherables";
 import type { ScenarioDefinition } from "$lib/domain/scenarios/scenario-types";
@@ -27,6 +27,14 @@ export function loadScenarioIntoMap(map: MapResource, scenario: ScenarioDefiniti
   map.solidCoords = new Set();
   map.customSolids = new Map();
   map.mapData = { spawns: [] };
+  map.forestMetadata = {
+    waterSources: [],
+    resourceClusters: [],
+    animalZones: [],
+    landmarks: [],
+    campCandidates: [],
+    eventPoints: [],
+  };
 
   const sx = spawnPoint.gx;
   const sy = spawnPoint.gy;
@@ -53,12 +61,32 @@ export function loadScenarioIntoMap(map: MapResource, scenario: ScenarioDefiniti
   }
 
   const spawnNodes: SpawnNode[] = [];
-  for (const s of spawns) {
-    spawnNodes.push({ id: s.id, x: s.x, y: s.y, gatherableId: s.gatherableId });
-    const def = GATHERABLE_DEFINITIONS[s.gatherableId];
+  let devSpawnIdSeq = 1;
+  const occupiedSpawns = new Set<string>();
+  const addSpawn = (gatherableId: string, x: number, y: number, prefix = "node") => {
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    const key = coordKey(x, y);
+    if (occupiedSpawns.has(key)) return;
+    if (map.cells[y * W + x] === Cell.Water) return;
+    occupiedSpawns.add(key);
+    spawnNodes.push({
+      id: `${prefix}_${gatherableId}_${devSpawnIdSeq++}`,
+      x,
+      y,
+      gatherableId,
+    });
+    const def = GATHERABLE_DEFINITIONS[gatherableId];
     if (def?.solidKind === "tree" || def?.solidKind === "rock") {
-      map.solidCoords.add(coordKey(s.x, s.y));
+      map.solidCoords.add(key);
     }
+  };
+
+  if (scenario.firstCampLayout) {
+    applyFirstCampForestPass(map, addSpawn, sx, sy);
+  }
+
+  for (const s of spawns) {
+    addSpawn(s.gatherableId, s.x, s.y, s.id);
   }
 
   map.mapData = { spawns: spawnNodes };

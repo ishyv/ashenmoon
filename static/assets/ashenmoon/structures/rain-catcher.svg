@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 140" role="img" aria-label="rain catcher">
+  <ellipse cx="90" cy="124" rx="52" ry="10" fill="#080706" opacity=".42"/>
+  <path d="M48 121 67 50h11l-15 71zM117 121l-15-71h11l19 71z" fill="#080706"/>
+  <path d="M58 117 72 56h3l-12 61zM122 117l-12-61h3l14 61z" fill="#5a3824"/>
+  <path d="M45 50c29-18 62-18 90 0-8 28-77 28-90 0z" fill="#080706"/>
+  <path d="M57 52c22-11 45-11 66 0-12 17-50 17-66 0z" fill="#314b55"/>
+  <path d="M69 53c15-5 30-5 44 0-9 7-31 7-44 0z" fill="#87a9ad" opacity=".75"/>
+  <path d="M83 23v17M102 17v23M119 28v15" stroke="#87a9ad" stroke-width="5" stroke-linecap="round" opacity=".65"/>
+</svg>

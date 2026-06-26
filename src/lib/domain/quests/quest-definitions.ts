@@ -3,15 +3,15 @@ import type { Quest } from "./quest-types";
 export const INITIAL_QUESTS: Record<string, Quest> = {
   lost_in_woods: {
     id: "lost_in_woods",
-    title: "Lost in the Woods",
+    title: "First Night in Ashenmoor",
     description:
-      "No camp, no tools, a dry throat. Boil filthy water clean, drink it, and keep a fire alive.",
+      "Your throat burns, the fire is dead, and something moved beyond the trees. Make the clearing livable before night teaches you its teeth.",
     completed: false,
     rewardClaimed: false,
     objectives: [
-      { id: "boil_water", label: "Boil Dirty Water clean", current: 0, target: 1, completed: false },
-      { id: "drink_water", label: "Drink Clean Water", current: 0, target: 1, completed: false },
-      { id: "warm_fire", label: "Tend the campfire", current: 0, target: 1, completed: false },
+      { id: "boil_water", label: "Cleanse dirty water at the fire", current: 0, target: 1, completed: false },
+      { id: "drink_water", label: "Drink clean water before thirst worsens", current: 0, target: 1, completed: false },
+      { id: "warm_fire", label: "Wake the campfire", current: 0, target: 1, completed: false },
     ],
   },
   scavenger_tools: {

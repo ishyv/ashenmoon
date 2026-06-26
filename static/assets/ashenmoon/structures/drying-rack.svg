@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 140" role="img" aria-label="drying rack">
+  <ellipse cx="90" cy="125" rx="58" ry="10" fill="#080706" opacity=".42"/>
+  <path d="M38 119 60 35h13l-19 84zM126 119l-19-84h13l22 84z" fill="#080706"/>
+  <path d="M47 116 65 42h4l-16 74zM133 116l-16-74h4l18 74z" fill="#5a3824"/>
+  <path d="M58 42h64" stroke="#080706" stroke-width="13" stroke-linecap="round"/>
+  <path d="M61 42h58" stroke="#8a6a45" stroke-width="7" stroke-linecap="round"/>
+  <path d="M72 47c-7 18-4 32 2 47 8-10 10-28 4-47z" fill="#8d2b35" stroke="#080706" stroke-width="4"/>
+  <path d="M94 47c-8 19-5 35 4 50 8-17 8-34 1-50z" fill="#b13b42" stroke="#080706" stroke-width="4"/>
+  <path d="M116 47c-6 15-4 30 3 42 7-12 8-27 2-42z" fill="#5a3824" stroke="#080706" stroke-width="4"/>
+</svg>

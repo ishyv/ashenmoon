@@ -1,4 +1,4 @@
-import { AnimatedSprite, Container, Graphics, Sprite, type Texture } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
@@ -8,6 +8,8 @@ import { Colors } from "$lib/utils/colors";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import { GameEvent } from "$lib/domain/game-events";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
+import { Cell } from "$lib/domain/worldgen/cell";
+import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import {
   createTreeFallHazard,
   fallDirectionAwayFromPlayer,
@@ -24,8 +26,6 @@ export function depleteNodeSystem(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   triggerQuestEvent: (evt: string, val?: string) => void,
-  getTreeFrames: () => Texture[],
-  getStumpTexture: () => Texture,
   map?: MapResource,
 ): void {
   const pos = entity.position!;
@@ -37,7 +37,20 @@ export function depleteNodeSystem(
     map.customSolids.delete(key);
   }
   const gatherable = entity.resource?.gatherableId ? getGatherableDefinition(entity.resource.gatherableId) : undefined;
-  const wasTree = gatherable?.solidKind === "tree";
+  let wasTree = gatherable?.solidKind === "tree";
+  let wasRock = gatherable?.solidKind === "rock";
+
+  // Fallbacks if gatherable could not be resolved from gatherableId
+  if (!gatherable && entity.resource) {
+    const dropName = entity.resource.drop;
+    const displayName = entity.interactable?.name.toLowerCase() ?? "";
+    if (dropName === "wood" || displayName.includes("tree")) {
+      wasTree = true;
+    } else if (dropName === "stone" || dropName.includes("ore") || displayName.includes("node") || displayName.includes("vein")) {
+      wasRock = true;
+    }
+  }
+
   if (wasTree) {
     triggerQuestEvent(GameEvent.Harvest, entity.resource?.drop);
   }
@@ -107,14 +120,12 @@ export function depleteNodeSystem(
     spawnEnvFloatingText(vfx, "tree cracking", Colors.ui.warning, player.position ?? pos, entityLayer);
     triggerCameraShake(vfx, 2, hazard.dodgeWindowSec);
 
-    const fallFrames = getTreeFrames().slice(1);
-    const fallingSprite = new AnimatedSprite(fallFrames);
-    fallingSprite.anchor.set(0.5, 1);
-    fallingSprite.x = gx * TILE + TILE / 2;
-    fallingSprite.y = gy * TILE + TILE;
-    fallingSprite.scale.set((TILE * 1.5) / 256);
-    fallingSprite.loop = false;
-    fallingSprite.animationSpeed = 0.16;
+    const fallingTree = new Graphics();
+    fallingTree.rect(-8, -TILE * 1.25, 16, TILE * 1.25).fill(0x34251a);
+    fallingTree.rect(-17, -TILE * 1.52, 34, 28).fill(0x263326);
+    fallingTree.stroke({ color: 0x080706, width: 5, alpha: 0.95 });
+    fallingTree.x = gx * TILE + TILE / 2;
+    fallingTree.y = gy * TILE;
 
     const angles = {
       north: Math.PI,
@@ -122,20 +133,7 @@ export function depleteNodeSystem(
       east: Math.PI / 2,
       west: -Math.PI / 2,
     };
-    fallingSprite.rotation = angles[hazard.direction];
-
-    fallingSprite.onComplete = () => {
-      const stump = new Sprite(getStumpTexture());
-      stump.anchor.set(0.5, 1);
-      stump.x = gx * TILE + TILE / 2;
-      stump.y = gy * TILE + TILE;
-      stump.width = TILE * 0.8;
-      stump.height = TILE * 0.8;
-      entityLayer.addChild(stump);
-
-      entityLayer.removeChild(fallingSprite);
-      fallingSprite.destroy();
-    };
+    fallingTree.rotation = angles[hazard.direction];
 
     setTimeout(() => {
       playSound("node.treefall", { position: { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 } });
@@ -151,10 +149,93 @@ export function depleteNodeSystem(
           spawnEnvFloatingText(vfx, "tree hit", Colors.ui.error, latestPlayer.position, entityLayer);
         }
       }
-      entityLayer.addChild(fallingSprite);
-      fallingSprite.play();
+      entityLayer.addChild(fallingTree);
+
+      setTimeout(() => {
+        const stump = new Graphics();
+        stump.ellipse(0, 0, TILE * 0.28, TILE * 0.11).fill(0x34251a);
+        stump.ellipse(0, 0, TILE * 0.2, TILE * 0.07).stroke({ color: 0x080706, width: 3, alpha: 0.9 });
+        stump.x = gx * TILE + TILE / 2;
+        stump.y = gy * TILE + TILE;
+        stump.zIndex = Math.round(stump.y);
+        entityLayer.addChild(stump);
+        entityLayer.removeChild(fallingTree);
+        fallingTree.destroy();
+      }, 240);
     }, hazard.dodgeWindowSec * 1000);
   } else {
     playSound("node.deplete", { position: { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 } });
+  }
+
+  // Spawns 1 to 3 pickups (sticks/branches/leaves/resin for tree, stones for ore/stone) on depletion
+  if (wasTree || wasRock) {
+    const baseDropId = wasTree ? "stick_pickup" : "loose_stone_pickup";
+    let spawnedCount = 0;
+    const targetCount = 1 + Math.floor(Math.random() * 3); // 1 to 3 items
+
+    const offsets = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+      { dx: 1, dy: 1 }, { dx: -1, dy: -1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }
+    ].sort(() => Math.random() - 0.5);
+
+    for (const offset of offsets) {
+      if (spawnedCount >= targetCount) break;
+      const nx = gx + offset.dx;
+      const ny = gy + offset.dy;
+      if (map && !map.inBounds(nx, ny)) continue;
+
+      const key = `${nx},${ny}`;
+      if (map && map.solidCoords.has(key)) continue;
+
+      const alreadyOccupied = world.entities.some(
+        (e) => e.position && Math.round(e.position.x / TILE) === nx && Math.round(e.position.y / TILE) === ny
+      );
+      if (alreadyOccupied) continue;
+
+      if (map && map.cells[ny * map.mapW + nx] === Cell.Water) continue;
+
+      let dropId = baseDropId;
+      if (wasTree) {
+        if (spawnedCount === 0) {
+          dropId = "stick_pickup";
+        } else {
+          const roll = Math.random();
+          if (roll < 0.35) {
+            dropId = "branch_pickup";
+          } else if (roll < 0.6) {
+            dropId = "green_leaves_pickup";
+          } else if (roll < 0.75) {
+            dropId = "resin_pickup";
+          } else {
+            dropId = "stick_pickup";
+          }
+        }
+      }
+
+      const dropDef = getGatherableDefinition(dropId);
+      if (!dropDef) continue;
+
+      const dropName = dropDef.displayName;
+      const dropItem = dropDef.yieldTable[0]?.itemId ?? (wasTree ? "stick" : "stone");
+      const dropQty = dropDef.yieldTable[0]?.quantity ?? 1;
+
+      const px = nx * TILE;
+      const py = ny * TILE;
+      const pickupId = `depletion_drop_${dropId}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+      world.add({
+        id: pickupId,
+        position: { x: px, y: py, targetX: px, targetY: py },
+        collider: { isSolid: false },
+        interactable: { name: dropName, action: "pickup" },
+        pickup: { itemId: dropItem, qty: dropQty, gatherableId: dropId },
+      });
+
+      const dropSprite = createGatherableRenderSprite(dropDef, px, py);
+      entityLayer.addChild(dropSprite);
+      entitySprites.set(pickupId, dropSprite);
+
+      spawnedCount++;
+    }
   }
 }

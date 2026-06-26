@@ -1,8 +1,9 @@
-﻿import { Graphics, type Container } from "pixi.js";
+import { Graphics, type Container } from "pixi.js";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
 import type { VFXResource } from "$lib/core/vfx/vfx";
 import { TILE } from "$lib/core/systems/map/map";
+import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import { Colors } from "$lib/utils/colors";
 import { stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
@@ -148,7 +149,8 @@ export function applyKiteComboFinisher(
   const reachMult = 1 + (0.12 + 0.03 * kiteLevel) * currentStacks;
   const damageMult = 1 + (0.15 + 0.03 * kiteLevel) * currentStacks;
   
-  const effectiveReach = config.reach * 2.2 * reachMult;
+  const playerScale = ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES / 1.3;
+  const effectiveReach = config.reach * 2.2 * reachMult * playerScale;
   const effectiveHalfAngle = config.arcHalfAngle * 0.35;
   const effectiveDamage = Math.round(config.damage * 1.4 * damageMult);
   

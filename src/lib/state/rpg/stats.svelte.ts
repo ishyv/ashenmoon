@@ -15,9 +15,14 @@ import {
   applyModifiers,
   computeBaseStatsAtLevel,
   statusModifiersToStatModifiers,
+  type StatModifier,
 } from "$lib/domain/stats/stat-calculation";
 import { characterXpForLevel, MAX_LEVEL, MIN_LEVEL } from "$lib/domain/stats/player-stat-growth";
-import type { PlayerStats } from "$lib/domain/stats/stat-types";
+import type { PlayerStats, StatKey } from "$lib/domain/stats/stat-types";
+import { weaponDefForItem } from "$lib/domain/combat/weapons/weapon-registry";
+// Side-effect import: ensures prototype weapon definitions are registered before
+// equipment modifiers are read.
+import "$lib/domain/combat/weapons/prototype-weapons";
 
 export function getCharacterLevel(): number {
   return gameState.rpg.profile?.characterLevel ?? MIN_LEVEL;
@@ -32,9 +37,27 @@ export function getCharacterNextXp(): number {
   return characterXpForLevel(getCharacterLevel());
 }
 
+/** Stat modifiers contributed by the currently equipped weapon. */
+function equipmentModifiers(): StatModifier[] {
+  const weapon = gameState.rpg.profile?.loadout?.weapon;
+  const itemId = weapon ? (typeof weapon === "string" ? weapon : weapon.itemId) : null;
+  const def = weaponDefForItem(itemId);
+  if (!def?.statModifiers) return [];
+  return def.statModifiers.map((m) => ({
+    stat: m.stat as StatKey,
+    op: m.op,
+    value: m.value,
+    source: "equipment" as const,
+  }));
+}
+
 const derived = $derived.by<PlayerStats>(() => {
   const base = computeBaseStatsAtLevel(getCharacterLevel());
-  return applyModifiers(base, statusModifiersToStatModifiers(getStatusModifiers()));
+  const mods = [
+    ...statusModifiersToStatModifiers(getStatusModifiers()),
+    ...equipmentModifiers(),
+  ];
+  return applyModifiers(base, mods);
 });
 
 /** Effective player stats: level growth with status multipliers applied. */

@@ -1,6 +1,8 @@
 <script lang="ts">
+import { onMount, onDestroy } from "svelte";
 import { panelPositions, updatePanelPosition } from "$lib/state/panel-positions.svelte";
 import type { Snippet } from "svelte";
+import { playSound } from "$lib/audio/audio-engine";
 
 let {
   id,
@@ -14,7 +16,7 @@ let {
   title: string;
   width?: string;
   height?: string;
-  onClose?: () => void;
+  onClose?: (() => void) | undefined;
   children: Snippet;
 } = $props();
 
@@ -23,6 +25,26 @@ let startX = 0;
 let startY = 0;
 let initialX = 0;
 let initialY = 0;
+
+onMount(() => {
+  playSound("ui.panel.open", { conditions: { panelId: id } });
+  if (typeof window !== "undefined" && !panelPositions[id]) {
+    const centerableIds = ["construction-panel", "station-panel", "carcass-panel", "medicine-panel", "object-action-panel", "inspect"];
+    if (centerableIds.includes(id)) {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const panelWidth = width.endsWith("rem") ? parseFloat(width) * 16 : width.endsWith("px") ? parseFloat(width) : 380;
+      const panelHeight = height.endsWith("rem") ? parseFloat(height) * 16 : height.endsWith("px") ? parseFloat(height) : 300;
+      const defaultX = Math.round((w - panelWidth) / 2);
+      const defaultY = Math.round((h - panelHeight) / 2);
+      updatePanelPosition(id, defaultX, defaultY);
+    }
+  }
+});
+
+onDestroy(() => {
+  playSound("ui.panel.close", { conditions: { panelId: id } });
+});
 
 const position = $derived(panelPositions[id] || { x: 0, y: 0 });
 
@@ -85,13 +107,19 @@ function handleMouseUp() {
 
 <style>
   .game-panel-wrapper {
-    position: relative;
-    background: linear-gradient(135deg, rgba(20, 16, 14, 0.94), rgba(12, 10, 8, 0.97));
-    border: 1px solid rgba(255, 220, 120, 0.16);
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    background:
+      linear-gradient(135deg, rgba(31, 24, 20, 0.94), rgba(13, 11, 9, 0.98)),
+      url("/assets/ashenmoon/ui/panel-paper.svg");
+    background-size: auto, 64px 64px;
+    border: 1px solid rgba(185, 155, 98, 0.42);
     border-radius: 4px;
     box-shadow: 
       0 10px 30px rgba(0, 0, 0, 0.75), 
-      inset 0 0 16px rgba(255, 220, 120, 0.03);
+      inset 0 0 16px rgba(185, 155, 98, 0.05);
     backdrop-filter: blur(12px);
     transition: box-shadow 0.15s, border-color 0.15s, width 0.2s ease-in-out, height 0.2s ease-in-out;
     user-select: none;
@@ -101,11 +129,11 @@ function handleMouseUp() {
   }
 
   .game-panel-wrapper.is-dragging {
-    border-color: rgba(255, 220, 120, 0.45);
+    border-color: rgba(185, 155, 98, 0.75);
     box-shadow: 
       0 15px 40px rgba(0, 0, 0, 0.85), 
-      0 0 15px rgba(255, 220, 120, 0.12),
-      inset 0 0 16px rgba(255, 220, 120, 0.05);
+      0 0 15px rgba(185, 155, 98, 0.12),
+      inset 0 0 16px rgba(185, 155, 98, 0.05);
     z-index: 150 !important;
   }
 
@@ -121,29 +149,29 @@ function handleMouseUp() {
   .corner-ornament.top-left {
     top: -1px;
     left: -1px;
-    border-top: 2px solid #ffdc78;
-    border-left: 2px solid #ffdc78;
+    border-top: 2px solid #b99b62;
+    border-left: 2px solid #b99b62;
   }
   
   .corner-ornament.top-right {
     top: -1px;
     right: -1px;
-    border-top: 2px solid #ffdc78;
-    border-right: 2px solid #ffdc78;
+    border-top: 2px solid #b99b62;
+    border-right: 2px solid #b99b62;
   }
   
   .corner-ornament.bottom-left {
     bottom: -1px;
     left: -1px;
-    border-bottom: 2px solid #ffdc78;
-    border-left: 2px solid #ffdc78;
+    border-bottom: 2px solid #b99b62;
+    border-left: 2px solid #b99b62;
   }
   
   .corner-ornament.bottom-right {
     bottom: -1px;
     right: -1px;
-    border-bottom: 2px solid #ffdc78;
-    border-right: 2px solid #ffdc78;
+    border-bottom: 2px solid #b99b62;
+    border-right: 2px solid #b99b62;
   }
 
   .game-panel-inner {
@@ -157,9 +185,11 @@ function handleMouseUp() {
     display: flex;
     align-items: center;
     padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid rgba(255, 220, 120, 0.08);
+    border-bottom: 1px solid rgba(185, 155, 98, 0.24);
     cursor: grab;
-    background: rgba(255, 220, 120, 0.02);
+    background:
+      linear-gradient(90deg, rgba(185, 155, 98, 0.08), rgba(185, 155, 98, 0.02)),
+      url("/assets/ashenmoon/ui/ink-separator.svg") bottom center / 160px 16px repeat-x;
   }
 
   .game-panel-header:active {
@@ -168,7 +198,7 @@ function handleMouseUp() {
 
   .panel-drag-handle {
     font-size: 0.95rem;
-    color: rgba(255, 220, 120, 0.35);
+    color: rgba(185, 155, 98, 0.55);
     margin-right: 0.6rem;
     line-height: 1;
     font-family: monospace;
@@ -181,7 +211,7 @@ function handleMouseUp() {
     font-family: "Cinzel", serif;
     font-size: 0.82rem;
     font-weight: 700;
-    color: #ffdc78;
+    color: #d9c28e;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin: 0;

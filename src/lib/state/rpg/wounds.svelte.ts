@@ -2,14 +2,20 @@ import {
   createWound,
   statusIdsForWound,
   tickWound,
+  treatWound,
   type WoundSeverity,
   type WoundState,
+  type TreatmentId,
 } from "$lib/domain/injury/wounds";
 import { StorageKeys } from "$lib/domain/game-events";
 import { StatusId } from "$lib/domain/systems/status-types";
-import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
+import { applyStatusEffect, clearStatusEffect } from "$lib/state/rpg/status-effects.svelte";
 import { playerRpgEntityId, rpgEventQueue } from "$lib/state/rpg/rpg-feedback-router";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
+import { setRpgInventory } from "$lib/state/rpg-actions.svelte";
+import { removeStackQty } from "$lib/domain/systems/inventory-system";
+import { gameState } from "$lib/state/game-state.svelte";
+import { getItemQty } from "$lib/state/rpg/inventory-api";
 
 export const woundState = $state<{ active: WoundState[] }>({ active: [] });
 const WOUND_TICK_INTERVAL_SEC = 1;
@@ -95,4 +101,60 @@ export function loadWounds(): void {
 
 function saveWounds(): void {
   saveSlice(StorageKeys.wounds, woundState.active);
+}
+
+export function clearAllWounds(): void {
+  woundState.active = [];
+  saveWounds();
+}
+
+export function treatActiveWound(
+  woundId: string,
+  treatment: TreatmentId,
+  itemCostId: string,
+): { readonly success: boolean; readonly feedback: string } {
+  // 1. Verify item is in inventory
+  const qty = getItemQty(itemCostId);
+  if (qty <= 0) {
+    return { success: false, feedback: "You do not have the required item in your inventory." };
+  }
+
+  // 2. Find the wound
+  const index = woundState.active.findIndex((w) => w.id === woundId);
+  if (index === -1) {
+    return { success: false, feedback: "Wound not found." };
+  }
+
+  const wound = woundState.active[index]!;
+
+  // 3. Apply treatment
+  const result = treatWound(wound, treatment);
+  if (result.wound === wound) {
+    return { success: false, feedback: result.feedback };
+  }
+
+  // 4. Update wound in state
+  const updatedWounds = [...woundState.active];
+  updatedWounds[index] = result.wound;
+  woundState.active = updatedWounds;
+  saveWounds();
+
+  // 5. Deduct item from inventory
+  if (gameState.rpg.inventory) {
+    setRpgInventory(removeStackQty(gameState.rpg.inventory, itemCostId, 1));
+  }
+
+  // 6. Check if we need to clear Bleeding status effect
+  const anyBleeding = woundState.active.some((w) => w.bleeding);
+  if (!anyBleeding) {
+    clearStatusEffect(StatusId.Bleeding);
+  }
+
+  // 7. Check if we need to clear Infected status effect
+  const anyInfected = woundState.active.some((w) => w.infected);
+  if (!anyInfected) {
+    clearStatusEffect(StatusId.Infected);
+  }
+
+  return { success: true, feedback: result.feedback };
 }

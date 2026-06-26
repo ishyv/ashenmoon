@@ -1,4 +1,4 @@
-﻿import type { CommandSource, SkillCommandKey } from "$lib/domain/game-command";
+import type { CommandSource, SkillCommandKey } from "$lib/domain/game-command";
 import { setStamina, spendStamina, stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import {
@@ -7,12 +7,13 @@ import {
   clearStatusEffect,
   statusState,
 } from "$lib/state/rpg/status-effects.svelte";
-import { setThirst, thirst, thirstConfig } from "$lib/state/rpg/survival.svelte";
+import { setThirst, setHunger, thirst, thirstConfig } from "$lib/state/rpg/survival.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
 import type { GameEngine } from "$lib/core/engine";
 import type { CommandContext } from "./command-runtime";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgInventory, setRpgProfile, setRpgSkills } from "$lib/state/rpg-actions.svelte";
+import { clearAllWounds } from "$lib/state/rpg/wounds.svelte";
 import { devEquip, devGiveItem, devSetHp } from "$lib/state/dev-rpg-actions";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 
@@ -143,7 +144,13 @@ export function createEngineCommandContext(
         setRpgProfile(null);
         setRpgInventory(null);
         setRpgSkills(null);
-        return "rpg state cleared";
+        clearAllStatusEffects();
+        clearAllWounds();
+        setThirst(100);
+        setHunger(100);
+        setStamina(staminaConfig.max);
+        engine.devSetPlayerHp(600);
+        return "player profile, inventory, skills, survival stats, wounds, and status effects reset to default";
       },
     },
     skill: {

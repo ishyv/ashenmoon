@@ -46,6 +46,7 @@ export {
   CuttingEdge,
   RestQuality,
   Blueprint,
+  EquippableVisuals,
   traitOf,
   type ItemTrait,
   type BlueprintTrait,
@@ -54,6 +55,7 @@ export {
   type DecayableTrait,
   type ConsumableTrait,
   type BoilableTrait,
+  type EquippableVisualsTrait,
 } from "./item-traits";
 
 // effect DSL

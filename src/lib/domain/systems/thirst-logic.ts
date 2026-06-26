@@ -28,6 +28,7 @@ export const DEFAULT_THIRST_CONFIG: ThirstConfig = {
 export interface ThirstActivity {
   moving: boolean;
   laboring: boolean;
+  raining?: boolean;
 }
 
 /** Drain for a time slice. Laboring dominates moving; both fall back to base. */

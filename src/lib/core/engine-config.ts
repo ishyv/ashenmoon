@@ -15,7 +15,14 @@ export const ENGINE_CONFIG = {
   },
   
   // --- Animation & Feedback ---
-  PLAYER_BASE_SCALE: (64 * 1.1) / 192, // 64 = TILE from map.ts
+  PLAYER_BASE_SCALE: (64 * 1.1) / 192, // legacy callers; prefer ACTOR_VISUALS for Ashenmoon standees
+  ACTOR_VISUALS: {
+    PLAYER_HEIGHT_TILES: 1.3,
+    HUMANOID_HEIGHT_TILES: 1.38,
+    HUMANOID_SHADOW_SCALE: 0.48,
+    PLAYER_RUN_BOB_PX: 3,
+    PLAYER_ATTACK_LEAN_RAD: 0.16,
+  },
   NOTIFY_DURATION_MS: 2500,
   
   // --- Environment & Weather ---

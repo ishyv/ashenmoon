@@ -27,6 +27,23 @@ vi.mock("$lib/audio/audio-engine", () => ({
   setListener: vi.fn(),
 }));
 
+vi.mock("$lib/state/rpg/stats.svelte", async () => {
+  const actual = await vi.importActual<typeof import("$lib/state/rpg/stats.svelte")>("$lib/state/rpg/stats.svelte");
+  return {
+    ...actual,
+    getPlayerStats: () => {
+      const stats = actual.getPlayerStats();
+      return {
+        ...stats,
+        combat: {
+          ...stats.combat,
+          attackDamage: 10,
+        },
+      };
+    },
+  };
+});
+
 function setup() {
   const world = new World<Entity>();
   const inputs = new InputResource();

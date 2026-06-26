@@ -1,5 +1,6 @@
 import type { InventoryEffect, VitalsEffect } from "./item-effects";
 import type { ItemDefinition } from "./item-types";
+import { EquippableVisuals, type EquippableVisualsTrait } from "./equippable-visuals";
 
 /**
  * Union of all capabilities an item can possess.
@@ -30,7 +31,8 @@ export type ItemTrait =
   | HandlingRiskTrait
   | CuttingEdgeTrait
   | RestQualityTrait
-  | BlueprintTrait;
+  | BlueprintTrait
+  | EquippableVisualsTrait;
 
 /**
  * Defines item behavior based on ambient temperature.
@@ -127,6 +129,12 @@ export interface WeaponTrait {
   damage: number;
   damageType: "slash" | "pierce" | "blunt";
   bleedChancePct?: number;
+  /**
+   * Links this item to an explicit `WeaponDefinition` (see
+   * domain/combat/weapons/weapon-registry). When absent, combat derives a default
+   * definition from this trait, so non-authored weapons still work.
+   */
+  weaponDefId?: string;
 }
 
 export interface ReachWeaponTrait {
@@ -266,6 +274,7 @@ export function Weapon(input: {
   damage: number;
   damageType: "slash" | "pierce" | "blunt";
   bleedChancePct?: number;
+  weaponDefId?: string;
 }): WeaponTrait {
   return { kind: "weapon", ...input };
 }
@@ -357,3 +366,5 @@ export function traitOf<K extends ItemTrait["kind"]>(
     (trait): trait is Extract<ItemTrait, { kind: K }> => trait.kind === kind,
   );
 }
+
+export { EquippableVisuals, type EquippableVisualsTrait };

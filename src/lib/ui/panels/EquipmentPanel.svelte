@@ -1,8 +1,11 @@
 <script lang="ts">
 import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
+
+let { onClose }: { onClose?: (() => void) | undefined } = $props();
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
+import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 
 let hoveredSlot = $state<string | null>(null);
 
@@ -152,7 +155,7 @@ const activeHoverDetail = $derived(() => {
 });
 </script>
 
-<GamePanel id="loadout" title="loadout">
+<GamePanel id="loadout" title="loadout" {onClose}>
   <div class="equip-panel-body">
     <div class="gear-slots">
       <!-- Row 1: Helmet -->
@@ -170,16 +173,7 @@ const activeHoverDetail = $derived(() => {
           {#if helmet()}
             {@const meta = helmetMeta()}
             {#if meta}
-              {#if meta.iconSheet}
-                {@const s = meta.iconSheet}
-                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
-              {:else if meta.iconUrl}
-                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-              {:else if meta.icon}
-                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
-              {:else}
-                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
-              {/if}
+              <ItemIcon itemId={helmet()?.itemId ?? "stick"} def={meta} class="item-icon-img" />
             {/if}
           {:else}
             <span class="slot-placeholder">head</span>
@@ -202,16 +196,7 @@ const activeHoverDetail = $derived(() => {
           {#if weapon()}
             {@const meta = weaponMeta()}
             {#if meta}
-              {#if meta.iconSheet}
-                {@const s = meta.iconSheet}
-                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
-              {:else if meta.iconUrl}
-                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-              {:else if meta.icon}
-                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
-              {:else}
-                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
-              {/if}
+              <ItemIcon itemId={weapon()?.itemId ?? "stick"} def={meta} class="item-icon-img" />
             {/if}
           {:else}
             <span class="slot-placeholder">tool</span>
@@ -231,16 +216,7 @@ const activeHoverDetail = $derived(() => {
           {#if chest()}
             {@const meta = chestMeta()}
             {#if meta}
-              {#if meta.iconSheet}
-                {@const s = meta.iconSheet}
-                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
-              {:else if meta.iconUrl}
-                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-              {:else if meta.icon}
-                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
-              {:else}
-                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
-              {/if}
+              <ItemIcon itemId={chest()?.itemId ?? "stick"} def={meta} class="item-icon-img" />
             {/if}
           {:else}
             <span class="slot-placeholder">body</span>
@@ -260,16 +236,7 @@ const activeHoverDetail = $derived(() => {
           {#if shield()}
             {@const meta = shieldMeta()}
             {#if meta}
-              {#if meta.iconSheet}
-                {@const s = meta.iconSheet}
-                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
-              {:else if meta.iconUrl}
-                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-              {:else if meta.icon}
-                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
-              {:else}
-                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
-              {/if}
+              <ItemIcon itemId={shield()?.itemId ?? "stick"} def={meta} class="item-icon-img" />
             {/if}
           {:else}
             <span class="slot-placeholder">guard</span>
@@ -292,16 +259,7 @@ const activeHoverDetail = $derived(() => {
           {#if pants()}
             {@const meta = pantsMeta()}
             {#if meta}
-              {#if meta.iconSheet}
-                {@const s = meta.iconSheet}
-                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
-              {:else if meta.iconUrl}
-                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-              {:else if meta.icon}
-                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
-              {:else}
-                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
-              {/if}
+              <ItemIcon itemId={pants()?.itemId ?? "stick"} def={meta} class="item-icon-img" />
             {/if}
           {:else}
             <span class="slot-placeholder">legs</span>
@@ -324,16 +282,7 @@ const activeHoverDetail = $derived(() => {
           {#if boots()}
             {@const meta = bootsMeta()}
             {#if meta}
-              {#if meta.iconSheet}
-                {@const s = meta.iconSheet}
-                <div class="slot-icon" style="background-image:url({s.src});background-position:-{s.col*s.size}px -{s.row*s.size}px;width:{s.size}px;height:{s.size}px;background-repeat:no-repeat;image-rendering:pixelated;" role="img" aria-label={meta.name}></div>
-              {:else if meta.iconUrl}
-                <img src={meta.iconUrl} alt={meta.name} class="item-icon-img" />
-              {:else if meta.icon}
-                <span class="slot-icon slot-icon-emoji">{meta.icon}</span>
-              {:else}
-                <span class="slot-icon">{meta.name.slice(0, 2).toLowerCase()}</span>
-              {/if}
+              <ItemIcon itemId={boots()?.itemId ?? "stick"} def={meta} class="item-icon-img" />
             {/if}
           {:else}
             <span class="slot-placeholder">feet</span>
@@ -464,14 +413,6 @@ const activeHoverDetail = $derived(() => {
     letter-spacing: 0.05em;
   }
 
-  .slot-icon {
-    font-size: 1.4rem;
-  }
-
-  .slot-icon-emoji {
-    font-size: 1.6rem;
-    line-height: 1;
-  }
 
   .slot-details {
     padding: 0.8rem 1rem;
@@ -538,7 +479,7 @@ const activeHoverDetail = $derived(() => {
     margin-top: 0.3rem;
   }
 
-  .item-icon-img {
+  :global(.item-icon-img) {
     width: 100%;
     height: 100%;
     object-fit: contain;

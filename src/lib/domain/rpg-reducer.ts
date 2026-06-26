@@ -17,7 +17,7 @@ const BUILDING_RECLAIM_RATIO = 0.5;
 const DEFAULT_DECAY_RESULT = "volatile_ash";
 
 export type RpgReducerCommand =
-  | { type: "equipTool"; itemId: string | null }
+  | { type: "equipTool"; itemId: string | null; auto?: boolean }
   | {
       type: "equipGear";
       itemId: string | null;
@@ -30,6 +30,7 @@ export type RpgReducerCommand =
   | { type: "studyBlueprint"; itemId: string }
   | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
+  | { type: "upgradeBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number }
   | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
 
@@ -144,6 +145,20 @@ function equipTool(
   const slot = playerState.inventory.slots[command.itemId];
   const exists = slot && ("qty" in slot ? slot.qty > 0 : slot.instances.length > 0);
   if (!exists) throw new Error("Item not in inventory");
+
+  const def = ITEM_DEFINITIONS[command.itemId];
+  const visual = def ? traitOf(def, "equippable_visuals") : undefined;
+
+  // If two-handed weapon/tool, unequip shield
+  if (visual && visual.handUsage === "two-handed") {
+    const shield = playerState.profile.loadout.shield;
+    if (shield) {
+      const shieldItemId = typeof shield === "string" ? shield : shield.itemId;
+      addQty(playerState.inventory.slots, shieldItemId, 1);
+      playerState.profile.loadout.shield = null;
+    }
+  }
+
   playerState.profile.loadout.weapon = {
     instanceId: `standalone_${command.itemId}_${options.now?.() ?? Date.now()}`,
     itemId: command.itemId,
@@ -202,6 +217,51 @@ function equipGear(
     throw new Error(`Item ${itemId} cannot be equipped in slot ${slotKey}`);
   }
 
+  // --- Hand usage & Multi-slot constraint checks ---
+  const visual = traitOf(def, "equippable_visuals");
+
+  // A. If equipping a shield, check if currently equipped weapon is two-handed
+  if (slotKey === "shield") {
+    const equippedWeapon = playerState.profile.loadout.weapon;
+    if (equippedWeapon) {
+      const weaponId = typeof equippedWeapon === "string" ? equippedWeapon : equippedWeapon.itemId;
+      const weaponDef = ITEM_DEFINITIONS[weaponId];
+      const weaponVisual = weaponDef ? traitOf(weaponDef, "equippable_visuals") : undefined;
+      if (weaponVisual && weaponVisual.handUsage === "two-handed") {
+        addQty(playerState.inventory.slots, weaponId, 1);
+        playerState.profile.loadout.weapon = null; // Unequip weapon
+      }
+    }
+  }
+
+  // B. Check if this slot is currently blocked by a multi-slot item equipped in another slot
+  for (const otherSlotKey of Object.keys(playerState.profile.loadout) as (keyof typeof playerState.profile.loadout)[]) {
+    if (otherSlotKey === slotKey) continue;
+    const otherEquipped = playerState.profile.loadout[otherSlotKey];
+    if (otherEquipped) {
+      const otherItemId = typeof otherEquipped === "string" ? otherEquipped : otherEquipped.itemId;
+      const otherDef = ITEM_DEFINITIONS[otherItemId];
+      const otherVisual = otherDef ? traitOf(otherDef, "equippable_visuals") : undefined;
+      if (otherVisual && otherVisual.slots.includes(slotKey as any)) {
+        throw new Error(`Slot ${slotKey} is blocked by equipped ${otherItemId}`);
+      }
+    }
+  }
+
+  // C. If this item covers multiple slots, unequip any items in those slots
+  if (visual && visual.slots.length > 1) {
+    for (const coveredSlot of visual.slots) {
+      if (coveredSlot === slotKey) continue;
+      const itemInCoveredSlot = playerState.profile.loadout[coveredSlot];
+      if (itemInCoveredSlot) {
+        const coveredItemId = typeof itemInCoveredSlot === "string" ? itemInCoveredSlot : itemInCoveredSlot.itemId;
+        addQty(playerState.inventory.slots, coveredItemId, 1);
+        playerState.profile.loadout[coveredSlot] = null;
+      }
+    }
+  }
+  // ------------------------------------------------------
+
   // Deduct from inventory
   removeQty(playerState.inventory.slots, itemId, 1);
 
@@ -254,8 +314,49 @@ function build(
       x: command.x,
       y: command.y,
       ...(command.sourceItemId ? { sourceItemId: command.sourceItemId } : {}),
+      ...(spec.isMultiStage ? { stage: 0 } : {}),
     },
   ];
+  return { playerState };
+}
+
+function upgradeBuilding(
+  state: RpgPlayerState,
+  command: Extract<RpgReducerCommand, { type: "upgradeBuilding" }>,
+  options: RpgReducerOptions,
+): { playerState: RpgPlayerState } {
+  const playerState = clonePlayerState(state);
+  const building = playerState.profile.buildings?.find((b) => b.id === command.buildingId);
+  if (!building) throw new Error("Building not found");
+
+  const spec = getBuildingSpec(building.type);
+  if (!spec.isMultiStage || !spec.constructionStages) {
+    throw new Error("Building is not multi-stage");
+  }
+
+  const currentStage = building.stage ?? 0;
+  if (currentStage >= 5) {
+    throw new Error("Building already fully constructed");
+  }
+
+  const nextStage = currentStage + 1;
+  const stageSpec = spec.constructionStages.find((s) => s.stage === nextStage);
+  if (!stageSpec) {
+    throw new Error(`Invalid next construction stage ${nextStage}`);
+  }
+
+  if (!options.freeBuilding) {
+    const slots = { ...playerState.inventory.slots };
+    for (const [itemId, reqQty] of Object.entries(stageSpec.cost)) {
+      if (getQty(slots[itemId]) < reqQty) throw new Error(`Insufficient ${itemId}`);
+    }
+    for (const [itemId, reqQty] of Object.entries(stageSpec.cost)) {
+      removeQty(slots, itemId, reqQty);
+    }
+    playerState.inventory = { slots };
+  }
+
+  building.stage = nextStage;
   return { playerState };
 }
 
@@ -372,6 +473,8 @@ export function reduceRpgCommand(
       return build(state, command, options);
     case "destroyBuilding":
       return destroyBuilding(state, command);
+    case "upgradeBuilding":
+      return upgradeBuilding(state, command, options);
     case "placeItem":
       return placeItem(state, command);
     case "environmentTick":
