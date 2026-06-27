@@ -1,6 +1,7 @@
 export interface CampfireState {
   isLit: boolean;
   fuelRemainingMs: number;
+  fuelCapacityMs?: number;
   heatRadiusPx: number;
   lightRadiusPx: number;
   wetness: number;
@@ -48,9 +49,12 @@ export interface CampCluster {
 
 export function createCampfireState(input: Partial<CampfireState> = {}): CampfireState {
   const isLit = input.isLit ?? false;
+  const fuelRemainingMs = input.fuelRemainingMs ?? (isLit ? 30_000 : 0);
+  const fuelCapacityMs = input.fuelCapacityMs ?? (isLit && input.fuelRemainingMs != null ? input.fuelRemainingMs : 30_000);
   return {
     isLit,
-    fuelRemainingMs: input.fuelRemainingMs ?? (isLit ? 30_000 : 0),
+    fuelRemainingMs,
+    fuelCapacityMs,
     heatRadiusPx: isLit ? (input.heatRadiusPx ?? 224) : 0,
     lightRadiusPx: isLit ? (input.lightRadiusPx ?? 288) : 0,
     wetness: input.wetness ?? 0,
