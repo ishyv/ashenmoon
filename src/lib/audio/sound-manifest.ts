@@ -85,6 +85,7 @@ export type SoundId =
   | "craft.cut"
   | "craft.crush"
   | "craft.cook.meat"
+  | "craft.cook.sizzle"
   | "recipe.discovered"
   | "consume"
   | "station.boil"
@@ -129,6 +130,7 @@ export type SoundId =
   | "campfire.ignite"
   | "campfire.loop"
   | "campfire.low"
+  | "campfire.extinguish"
   | "rain.loop"
   | "wind.loop"
   | "river.loop"
@@ -244,6 +246,7 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
     tags: ["craft", "stone", "herb"],
   },
   "craft.cook.meat": { bus: "sfx", recipe: "campfireCrackle", pitchJitter: 60, gainJitter: 0.08, tags: ["craft", "meat", "fire"] },
+  "craft.cook.sizzle": { bus: "sfx", recipe: "campfireCrackle", gain: 0.45, loopIntervalMs: 500, tags: ["craft", "fire", "loop"] },
   "recipe.discovered": { bus: "ui", recipe: "discovery", throttleMs: 120, pitchJitter: 45, gain: 0.75, tags: ["ui", "recipe"] },
   consume: { bus: "sfx", recipe: "pickup", pitchJitter: 100, gainJitter: 0.1 },
   "station.boil": { bus: "sfx", recipe: "waterCollect", throttleMs: 200, pitchJitter: 80, tags: ["station", "water"] },
@@ -422,6 +425,7 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "campfire.ignite": { bus: "ambient", recipe: "campfireIgnite", spatial: true, throttleMs: 250, pitchJitter: 70, gainJitter: 0.08, tags: ["environment", "fire"] },
   "campfire.loop": { bus: "ambient", recipe: "campfireCrackle", spatial: true, loopIntervalMs: 420, pitchJitter: 70, gainJitter: 0.12, gain: 0.72, tags: ["environment", "fire", "loop"] },
   "campfire.low": { bus: "ambient", recipe: "campfireLow", spatial: true, loopIntervalMs: 850, pitchJitter: 60, gainJitter: 0.1, gain: 0.55, tags: ["environment", "fire", "loop"] },
+  "campfire.extinguish": { bus: "ambient", recipe: "campfireLow", spatial: true, throttleMs: 2000, gain: 0.7, tags: ["environment", "fire"] },
   "rain.loop": { bus: "ambient", recipe: "rainPulse", loopIntervalMs: 520, pitchJitter: 40, gainJitter: 0.08, gain: 0.58, tags: ["environment", "rain", "loop"] },
   "wind.loop": { bus: "ambient", recipe: "wind", loopIntervalMs: 760, pitchJitter: 30, gainJitter: 0.08, gain: 0.55, tags: ["environment", "wind", "loop"] },
   "river.loop": { bus: "ambient", recipe: "riverPulse", spatial: true, loopIntervalMs: 650, pitchJitter: 40, gainJitter: 0.08, gain: 0.62, tags: ["environment", "water", "loop"] },
