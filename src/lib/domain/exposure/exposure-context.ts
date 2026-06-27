@@ -16,6 +16,17 @@ export interface ExposureContext {
   readonly radiantHeat: number;
 }
 
+/**
+ * Exposure context for an item sitting in the world, where rain is a factor.
+ * Superset of `ExposureContext` so `effectiveTemperature` and the inventory
+ * reaction path keep working unchanged; the placed-reaction engine reads the
+ * extra `wetness` for its moisture reactions.
+ */
+export interface PlacedExposureContext extends ExposureContext {
+  /** Rain influx pressure at the item's tile (0..1) from EnvironmentSample.wetness. */
+  readonly wetness: number;
+}
+
 export type ItemLocation =
   | "inventory"
   | "world_drop"

@@ -6,11 +6,14 @@ import {
   flashEntity,
   spawnDamageNumber,
   spawnDeathBurst,
+  spawnEnvFloatingText,
+  spawnEnvParticles,
   spawnSlashArc,
   triggerCameraShake,
   type VFXResource,
 } from "$lib/core/vfx/vfx";
 import { playSound } from "$lib/audio/audio-engine";
+import { resolveCombatSound } from "$lib/audio/audio-feedback";
 import type { SoundId } from "$lib/audio/sound-manifest";
 import type { QueuedGameEvent } from "$lib/domain/game-event-queue";
 import { Colors } from "$lib/utils/colors";
@@ -33,8 +36,12 @@ export function routeGameEventsToFeedback(
       routeEntityDied(event, context);
     } else if (event.type === "feedback_requested") {
       routeFeedbackRequested(event);
+    } else if (event.type === "placed_item_reacted") {
+      routePlacedItemReacted(event, context);
     } else if (event.type === "attack_started") {
       routeAttackStarted(event, context);
+    } else if (event.type === "attack_missed") {
+      playSound(resolveCombatSound({ phase: "miss", weaponCategory: event.soundProfile }));
     } else if (event.type === "interaction_completed") {
       playSound("craft");
     } else if (event.type === "world_action_completed") {
@@ -61,7 +68,35 @@ function routeAttackStarted(
     (event.arcDegrees * Math.PI) / 360, // half-angle in radians
     Colors.combat.slashArc,
   );
-  playSound("player.swing", { conditions: { weaponCategory: event.soundProfile } });
+  playSound(resolveCombatSound({ phase: "swing", weaponCategory: event.soundProfile }), {
+    conditions: { weaponCategory: event.soundProfile },
+  });
+}
+
+/**
+ * World-item environmental reaction: floating bark at the item, smoke when it
+ * starts to smolder, and a craft sound when it finishes transforming. Knowledge
+ * unlocks ride the rpg event queue, not this presentation path.
+ */
+function routePlacedItemReacted(
+  event: Extract<QueuedGameEvent, { type: "placed_item_reacted" }>,
+  context: FeedbackRouterContext,
+): void {
+  const color =
+    event.outcome === "transformed"
+      ? Colors.ui.success
+      : event.outcome === "destroyed"
+        ? Colors.ui.muted
+        : Colors.ui.warning;
+
+  spawnEnvFloatingText(context.vfx, event.message, color, event.position, context.entityLayer, event.entityId);
+
+  if (event.reactionId === "ignite" && event.outcome === "warned") {
+    spawnEnvParticles(context.vfx, Colors.vfx.smoke, 5, "smoke", event.position, context.entityLayer);
+  }
+  if (event.outcome === "transformed") {
+    playSound("craft");
+  }
 }
 
 function routeFeedbackRequested(
@@ -118,7 +153,7 @@ function routeDamageApplied(
   triggerCameraShake(context.vfx, isPlayer ? 4 : 2.5, 0.12);
 
   const species = target?.animal?.speciesId ?? "humanoid";
-  playSound(isPlayer ? "combat.hit.player" : "combat.hit.enemy", {
+  playSound(isPlayer ? "combat.hit.player" : resolveCombatSound({ phase: "hit", targetMaterial: "flesh" }), {
     position: hitPos,
     conditions: { targetSpecies: species }
   });

@@ -35,6 +35,8 @@ export interface ActiveStatus {
    * Feeds the knowledge auto-memory system; absent for dev-applied statuses.
    */
   source?: string;
+  /** When true, pulse damage from this status floors HP at 1 and cannot kill. */
+  nonLethal?: boolean;
 }
 
 /** Periodic effect applied every `pulseEverySec` while the status is active. */

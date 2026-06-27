@@ -15,12 +15,21 @@ export type CraftingCategory =
 
 export type CraftingContextId = "hand" | "campfire" | "placement" | "meat_smoking_rack" | StationId;
 
+/** An alternative material that satisfies a recipe cost slot. */
+export interface RecipeCostSubstitute {
+  readonly itemId: ValidItemId;
+  readonly name: string;
+  readonly required: number;
+}
+
 /** A single material requirement for a recipe. `itemId` is an inventory slot key. */
 export interface RecipeCost {
   readonly itemId: ValidItemId;
   /** Display label for the cost line (HUD copy). */
   readonly name: string;
   readonly required: number;
+  /** Alternative materials that satisfy this slot, checked in order when the primary is unavailable. */
+  readonly substitutes?: ReadonlyArray<RecipeCostSubstitute>;
 }
 
 /** A craftable recipe: consume `costs`, produce `output`. */

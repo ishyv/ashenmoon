@@ -18,6 +18,26 @@ describe("wound model", () => {
     expect(washed.infectionRisk).toBeLessThan(wound.infectionRisk);
   });
 
+  it("crude dressing helps minor cuts without fully solving deeper bleeding", () => {
+    const cut = createWound({ id: "cut_1", severity: "cut", contamination: 1 });
+    const dressedCut = treatWound(cut, "clean_binding", { itemId: "crude_dressing" }).wound;
+    expect(dressedCut.infectionRisk).toBeLessThan(cut.infectionRisk);
+
+    const deepCut = createWound({ id: "deep_1", severity: "deep_cut", contamination: 1 });
+    const dressedDeepCut = treatWound(deepCut, "clean_binding", { itemId: "crude_dressing" }).wound;
+    expect(dressedDeepCut.bleeding).toBe(true);
+  });
+
+  it("clean bandage controls bleeding better than crude dressing", () => {
+    const deepCut = createWound({ id: "deep_1", severity: "deep_cut", contamination: 1 });
+    const crude = treatWound(deepCut, "clean_binding", { itemId: "crude_dressing" }).wound;
+    const clean = treatWound(deepCut, "clean_binding", { itemId: "clean_bandage" }).wound;
+
+    expect(crude.bleeding).toBe(true);
+    expect(clean.bleeding).toBe(false);
+    expect(clean.infectionRisk).toBeLessThan(crude.infectionRisk);
+  });
+
   it("untreated risky wounds can progress to infection", () => {
     const wound = createWound({ id: "bite_1", severity: "bite_wound", contamination: 1 });
     const progressed = tickWound(wound, 3600, () => 0);

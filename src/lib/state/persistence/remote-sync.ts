@@ -69,9 +69,17 @@ export function syncBuild(
 export function syncPlaceItem(
   itemId: string,
   qty = 1,
+  x?: number,
+  y?: number,
 ): Promise<SyncResult<RpgPlayerState>> {
   return syncLocal(async () => {
-    const result = await dispatchRpgCommand({ type: "placeItem", itemId, quantity: qty });
+    const result = await dispatchRpgCommand({
+      type: "placeItem",
+      itemId,
+      quantity: qty,
+      ...(typeof x === "number" ? { x } : {}),
+      ...(typeof y === "number" ? { y } : {}),
+    });
     if (!result.ok) throw new Error(result.error);
     return result.data.playerState;
   });

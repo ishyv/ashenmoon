@@ -9,7 +9,7 @@
  * SSR/test safe: with no AudioContext available, every call is a silent no-op.
  */
 
-import { SOUNDS, type Bus, type SoundId, type AmbientBiome, type SoundDef } from "./sound-manifest";
+import { SOUNDS, type AudioBusId, type Bus, type SoundId, type AmbientBiome, type SoundDef } from "./sound-manifest";
 import { RECIPES } from "./recipes";
 import { getSampleBuffer, preloadSamples } from "./sample-loader";
 import { shouldThrottle, spatialGainPan, type Vec2 } from "./spatial";
@@ -41,6 +41,16 @@ const listener: Vec2 = { x: 0, y: 0 };
 const lastPlayed = new Map<string, number>();
 const recentVoices: number[] = [];
 let ambientTimer = 1.5;
+
+interface LoopHandle {
+  key: string;
+  soundId: SoundId;
+  timer: ReturnType<typeof setInterval>;
+  position?: Vec2;
+  opts: PlayOpts;
+}
+
+const activeLoops = new Map<string, LoopHandle>();
 
 function ensureEngine(): Engine | null {
   if (engine) return engine;
@@ -89,7 +99,7 @@ export function setMuted(value: boolean): void {
   if (engine) engine.master.gain.value = value ? 0 : masterVolume;
 }
 
-export function setBusVolume(bus: Bus | "master", value: number): void {
+export function setBusVolume(bus: AudioBusId, value: number): void {
   const v = Math.max(0, Math.min(1, value));
   if (bus === "master") {
     masterVolume = v;
@@ -111,6 +121,67 @@ export interface PlayOpts {
   params?: RecipeParams;
   /** Key-value pairs for conditional sound variations. */
   conditions?: Record<string, string | number | boolean>;
+}
+
+export function getEffectiveVolume(params: {
+  bus: AudioBusId;
+  baseVolume?: number;
+  requestVolume?: number;
+  distanceFalloff?: number;
+  randomVariation?: number;
+}): number {
+  if (muted) return 0;
+  const master = masterVolume;
+  const busVolume = params.bus === "master" ? 1 : (busVolumes[params.bus] ?? 1);
+  const base = params.baseVolume ?? 1;
+  const request = params.requestVolume ?? 1;
+  const distance = params.distanceFalloff ?? 1;
+  const random = params.randomVariation ?? 1;
+  return Math.max(0, Math.min(1, master * busVolume * base * request * distance * random));
+}
+
+export function play(id: SoundId, opts: PlayOpts = {}): void {
+  playSound(id, opts);
+}
+
+export function playAt(id: SoundId, position: Vec2, opts: PlayOpts = {}): void {
+  playSound(id, { ...opts, position });
+}
+
+export function startLoop(id: SoundId, key: string, position?: Vec2, opts: PlayOpts = {}): string {
+  stopLoop(key);
+  const def = SOUNDS[id];
+  if (!def) return key;
+
+  const loopOpts: PlayOpts = position ? { ...opts, position } : { ...opts };
+  playSound(id, loopOpts);
+
+  const intervalMs = Math.max(80, def.loopIntervalMs ?? 1000);
+  const timer = setInterval(() => {
+    const handle = activeLoops.get(key);
+    if (!handle) return;
+    playSound(handle.soundId, handle.position ? { ...handle.opts, position: handle.position } : handle.opts);
+  }, intervalMs);
+
+  activeLoops.set(key, {
+    key,
+    soundId: id,
+    timer,
+    opts,
+    ...(position ? { position } : {}),
+  });
+  return key;
+}
+
+export function stopLoop(key: string): void {
+  const handle = activeLoops.get(key);
+  if (!handle) return;
+  clearInterval(handle.timer);
+  activeLoops.delete(key);
+}
+
+export function stopAllLoops(): void {
+  for (const key of [...activeLoops.keys()]) stopLoop(key);
 }
 
 /** Evaluate current conditions against variations defined in SoundDef. First match wins. */
@@ -150,6 +221,14 @@ export function resolveSoundDef(
     pitchJitter,
     gainJitter,
   };
+}
+
+function scheduleLayer(soundId: SoundId, opts: PlayOpts, delayMs: number): void {
+  if (delayMs <= 0) {
+    playSound(soundId, opts);
+    return;
+  }
+  setTimeout(() => playSound(soundId, opts), delayMs);
 }
 
 /** Play a sound by event id. Silent no-op when muted, throttled, or capped. */
@@ -193,6 +272,16 @@ export function playSound(id: SoundId, opts: PlayOpts = {}): void {
 
   lastPlayed.set(id, nowMs);
   recentVoices.push(nowMs);
+
+  for (const layer of def.layers ?? []) {
+    const layerOpts: PlayOpts = {
+      ...opts,
+      gain: (opts.gain ?? 1) * (layer.gain ?? 1),
+      pitch: (opts.pitch ?? 0) + (layer.pitch ?? 0),
+      conditions: { ...(opts.conditions ?? {}), ...(layer.conditions ?? {}) },
+    };
+    scheduleLayer(layer.soundId, layerOpts, layer.delayMs ?? 0);
+  }
 
   const buffer = getSampleBuffer(resolved.sample);
   if (buffer) {

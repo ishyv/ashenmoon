@@ -1,13 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { SOUNDS, gatherSoundId } from "./sound-manifest";
+import { AUDIO_BUS_IDS, SOUNDS, gatherSoundId } from "./sound-manifest";
 import { RECIPES } from "./recipes";
-import { resolveSoundDef } from "./audio-engine";
+import { getEffectiveVolume, resolveSoundDef, startLoop, stopLoop } from "./audio-engine";
 import { getAllManifestSamples } from "./sample-loader";
+import { getMissingSampleMetadata } from "./sound-assets";
+import {
+  resolveCombatSound,
+  resolveCraftSound,
+  resolveGatherSound,
+  resolveImpactSound,
+} from "./audio-feedback";
 
 describe("sound manifest", () => {
   it("points every sound at a defined recipe", () => {
     for (const [id, def] of Object.entries(SOUNDS)) {
       expect(RECIPES[def.recipe], `${id} -> ${def.recipe}`).toBeTypeOf("function");
+      for (const variant of def.variations ?? []) {
+        if (variant.recipe) expect(RECIPES[variant.recipe], `${id} variation -> ${variant.recipe}`).toBeTypeOf("function");
+      }
+    }
+  });
+
+  it("treats master as a first-class bus id while definitions use routable child buses", () => {
+    expect(AUDIO_BUS_IDS).toEqual(["master", "music", "sfx", "ui", "ambient", "entities"]);
+    for (const [id, def] of Object.entries(SOUNDS)) {
+      expect(def.bus, `${id} bus`).not.toBe("master");
+      expect(AUDIO_BUS_IDS).toContain(def.bus);
+    }
+  });
+
+  it("keeps every layered sound pointed at a registered child sound", () => {
+    for (const [id, def] of Object.entries(SOUNDS)) {
+      for (const layer of def.layers ?? []) {
+        expect(SOUNDS[layer.soundId], `${id} layer -> ${layer.soundId}`).toBeDefined();
+      }
     }
   });
 
@@ -49,5 +75,32 @@ describe("sound manifest", () => {
     // but the function must run cleanly without throwing.
     expect(samples.length).toBe(0);
   });
-});
 
+  it("requires metadata for every declared sample", () => {
+    expect(getMissingSampleMetadata()).toEqual([]);
+  });
+
+  it("maps physical audio events to material-specific sounds", () => {
+    expect(resolveImpactSound({ source: "axe", targetMaterial: "wood", intensity: 0.8 })).toBe("impact.wood.heavy");
+    expect(resolveImpactSound({ source: "pickaxe", targetMaterial: "stone" })).toBe("impact.stone");
+    expect(resolveGatherSound({ material: "clay" })).toBe("gather.clay.pull");
+    expect(resolveGatherSound({ legacyGatherSound: "chop" })).toBe("gather.chop");
+    expect(resolveCraftSound({ outcome: "discovered" })).toBe("recipe.discovered");
+    expect(resolveCraftSound({ outcome: "failure" })).toBe("craft.failure");
+    expect(resolveCraftSound({ outcome: "success", feedbackTags: ["binding"] })).toBe("craft.bind");
+    expect(resolveCombatSound({ phase: "miss" })).toBe("combat.miss.air");
+    expect(resolveCombatSound({ phase: "hit", targetMaterial: "hide" })).toBe("impact.hide");
+  });
+
+  it("calculates effective engine volume with master, bus, request, distance, and clamping", () => {
+    expect(getEffectiveVolume({ bus: "sfx", baseVolume: 0.5, requestVolume: 0.5, distanceFalloff: 0.5 })).toBeCloseTo(0.08, 5);
+    expect(getEffectiveVolume({ bus: "master", baseVolume: 2, requestVolume: 2 })).toBe(1);
+    expect(getEffectiveVolume({ bus: "ui", baseVolume: -1 })).toBe(0);
+  });
+
+  it("starts and stops keyed generated loops without requiring a browser AudioContext", () => {
+    const key = startLoop("rain.loop", "test:rain");
+    expect(key).toBe("test:rain");
+    stopLoop(key);
+  });
+});

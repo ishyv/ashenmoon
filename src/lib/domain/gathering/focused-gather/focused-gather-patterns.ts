@@ -12,12 +12,14 @@ import type {
   FocusedGatherTargetMovement,
   Vec2,
 } from "./focused-gather-types";
+import { estimateFocusedGatherFeasibility } from "./focused-gather-feasibility";
 
 /** How far targets spread from the source center, in world pixels (~0.6 tile). */
 const SPREAD_RADIUS = 46;
 /** Positional jitter as a fraction of SPREAD_RADIUS for structured patterns. */
 const PATTERN_JITTER = 0.3;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const MAX_FEASIBILITY_REROLLS = 8;
 
 function randRange(rng: () => number, min: number, max: number): number {
   return min + rng() * (max - min);
@@ -86,7 +88,7 @@ function patternOffset(
  * radii randomized within the profile band, spawn waves honoring the
  * simultaneous limit, and a movement behavior per target.
  */
-export function generateTargets(
+function generateTargetCandidate(
   profile: FocusedGatherProfile,
   sourceCenter: Vec2,
   rng: () => number = Math.random,
@@ -167,6 +169,7 @@ export function generateTargets(
 
     targets.push({
       id: `fg-t${i}`,
+      patternId: pattern,
       orderIndex: i,
       spawnAtMs: waveSpawn,
       expiresAtMs: waveSpawn + profile.targetLifetimeMs,
@@ -178,4 +181,64 @@ export function generateTargets(
   }
 
   return targets;
+}
+
+function generateFallbackTargets(
+  profile: FocusedGatherProfile,
+  sourceCenter: Vec2,
+): FocusedGatherTarget[] {
+  const baseCount = Math.max(1, Math.min(3, Math.floor(profile.targetCount)));
+  const safeLifetimeMs = Math.max(profile.targetLifetimeMs, 900);
+  const safeDelayMs = safeLifetimeMs + Math.max(50, profile.spawnDelayMaxMs);
+  const movement = profile.movementTypes.includes("static") ? "static" : profile.movementTypes[0] ?? "static";
+
+  for (let count = baseCount; count >= 1; count--) {
+    const targets: FocusedGatherTarget[] = [];
+    const radius = Math.max(profile.minCircleRadius, profile.baseCircleRadius);
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(3, count);
+      const distance = count === 1 ? 0 : SPREAD_RADIUS * 0.45;
+      const spawnAtMs = i * safeDelayMs;
+      targets.push({
+        id: `fg-t${i}`,
+        patternId: "center_out",
+        orderIndex: i,
+        spawnAtMs,
+        expiresAtMs: spawnAtMs + safeLifetimeMs,
+        position: {
+          x: sourceCenter.x + Math.cos(angle) * distance,
+          y: sourceCenter.y + Math.sin(angle) * distance,
+        },
+        radius,
+        movement,
+        state: "pending",
+      });
+    }
+    if (estimateFocusedGatherFeasibility(targets, profile).feasible) return targets;
+  }
+
+  return [{
+    id: "fg-t0",
+    patternId: "center_out",
+    orderIndex: 0,
+    spawnAtMs: 0,
+    expiresAtMs: Math.max(profile.targetLifetimeMs, 900),
+    position: sourceCenter,
+    radius: Math.max(profile.minCircleRadius, profile.baseCircleRadius),
+    movement,
+    state: "pending",
+  }];
+}
+
+export function generateTargets(
+  profile: FocusedGatherProfile,
+  sourceCenter: Vec2,
+  rng: () => number = Math.random,
+): FocusedGatherTarget[] {
+  for (let attempt = 0; attempt < MAX_FEASIBILITY_REROLLS; attempt++) {
+    const targets = generateTargetCandidate(profile, sourceCenter, rng);
+    if (estimateFocusedGatherFeasibility(targets, profile).feasible) return targets;
+  }
+
+  return generateFallbackTargets(profile, sourceCenter);
 }

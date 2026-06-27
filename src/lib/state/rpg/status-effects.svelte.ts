@@ -26,9 +26,12 @@ import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 
 export const statusState = $state<{ active: ActiveStatus[] }>({ active: [] });
 
-export function applyStatusEffect(id: StatusId, durationSec: number, source?: string): void {
+export function applyStatusEffect(id: StatusId, durationSec: number, source?: string, nonLethal?: boolean): void {
   const had = statusState.active.some((s) => s.id === id);
-  statusState.active = applyStatus(statusState.active, id, durationSec, source);
+  const list = applyStatus(statusState.active, id, durationSec, source);
+  statusState.active = nonLethal
+    ? list.map((s) => (s.id === id ? { ...s, nonLethal: true } : s))
+    : list;
   if (!had) {
     rpgEventQueue.push({
       type: "status_added",
@@ -70,9 +73,9 @@ let tickAccumulator = 0;
  * Advance statuses. Returns the hp delta from pulses this call (usually 0;
  * negative = damage) for the engine to apply to the player.
  */
-export function tickStatusEffects(dt: number): { hpDelta: number } {
+export function tickStatusEffects(dt: number): { hpDelta: number; nonLethalHpDelta: number } {
   tickAccumulator += dt;
-  if (tickAccumulator < STATUS_TICK_INTERVAL_SEC) return { hpDelta: 0 };
+  if (tickAccumulator < STATUS_TICK_INTERVAL_SEC) return { hpDelta: 0, nonLethalHpDelta: 0 };
 
   const slice = tickAccumulator;
   tickAccumulator = 0;
@@ -94,7 +97,7 @@ export function tickStatusEffects(dt: number): { hpDelta: number } {
     saveStatuses();
   }
 
-  return { hpDelta: result.hpDelta };
+  return { hpDelta: result.hpDelta, nonLethalHpDelta: result.nonLethalHpDelta };
 }
 
 export function loadStatuses(): void {

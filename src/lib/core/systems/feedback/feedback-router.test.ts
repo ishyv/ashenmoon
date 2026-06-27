@@ -59,7 +59,7 @@ describe("FeedbackRouter", () => {
       Colors.combat.enemyDmgNum,
     );
     expect(triggerCameraShake).toHaveBeenCalledWith(vfx, 2.5, 0.12);
-    expect(playSound).toHaveBeenCalledWith("combat.hit.enemy", {
+    expect(playSound).toHaveBeenCalledWith("impact.flesh", {
       position: { x: 64 + TILE / 2, y: 96 + TILE / 2 },
       conditions: { targetSpecies: "humanoid" },
     });

@@ -36,14 +36,14 @@ let {
 </script>
 
 <div class="top-bar">
-  <button class="settings-trigger-btn" onclick={onSkills} title="Open Skill Progression (C)">
+  <button class="settings-trigger-btn" onclick={onSkills} title="skills [C]">
     skills
   </button>
   <button
     class="settings-trigger-btn"
     class:active-scenario={showEquipment}
     onclick={onEquipment}
-    title="Open Equipment Loadout (I)"
+    title="gear [I]"
   >
     gear
   </button>
@@ -51,7 +51,7 @@ let {
     class="settings-trigger-btn"
     class:active-scenario={showInventory && inventoryTab === "stash"}
     onclick={onInventory}
-    title="Open Stash Inventory (Tab)"
+    title="stash [Tab]"
   >
     stash
   </button>
@@ -59,7 +59,7 @@ let {
     class="settings-trigger-btn"
     class:active-scenario={showInventory && inventoryTab === "crafting"}
     onclick={onCrafting}
-    title="Open Crafting Panel (G)"
+    title="craft [G]"
   >
     craft
   </button>
@@ -67,11 +67,11 @@ let {
     class="settings-trigger-btn"
     class:active-scenario={showQuests}
     onclick={onQuests}
-    title="Open Quest Tracker (J)"
+    title="quests [Q]"
   >
     quests
   </button>
-  <button class="settings-trigger-btn" onclick={onSettings} title="Open Settings (Controls & Audio)">
+  <button class="settings-trigger-btn" onclick={onSettings} title="settings">
     settings
   </button>
   {#if showScenarioTools}

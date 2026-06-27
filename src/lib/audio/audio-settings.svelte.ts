@@ -1,7 +1,7 @@
 import { setBusVolume, setMuted } from "./audio-engine";
-import type { Bus } from "./sound-manifest";
+import type { AudioBusId, Bus } from "./sound-manifest";
 
-export type VolumeKey = "master" | Bus;
+export type VolumeKey = AudioBusId;
 
 export interface AudioSettings {
   master: number;
@@ -114,4 +114,3 @@ export function getEffectiveVolume(params: {
 
   return Math.max(0, Math.min(1, master * busVolume * base * request));
 }
-

@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Texture, TilingSprite } from "pixi.js";
+import { Container, Graphics, Sprite, Texture } from "pixi.js";
 import { Cell, type AABB } from "$lib/core/types";
 import { computeRenderZ } from "$lib/domain/collision";
 import { SeededNoise } from "$lib/utils/noise";
@@ -199,7 +199,7 @@ export class MapResource {
   public mapW = 100;
   public mapH = 100;
   public cells: Cell[] = [];
-  public tileSprites: TilingSprite[] = [];
+  public tileSprites: Container[] = [];
   public solidCoords = new Set<string>();
   public customSolids = new Map<string, AABB>();
   public lastCullKey = "";
@@ -350,6 +350,9 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
     moss_patch: 0,
     berry_bush: 0,
     mushroom_patch: 0,
+    wild_root_node: 0,
+    acorn_pickup: 0,
+    wild_herb_patch: 0,
     clay_deposit: 0,
     water_source: 0,
   };
@@ -361,8 +364,11 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
     bark_strip: 6,
     grass_patch: 8,
     moss_patch: 5,
-    berry_bush: 5,
-    mushroom_patch: 5,
+    berry_bush: 7,
+    mushroom_patch: 6,
+    wild_root_node: 4,
+    acorn_pickup: 4,
+    wild_herb_patch: 3,
     clay_deposit: 0,
     water_source: 0,
   };
@@ -433,7 +439,7 @@ export function drawTerrainSystem(map: MapResource, tileLayer: Container): void 
         }
 
         tileLayer.addChild(g);
-        map.tileSprites.push(null as any);
+        map.tileSprites.push(g);
       } else if (cell === Cell.Water) {
         const hash = (x * 1103515245 + y * 12345) & 0xffff;
         const g = new Graphics();
@@ -446,7 +452,7 @@ export function drawTerrainSystem(map: MapResource, tileLayer: Container): void 
           g.circle(px + TILE * 0.25, py + TILE * 0.72, TILE * 0.06).fill({ color: 0x87a9ad, alpha: 0.18 });
         }
         tileLayer.addChild(g);
-        map.tileSprites.push(null as any);
+        map.tileSprites.push(g);
       } else {
         const hash = (x * 928371 + y * 689287) & 0xffff;
         const base = cell === Cell.ScorchedWastes
@@ -476,7 +482,7 @@ export function drawTerrainSystem(map: MapResource, tileLayer: Container): void 
           g.rect(px + TILE * 0.15, py + TILE * 0.72, TILE * 0.55, 2).fill({ color: 0x080706, alpha: 0.08 });
         }
         tileLayer.addChild(g);
-        map.tileSprites.push(null as any);
+        map.tileSprites.push(g);
       }
     }
   }
@@ -747,6 +753,7 @@ function applyLocalResourceDebrisPass(
     const isOre = spawn.gatherableId === "stone_node" || spawn.gatherableId.includes("ore") || spawn.gatherableId.includes("node");
     if (!isTree && !isOre) continue;
 
+    const treeDebris = ["stick_pickup", "leaf_litter", "branch_pickup", "green_leaves_pickup"] as const;
     const debrisId = isTree ? "stick_pickup" : "loose_stone_pickup";
     let spawnedCount = 0;
     const maxDebris = 2;
@@ -766,7 +773,11 @@ function applyLocalResourceDebrisPass(
 
         const roll = Math.abs(noiseGen.noise(nx * 14.7 + 3.1, ny * 11.2 + 9.8) % 1);
         if (roll < 0.35) {
-          addSpawn(debrisId, nx, ny, "pickup");
+          const typeRoll = Math.abs(noiseGen.noise(nx * 8.3 + 11.1, ny * 10.9 + 4.4) % 1);
+          const localDebrisId = isTree
+            ? treeDebris[Math.floor(typeRoll * treeDebris.length)] ?? debrisId
+            : debrisId;
+          addSpawn(localDebrisId, nx, ny, "pickup");
           spawnedCount++;
         }
       }
@@ -790,7 +801,10 @@ function applyGlobalWildernessPickupsPass(
     "grass_patch",
     "moss_patch",
     "berry_bush",
-    "mushroom_patch"
+    "mushroom_patch",
+    "wild_root_node",
+    "acorn_pickup",
+    "wild_herb_patch"
   ];
 
   for (let y = 0; y < H; y++) {

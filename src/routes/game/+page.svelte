@@ -100,6 +100,7 @@ let inventoryTab = $state<"stash" | "crafting" | "building">("stash");
 function toggleInventory() {
   if (showInventory && inventoryTab === "stash") {
     overlayStack.close(OverlayId.Inventory);
+    if (uiPreferences.equipOnlyWithStash) overlayStack.close(OverlayId.Equipment);
   } else {
     inventoryTab = "stash";
     if (!showInventory) overlayStack.push(OverlayId.Inventory);
@@ -170,8 +171,13 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
     toggleEquipment();
     return;
   }
-  if (e.key === "j" || e.key === "J") {
+  if (e.key === "q" || e.key === "Q") {
     toggleQuests();
+    return;
+  }
+  if (e.key === "F8") {
+    engine?.toggleEnvironmentInspector();
+    e.preventDefault();
     return;
   }
 }
@@ -224,13 +230,11 @@ $effect(() => {
 });
 
 // --- Equipment Panel ↔ inventory sync preference --------------------------
+// One-directional: stash opening pulls gear open, but stash closing does NOT
+// force-close gear. Gear can be toggled independently at all times.
 $effect(() => {
-  if (uiPreferences.equipOnlyWithStash) {
-    if (showInventory) {
-      overlayStack.push(OverlayId.Equipment);
-    } else {
-      overlayStack.close(OverlayId.Equipment);
-    }
+  if (uiPreferences.equipOnlyWithStash && showInventory) {
+    overlayStack.push(OverlayId.Equipment);
   }
 });
 
@@ -378,7 +382,7 @@ onDestroy(() => {
 <svelte:window
   onmousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
   onkeydown={handleGlobalKeyDown}
-  oncontextmenu={(e) => e.preventDefault()}
+  onclick={(e) => { if (e.shiftKey) e.preventDefault(); }}
 />
 
 <div class="shell">

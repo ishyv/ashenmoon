@@ -92,6 +92,7 @@ export function spawnPlacedItemSystem(
   world: World<Entity>,
   entityLayer: Container,
   entitySprites: Map<string, Container>,
+  quantity = 1,
 ): void {
   const ex = gx * TILE;
   const ey = gy * TILE;
@@ -105,7 +106,7 @@ export function spawnPlacedItemSystem(
     position: { x: ex, y: ey, targetX: ex, targetY: ey },
     collider: { isSolid: false },
     interactable: { name, action: "pickup" },
-    pickup: { itemId, qty: 1 },
+    pickup: { itemId, qty: quantity },
   });
 
   // Create its PIXI Sprite
@@ -132,7 +133,7 @@ export async function placeItemSystem(
   cancelPlacement: () => void,
   onCompleteCb: (() => void) | undefined,
 ): Promise<void> {
-  const result = await syncPlaceItem(itemId, 1);
+  const result = await syncPlaceItem(itemId, 1, gx, gy);
   const player = getPlayerEntity();
 
   if (!result.ok) {
@@ -148,8 +149,11 @@ export async function placeItemSystem(
 
   applyRpgState(result.data);
 
-  const id = `pickup_${itemId}_${Date.now()}`;
-  spawnPlacedItemSystem(id, itemId, gx, gy, world, entityLayer, entitySprites);
+  const placed = result.data.profile.worldEntities
+    ?.filter((entity) => entity.kind === "placed_item" && entity.itemId === itemId && entity.x === gx && entity.y === gy)
+    .at(-1);
+  const id = placed?.id ?? `world_item_${itemId}_${Date.now()}`;
+  spawnPlacedItemSystem(id, itemId, gx, gy, world, entityLayer, entitySprites, placed?.quantity ?? 1);
 
   playSound("pickup");
   spawnEnvFloatingText(vfx, "placed", Colors.ui.success, player.position!, entityLayer);

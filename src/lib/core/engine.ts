@@ -95,12 +95,12 @@ import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
 import {
   createLitCampfireState,
   findLitCampfires,
-  getCampfireHeatAt,
   getCampfireHeatRadiusTiles,
-  isPointNearLitCampfire,
   refuelCampfireEntity,
   tickCampfireEntities,
 } from "$lib/core/systems/camp/campfire-runtime-system";
+import { sampleEnvironmentAt } from "$lib/core/systems/environment/environment-signal-system";
+import { EnvironmentInspector } from "$lib/core/systems/environment/environment-inspector";
 import {
   InteractionResource,
   runInteractionSystem,
@@ -131,6 +131,7 @@ import { shelterExposureMitigation } from "$lib/domain/camp/camp-state";
 import type { StationId } from "$lib/domain/stations";
 import { ANIMAL_DEFINITIONS, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import {
+  effectivePlayerTemperature,
   nightEnvironmentModifiers,
   isNight,
 } from "$lib/domain/weather/weather-events";
@@ -155,13 +156,15 @@ import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$l
 import { setEnvironment } from "$lib/state/environment-state.svelte";
 import { tickWetnessState, wetnessState } from "$lib/state/rpg/wetness.svelte";
 import { setColdAccumulator } from "$lib/state/rpg/cold-exposure.svelte";
-import { tickExposureSystem } from "$lib/core/systems/exposure/exposure-system";
+import { tickPlacedReactionSystem } from "$lib/core/systems/exposure/exposure-system";
+import { ExposureResource } from "$lib/core/systems/exposure/exposure-resource";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import {
   ItemPlacementResource,
   updateItemPlacementPreviewSystem,
   placeItemSystem,
+  spawnPlacedItemSystem,
   getItemTexture,
   isValidItemPlacementGrid,
 } from "$lib/core/systems/item-placement/item-placement-system";
@@ -244,6 +247,7 @@ export class GameEngine {
   public focusedGatherResource = new FocusedGatherResource();
   public buildingResource = new BuildingResource();
   public itemPlacementResource = new ItemPlacementResource();
+  public exposureResource = new ExposureResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
   public eventQueue = createGameEventQueue();
@@ -344,6 +348,9 @@ export class GameEngine {
   // First-camp experience presentation state.
   private firstCampState: FirstCampPresentationState = createFirstCampPresentationState();
 
+  // Debug environment-signal inspector (toggled with F8)
+  private environmentInspector!: EnvironmentInspector;
+
   constructor(config: GameEngineConfig) {
     this.containerEl = config.container;
     this.onInteract = config.onInteract;
@@ -434,6 +441,9 @@ export class GameEngine {
 
       this.visionSystem.init();
       this.app.stage.addChild(this.visionSystem.layer);
+
+      // Debug environment inspector — top of stage so it's never occluded
+      this.environmentInspector = new EnvironmentInspector(this.app.stage);
 
       // Draw map tiles
       drawTerrainSystem(this.mapResource, this.tileLayer);
@@ -992,13 +1002,13 @@ export class GameEngine {
 
       // Wetness system — must run before weatherOverlaySystem so its multiplier is fresh
       if (this.playerEntity.position) {
-        const pgxW = Math.round(this.playerEntity.position.x / TILE);
-        const pgyW = Math.round(this.playerEntity.position.y / TILE);
-        const isSheltered = this.shelterColdMultiplierAt(pgxW, pgyW) < 1;
-        const nearFire = isPointNearLitCampfire(world, {
+        const playerCenter = {
           x: this.playerEntity.position.x + TILE / 2,
           y: this.playerEntity.position.y + TILE / 2,
-        });
+        };
+        const playerSignals = sampleEnvironmentAt(world, this.weatherResource, playerCenter);
+        const isSheltered = playerSignals.shelter > 0;
+        const nearFire = playerSignals.heat > 0;
         tickWetnessState(dt, this.weatherResource.state.raining, isSheltered, nearFire);
       }
 
@@ -1013,7 +1023,7 @@ export class GameEngine {
         }
       }
 
-      tickExposureSystem(world, this.mapResource, dt, this.vfxResource, this.entityLayer);
+      tickPlacedReactionSystem(world, this.mapResource, this.exposureResource, dt, this.weatherResource, this.eventQueue);
       tickWounds(dt);
 
       const statusTick = tickStatusEffects(dt);
@@ -1022,6 +1032,9 @@ export class GameEngine {
           0,
           Math.min(playerHealth.max, playerHealth.current + statusTick.hpDelta)
         );
+      }
+      if (statusTick.nonLethalHpDelta !== 0) {
+        playerHealth.current = Math.max(1, playerHealth.current + statusTick.nonLethalHpDelta);
       }
 
       if (playerHealth.current <= 0) this.respawnPlayer();
@@ -1307,6 +1320,16 @@ export class GameEngine {
       this.updateRenderOrder();
       this.drawCollisionOverlay();
 
+      // Debug signal inspector
+      if (this.environmentInspector?.enabled) {
+        this.environmentInspector.tick(
+          world,
+          this.weatherResource,
+          this.inputResource.mouseWorld,
+          this.inputResource.mouseScreen,
+        );
+      }
+
       // First-camp presentation: pond proximity barks + omen.
       if (this.playerEntity.position) {
         const gx = Math.floor(this.playerEntity.position.x / TILE);
@@ -1443,6 +1466,25 @@ export class GameEngine {
           this.entitySprites,
           b.stage
         );
+      }
+    }
+
+    if (!scenario && gameState.rpg.profile && Array.isArray(gameState.rpg.profile.worldEntities)) {
+      const gatheredPickups = new Set(gameState.rpg.profile.gatheredPickups ?? []);
+      for (const entity of gameState.rpg.profile.worldEntities) {
+        if (gatheredPickups.has(entity.id)) continue;
+        if (entity.kind === "placed_item") {
+          spawnPlacedItemSystem(
+            entity.id,
+            entity.itemId,
+            entity.x,
+            entity.y,
+            world,
+            this.entityLayer,
+            this.entitySprites,
+            entity.quantity,
+          );
+        }
       }
     }
 
@@ -1950,6 +1992,10 @@ export class GameEngine {
   // Svelte / External Interfaces (Public APIs)
   // ---------------------------------------------------------------------------
 
+  public toggleEnvironmentInspector(): void {
+    this.environmentInspector?.toggle();
+  }
+
   public getAmbientEnvironment(gx: number, gy: number): { temperature: number; humidity: number; toxins: number } {
     const base = getAmbientEnvironment(
       this.mapResource,
@@ -1957,15 +2003,20 @@ export class GameEngine {
       gy,
       0
     );
-    const nearCampfire = isPointNearLitCampfire(world, { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 });
+    const point = { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 };
+    const signals = sampleEnvironmentAt(world, this.weatherResource, point);
     const night = nightEnvironmentModifiers({
       timeOfDay: this.weatherResource.state.timeOfDay,
-      nearLitCampfire: nearCampfire,
+      nearLitCampfire: false,
       shelterColdMultiplier: this.shelterColdMultiplierAt(gx, gy),
     });
 
     return {
-      temperature: Math.round(base.temperature + night.temperatureDelta),
+      temperature: effectivePlayerTemperature({
+        ambientTemperature: base.temperature,
+        nightTemperatureDelta: night.temperatureDelta,
+        radiantHeat: signals.heat,
+      }),
       humidity: Math.min(100, base.humidity + (this.weatherResource.state.raining ? 25 : 0)),
       toxins: base.toxins,
     };
@@ -2163,8 +2214,8 @@ export class GameEngine {
   public isNearCampfire(): boolean {
     const pos = this.playerEntity?.position;
     if (!pos) return false;
-    const heat = getCampfireHeatAt(world, { x: pos.x + TILE / 2, y: pos.y + TILE / 2 });
-    return heat >= OPEN_FLAME_BONUS * 0.3;
+    const signals = sampleEnvironmentAt(world, this.weatherResource, { x: pos.x + TILE / 2, y: pos.y + TILE / 2 });
+    return signals.heat >= OPEN_FLAME_BONUS * 0.3;
   }
 
   public isNearStation(stationId: StationId, maxDistanceTiles = 4.5): boolean {
@@ -2173,7 +2224,7 @@ export class GameEngine {
     const px = pos.x + TILE / 2;
     const py = pos.y + TILE / 2;
     if (stationId === "campfire") {
-      return isPointNearLitCampfire(world, { x: px, y: py });
+      return sampleEnvironmentAt(world, this.weatherResource, { x: px, y: py }).heat > 0;
     }
     return world.with("station", "position").entities.some((entity) => {
       if (entity.station?.stationId !== stationId) return false;

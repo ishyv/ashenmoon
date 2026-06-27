@@ -18,6 +18,10 @@ export interface WoundTreatmentResult {
   readonly feedback: string;
 }
 
+export interface WoundTreatmentContext {
+  readonly itemId?: string;
+}
+
 const BASE_INFECTION_RISK: Record<WoundSeverity, number> = {
   scratch: 0.04,
   cut: 0.12,
@@ -64,7 +68,11 @@ export function statusIdsForWound(wound: WoundState): StatusId[] {
   ];
 }
 
-export function treatWound(wound: WoundState, treatment: TreatmentId): WoundTreatmentResult {
+export function treatWound(
+  wound: WoundState,
+  treatment: TreatmentId,
+  context: WoundTreatmentContext = {},
+): WoundTreatmentResult {
   if (wound.treatedWith.includes(treatment)) {
     return { wound, feedback: "that treatment is already on this wound." };
   }
@@ -75,9 +83,17 @@ export function treatWound(wound: WoundState, treatment: TreatmentId): WoundTrea
 
   switch (treatment) {
     case "clean_binding":
-      infectionDelta = -0.08;
-      bleeding = wound.severity === "bite_wound";
-      feedback = "clean binding steadies the wound.";
+      if (context.itemId === "crude_dressing") {
+        infectionDelta = -0.03;
+        bleeding = wound.severity === "deep_cut" || wound.severity === "bite_wound";
+        feedback = wound.bleeding
+          ? "crude dressing slows the bleeding, but the wound still needs better care."
+          : "crude dressing covers the cut, dirty but useful.";
+      } else {
+        infectionDelta = -0.08;
+        bleeding = wound.severity === "bite_wound";
+        feedback = "clean binding steadies the wound.";
+      }
       break;
     case "herbal_poultice":
       infectionDelta = -0.12;

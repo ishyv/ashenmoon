@@ -62,6 +62,7 @@ export interface RpgPlayerState {
       sourceItemId?: string;
       stage?: number;
     }[];
+    worldEntities?: RpgWorldEntity[];
     gatheredPickups?: string[];
   };
   inventory: {
@@ -78,6 +79,16 @@ export interface RpgPlayerState {
     deathMode: string;
   };
 }
+
+export type RpgWorldEntity =
+  | {
+      id: string;
+      kind: "placed_item";
+      itemId: string;
+      x: number;
+      y: number;
+      quantity: number;
+    };
 
 export interface RpgGatherResult {
   userId: string;

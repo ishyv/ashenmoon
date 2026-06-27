@@ -31,7 +31,7 @@ export type RpgReducerCommand =
   | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "upgradeBuilding"; buildingId: string }
-  | { type: "placeItem"; itemId: string; quantity?: number }
+  | { type: "placeItem"; itemId: string; quantity?: number; x?: number; y?: number }
   | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
 
 export type MaterialGain = { id: string; quantity: number };
@@ -422,13 +422,33 @@ function environmentTick(
   return { mutated, reactions, playerState };
 }
 
-function placeItem(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "placeItem" }>): { playerState: RpgPlayerState } {
+function placeItem(
+  state: RpgPlayerState,
+  command: Extract<RpgReducerCommand, { type: "placeItem" }>,
+  options: RpgReducerOptions,
+): { playerState: RpgPlayerState } {
   const playerState = clonePlayerState(state);
   const placeQuantity = Math.max(1, Math.floor(command.quantity ?? 1));
   const slots = { ...playerState.inventory.slots };
   if (getQty(slots[command.itemId]) < placeQuantity) throw new Error(`Insufficient ${command.itemId} in inventory`);
   removeQty(slots, command.itemId, placeQuantity);
   playerState.inventory = { slots };
+
+  if (typeof command.x === "number" && typeof command.y === "number") {
+    const now = options.now?.() ?? Date.now();
+    playerState.profile.worldEntities = [
+      ...(playerState.profile.worldEntities ?? []),
+      {
+        id: `world_item_${command.itemId}_${now}`,
+        kind: "placed_item",
+        itemId: command.itemId,
+        x: command.x,
+        y: command.y,
+        quantity: placeQuantity,
+      },
+    ];
+  }
+
   return { playerState };
 }
 
@@ -476,7 +496,7 @@ export function reduceRpgCommand(
     case "upgradeBuilding":
       return upgradeBuilding(state, command, options);
     case "placeItem":
-      return placeItem(state, command);
+      return placeItem(state, command, options);
     case "environmentTick":
       return environmentTick(state, command);
   }

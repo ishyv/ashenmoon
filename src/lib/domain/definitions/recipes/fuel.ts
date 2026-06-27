@@ -60,7 +60,7 @@ export const fuelRecipes: readonly RecipeInput[] = [
     discoverable: true,
     discoveryText: "You pack dry leaves and shredded bark into tinder that wants to catch sparks.",
     costs: [
-      { itemId: "dry_leaves", name: "dry leaves", required: 4 },
+      { itemId: "dry_leaves", name: "dry leaves", required: 4, substitutes: [{ itemId: "leaves", name: "leaves", required: 4 }] },
       { itemId: "bark", name: "bark", required: 1 },
       { itemId: "twig_bundle", name: "twig bundle", required: 1 },
     ],
@@ -77,9 +77,26 @@ export const fuelRecipes: readonly RecipeInput[] = [
     process: "assemble",
     feedbackTags: ["dry", "fire"],
     costs: [
-      { itemId: "leaves", name: "dry leaves", required: 2 },
+      { itemId: "dry_leaves", name: "dry leaves", required: 4, substitutes: [{ itemId: "leaves", name: "leaves", required: 4 }] },
       { itemId: "bark", name: "bark", required: 1 },
     ],
+  },
+  {
+    id: "tinder_from_twigs",
+    name: "Tinder from Twigs",
+    description: "bark shreds and bundled twigs coaxed into rough tinder.",
+    category: "fuel_fire",
+    requiredContext: "hand",
+    process: "assemble",
+    discoverable: true,
+    discoveryText: "You shave bark into the twigs until the bundle will take a spark.",
+    feedbackTags: ["dry", "fire"],
+    costs: [
+      { itemId: "twig_bundle", name: "twig bundle", required: 1 },
+      { itemId: "bark", name: "bark", required: 2 },
+    ],
+    output: { itemId: "tinder_bundle", qty: 1 },
+    durationSec: 5,
   },
 {
     id: "firewood_bundle",

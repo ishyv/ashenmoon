@@ -6,7 +6,7 @@ import {
   tickCampfire,
   type CampfireState,
 } from "$lib/domain/camp/camp-state";
-import { OPEN_FLAME_BONUS } from "$lib/domain/exposure/exposure-context";
+import { syncCampfireEmitters } from "$lib/core/systems/environment/environment-signal-system";
 
 export interface LitCampfire {
   readonly entityId: string;
@@ -31,6 +31,7 @@ export function createLitCampfireState(fuelMs: number): CampfireState {
 
 export function refuelCampfireEntity(entity: Entity, fuelMs: number): void {
   entity.campfire = createLitCampfireState(fuelMs);
+  syncCampfireEmitters(entity);
 }
 
 export function tickCampfireEntities(
@@ -43,6 +44,8 @@ export function tickCampfireEntities(
       raining: context.raining,
       sheltered: false,
     });
+    // Keep the emitter array in sync so sampleEnvironmentAt sees the live radii.
+    syncCampfireEmitters(entity);
   }
 }
 
@@ -62,28 +65,6 @@ export function findLitCampfires(world: World<Entity>): LitCampfire[] {
     });
 }
 
-export function isPointNearLitCampfire(
-  world: World<Entity>,
-  point: { x: number; y: number },
-): boolean {
-  return findLitCampfires(world).some((fire) => Math.hypot(point.x - fire.x, point.y - fire.y) <= fire.radiusPx);
-}
-
-/**
- * Returns total radiant heat (°C) at a point from all lit campfires.
- * Each campfire contributes OPEN_FLAME_BONUS * (1 - dist/radius), falling to 0 at the edge.
- * Multiple overlapping campfires sum their contributions.
- */
-export function getCampfireHeatAt(
-  world: World<Entity>,
-  point: { x: number; y: number },
-): number {
-  return findLitCampfires(world).reduce((sum, fire) => {
-    const dist = Math.hypot(point.x - fire.x, point.y - fire.y);
-    const factor = Math.max(0, 1 - dist / fire.radiusPx);
-    return sum + OPEN_FLAME_BONUS * factor;
-  }, 0);
-}
 
 export function getCampfireHeatRadiusTiles(entity: Entity | undefined): number {
   if (!entity?.campfire?.isLit) return 0;

@@ -622,6 +622,7 @@ export function getAshenmoonItemIconKeyForItemId(itemId: string): AshenmoonItemI
     case "copper_ore": return "copperOre";
     case "tinder_bundle": return "tinderBundle";
     case "firewood_bundle": return "firewoodBundle";
+    case "damp_firewood": return "firewoodBundle";
     case "binding_cord": return "bindingCord";
     case "bark_rope": return "barkRope";
     case "sealing_paste": return "sealingPaste";

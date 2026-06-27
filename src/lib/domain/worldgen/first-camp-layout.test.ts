@@ -25,6 +25,14 @@ describe("First Camp worldgen layout", () => {
     })).toEqual([]);
   });
 
+  it("guarantees early tinder and small food options near the first camp", () => {
+    const guaranteedIds = FIRST_CAMP_RELATIVE_LAYOUT.guaranteedSpawns.map((spawn) => spawn.gatherableId);
+
+    expect(guaranteedIds).toEqual(expect.arrayContaining(["leaf_litter", "bark_strip"]));
+    expect(guaranteedIds.filter((id) => ["berry_bush", "wild_root_node", "acorn_pickup", "mushroom_patch"].includes(id)).length)
+      .toBeGreaterThanOrEqual(3);
+  });
+
   it("reports missing required anchors and unsafe wolf den placement", () => {
     const layout = materializeFirstCampLayout(
       {

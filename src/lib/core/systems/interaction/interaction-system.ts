@@ -148,6 +148,7 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
               contamination: 0.2,
               toolQuality: gatherRisk.toolQuality,
               source: "hazard:gather",
+              maxHp: playerEntity.health?.max,
             });
           } else {
             applyStatusEffect(gatherRisk.status, gatherRisk.durationSec, "hazard:gather");
@@ -706,7 +707,7 @@ export function runInteractionSystem(
       });
       if (gatherRisk) {
         if (gatherRisk.kind === "wound") {
-          applyWound({ severity: gatherRisk.woundSeverity, contamination: 0.2, toolQuality: gatherRisk.toolQuality, source: "hazard:gather" });
+          applyWound({ severity: gatherRisk.woundSeverity, contamination: 0.2, toolQuality: gatherRisk.toolQuality, source: "hazard:gather", maxHp: getPlayerEntity().health?.max });
         } else {
           applyStatusEffect(gatherRisk.status, gatherRisk.durationSec, "hazard:gather");
         }

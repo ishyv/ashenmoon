@@ -64,6 +64,11 @@ function getItemQty(itemId: string): number {
   return items.find((i) => i.itemId === itemId)?.qty ?? 0;
 }
 
+function isCostSatisfied(cost: import("$lib/domain/crafting/recipe-types").RecipeCost): boolean {
+  if (getItemQty(cost.itemId) >= cost.required) return true;
+  return (cost.substitutes ?? []).some((s) => getItemQty(s.itemId) >= s.required);
+}
+
 function handleComponentClick(costItemId: string) {
   const componentRecipe = allRecipes.find((r) => r.output.itemId === costItemId);
   if (componentRecipe) {
@@ -267,7 +272,7 @@ async function handleComponentDblClick(costItemId: string) {
                   {#each selectedRecipe.costs as cost}
                     {@const meta = getItemDef(cost.itemId)}
                     {@const current = getItemQty(cost.itemId)}
-                    {@const satisfied = current >= cost.required}
+                    {@const satisfied = isCostSatisfied(cost)}
                     {@const sources = getKnownSources(cost.itemId)}
                     {@const componentRecipe = allRecipes.find((r) => r.output.itemId === cost.itemId)}
                     {@const isClickable = !!componentRecipe}
@@ -293,6 +298,23 @@ async function handleComponentDblClick(costItemId: string) {
                         {current} / {cost.required}
                       </span>
                     </li>
+                    {#each cost.substitutes ?? [] as sub}
+                      {@const subMeta = getItemDef(sub.itemId)}
+                      {@const subQty = getItemQty(sub.itemId)}
+                      {@const subSatisfied = subQty >= sub.required}
+                      <li class="material-item material-substitute" class:satisfied={subSatisfied}>
+                        <div class="material-left">
+                          <span class="substitute-or">or</span>
+                          <div class="material-icon-wrapper">
+                            <ItemIcon itemId={sub.itemId} def={subMeta} />
+                          </div>
+                          <span class="material-name">{subMeta?.name.toLowerCase() ?? sub.itemId}</span>
+                        </div>
+                        <span class="material-qty" class:missing={!subSatisfied}>
+                          {subQty} / {sub.required}
+                        </span>
+                      </li>
+                    {/each}
                   {/each}
                 </ul>
               </div>
@@ -1018,5 +1040,19 @@ async function handleComponentDblClick(costItemId: string) {
   .material-item.clickable:hover .material-name {
     text-decoration: underline;
     color: var(--inv-accent);
+  }
+
+  .material-substitute {
+    margin-top: -0.1rem;
+    padding-left: 0.25rem;
+    opacity: 0.7;
+  }
+
+  .substitute-or {
+    font-size: 0.6rem;
+    font-style: italic;
+    color: var(--text-soft);
+    flex-shrink: 0;
+    min-width: 1.4rem;
   }
 </style>

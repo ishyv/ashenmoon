@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateTargets } from "./focused-gather-patterns";
 import { FOCUSED_GATHER_PROFILES } from "./focused-gather-profiles";
+import { estimateFocusedGatherFeasibility } from "./focused-gather-feasibility";
 
 /** Deterministic rng cycling through a fixed sequence. */
 function seededRng(seq: number[]): () => number {
@@ -67,5 +68,37 @@ describe("generateTargets", () => {
         }
       }
     }
+  });
+
+  it("only accepts feasible copper-tier patterns over deterministic samples", () => {
+    const copperProfile = FOCUSED_GATHER_PROFILES.medium;
+    for (let seed = 1; seed <= 24; seed++) {
+      const targets = generateTargets(copperProfile, { x: 100, y: 100 }, seededRng([
+        ((seed * 17) % 97) / 97,
+        ((seed * 31) % 89) / 89,
+        ((seed * 43) % 83) / 83,
+        ((seed * 59) % 79) / 79,
+      ]));
+      const feasibility = estimateFocusedGatherFeasibility(targets, copperProfile);
+      expect(feasibility.feasible, `seed ${seed}`).toBe(true);
+    }
+  });
+
+  it("falls back to a safer pattern if rerolls keep producing impossible layouts", () => {
+    const impossibleProfile = {
+      ...FOCUSED_GATHER_PROFILES.medium,
+      targetCount: 8,
+      targetLifetimeMs: 450,
+      spawnDelayMinMs: 0,
+      spawnDelayMaxMs: 0,
+      simultaneousTargetLimit: 8,
+      patternPool: ["zigzag" as const],
+    };
+
+    const targets = generateTargets(impossibleProfile, { x: 0, y: 0 }, seededRng([0.99, 0.01]));
+    const feasibility = estimateFocusedGatherFeasibility(targets, impossibleProfile);
+
+    expect(feasibility.feasible).toBe(true);
+    expect(targets.length).toBeLessThan(impossibleProfile.targetCount);
   });
 });

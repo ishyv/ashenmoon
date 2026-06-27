@@ -330,8 +330,8 @@ function handleVolumeChange(key: VolumeKey, value: number) {
 
           <label class="preference-row">
             <div class="preference-info">
-              <span class="preference-name">Link Equipment to Stash</span>
-              <span class="preference-desc">Only display the gear loadout panel when the backpack stash is open</span>
+              <span class="preference-name">open gear alongside stash</span>
+              <span class="preference-desc">automatically open the gear loadout whenever you open the stash</span>
             </div>
             <input type="checkbox" bind:checked={uiPreferences.equipOnlyWithStash} onchange={saveUiPreferences} />
           </label>

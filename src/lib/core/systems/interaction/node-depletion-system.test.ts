@@ -111,6 +111,53 @@ describe("depleteNodeSystem", () => {
     expect(spawnedPickups[0]?.pickup?.itemId).toBe("stick");
   });
 
+  it("can spawn green leaves when a tree is depleted", () => {
+    world.clear();
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+
+    const playerEntity: Entity = {
+      id: "player",
+      playerControlled: { speed: 100 },
+      position: { x: 0, y: 0, targetX: 0, targetY: 0 },
+    };
+    world.add(playerEntity);
+
+    const entity: Entity = {
+      id: "test_tree",
+      position: { x: 64, y: 64, targetX: 64, targetY: 64 },
+      resource: { hp: 0, maxHp: 15, drop: "wood", gatherableId: "oak_tree" },
+    };
+    world.add(entity);
+
+    const vfx: any = {
+      activeShakes: new Map(),
+      baseScales: new Map(),
+      particles: [],
+      shockwaveRings: [],
+      cameraShake: { intensity: 0, duration: 0, time: 0 },
+      floatingTexts: [],
+    };
+    const entityLayer: any = {
+      addChild: vi.fn(),
+      removeChild: vi.fn(),
+    };
+    const entitySprites = new Map<string, any>();
+    entitySprites.set("test_tree", { destroy: vi.fn() });
+
+    const map = new MapResource();
+    map.mapW = 10;
+    map.mapH = 10;
+    map.cells = new Array(100).fill(1);
+
+    depleteNodeSystem(world, entity, vi.fn(), vfx, entityLayer, entitySprites, vi.fn(), map);
+
+    const spawnedLeaves = world.entities.filter((e) => e.pickup?.gatherableId === "green_leaves_pickup");
+    expect(spawnedLeaves.length).toBeGreaterThanOrEqual(1);
+    expect(spawnedLeaves[0]?.pickup?.itemId).toBe("green_leaves");
+
+    randomSpy.mockRestore();
+  });
+
   it("spawns stones when a rock is depleted", () => {
     world.clear();
 

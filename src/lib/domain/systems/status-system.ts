@@ -20,8 +20,10 @@ export interface StatusTickResult {
   expired: StatusId[];
   /** Statuses whose pulse fired during this tick. */
   pulses: StatusId[];
-  /** Total hp change from pulses this tick (negative = damage). */
+  /** Total hp change from lethal pulses this tick (negative = damage, can reach 0). */
   hpDelta: number;
+  /** Total hp change from non-lethal pulses this tick (negative = damage, floors at 1). */
+  nonLethalHpDelta: number;
 }
 
 export function applyStatus(
@@ -57,13 +59,14 @@ export function hasStatus(list: ActiveStatus[], id: StatusId): boolean {
  */
 export function tickStatuses(list: ActiveStatus[], dtSec: number): StatusTickResult {
   if (list.length === 0 || dtSec <= 0) {
-    return { next: list, expired: [], pulses: [], hpDelta: 0 };
+    return { next: list, expired: [], pulses: [], hpDelta: 0, nonLethalHpDelta: 0 };
   }
 
   const next: ActiveStatus[] = [];
   const expired: StatusId[] = [];
   const pulses: StatusId[] = [];
   let hpDelta = 0;
+  let nonLethalHpDelta = 0;
 
   for (const status of list) {
     const def = STATUS_DEFINITIONS[status.id];
@@ -76,7 +79,12 @@ export function tickStatuses(list: ActiveStatus[], dtSec: number): StatusTickRes
         Math.ceil(before / def.pulseEverySec) - Math.ceil(Math.max(after, 0) / def.pulseEverySec);
       if (crossed > 0) {
         pulses.push(status.id);
-        hpDelta += (def.pulse.hpDelta ?? 0) * crossed;
+        const delta = (def.pulse.hpDelta ?? 0) * crossed;
+        if (status.nonLethal) {
+          nonLethalHpDelta += delta;
+        } else {
+          hpDelta += delta;
+        }
       }
     }
 
@@ -87,7 +95,7 @@ export function tickStatuses(list: ActiveStatus[], dtSec: number): StatusTickRes
     }
   }
 
-  return { next, expired, pulses, hpDelta };
+  return { next, expired, pulses, hpDelta, nonLethalHpDelta };
 }
 
 /** Combined continuous modifiers from every active status. */

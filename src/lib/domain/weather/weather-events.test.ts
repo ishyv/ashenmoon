@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  effectivePlayerTemperature,
   createWorldEventState,
   nightEnvironmentModifiers,
   putWorldEventOnCooldown,
@@ -22,6 +23,38 @@ describe("weather and night", () => {
     expect(night.visibilityMultiplier).toBeLessThan(1);
     expect(night.temperatureDelta).toBeLessThan(0);
     expect(warm.temperatureDelta).toBeGreaterThan(night.temperatureDelta);
+  });
+
+  it("keeps player-facing temperature unchanged without radiant heat", () => {
+    expect(effectivePlayerTemperature({
+      ambientTemperature: 18,
+      nightTemperatureDelta: -12,
+      radiantHeat: 0,
+    })).toBe(6);
+  });
+
+  it("converts raw radiant heat into bounded player-facing warmth", () => {
+    expect(effectivePlayerTemperature({
+      ambientTemperature: 18,
+      nightTemperatureDelta: -12,
+      radiantHeat: 600,
+    })).toBe(16);
+  });
+
+  it("falls off player-facing warmth with weaker radiant heat", () => {
+    const full = effectivePlayerTemperature({
+      ambientTemperature: 18,
+      nightTemperatureDelta: 0,
+      radiantHeat: 600,
+    });
+    const partial = effectivePlayerTemperature({
+      ambientTemperature: 18,
+      nightTemperatureDelta: 0,
+      radiantHeat: 300,
+    });
+
+    expect(partial).toBeGreaterThan(18);
+    expect(partial).toBeLessThan(full);
   });
 });
 

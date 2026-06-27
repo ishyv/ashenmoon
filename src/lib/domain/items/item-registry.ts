@@ -23,6 +23,9 @@ function validateItemRegistry(items: ItemRegistry): void {
       if (effect?.kind === "transform" && !items[effect.into]) {
         console.warn(`Item "${item.id}" transforms into missing item "${effect.into}".`);
       }
+      if ("into" in trait && !items[trait.into]) {
+        console.warn(`Item "${item.id}" transforms into missing item "${trait.into}".`);
+      }
     }
   }
 }
@@ -46,6 +49,9 @@ export function validateItemRegistryProblems(items: ItemRegistry): string[] {
       const effect = "effect" in trait ? trait.effect : null;
       if (effect?.kind === "transform" && !items[effect.into]) {
         problems.push(`item ${item.id} transforms into missing item ${effect.into}`);
+      }
+      if ("into" in trait && !items[trait.into]) {
+        problems.push(`item ${item.id} transforms into missing item ${trait.into}`);
       }
     }
   }

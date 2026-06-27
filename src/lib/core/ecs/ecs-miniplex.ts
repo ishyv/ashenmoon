@@ -6,6 +6,7 @@ import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/a
 import type { CarcassProcessAction, CarcassState } from "$lib/domain/animals/carcass-processing";
 import type { CampfireState, CampStructureType } from "$lib/domain/camp/camp-state";
 import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
+import type { EnvironmentEmitter } from "$lib/domain/environment/signals";
 
 /**
  * Game entity component structure.
@@ -47,8 +48,8 @@ export interface Entity {
     itemId: string;
     qty: number;
     gatherableId?: string;
-    exposureTimeSec?: number;
-    hasWarned?: boolean;
+    /** Per-reaction accumulated exposure seconds (reactionId -> seconds). */
+    reactions?: Record<string, number>;
   };
 
   /** Station marker for generic station/process interactions. */
@@ -186,6 +187,17 @@ export interface Entity {
     type: string;
     stage: number;
   };
+
+  /**
+   * Environmental signal emitters on this entity. The environment-signal system
+   * reads these each frame to build the world's signal field. A campfire carries
+   * heat + light emitters; a crude_shelter carries a shelter emitter. Cleared
+   * automatically when the underlying state (e.g. campfire extinguished) changes.
+   *
+   * Add emitters here rather than adding per-signal queries in consumers —
+   * that is the whole point of the signal architecture.
+   */
+  emitter?: EnvironmentEmitter[];
 }
 
 /** Central miniplex ECS world instance. Shared across all game systems. */

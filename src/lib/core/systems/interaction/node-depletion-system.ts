@@ -204,7 +204,9 @@ export function depleteNodeSystem(
             dropId = "branch_pickup";
           } else if (roll < 0.6) {
             dropId = "green_leaves_pickup";
-          } else if (roll < 0.75) {
+          } else if (roll < 0.8) {
+            dropId = "leaf_litter";
+          } else if (roll < 0.9) {
             dropId = "resin_pickup";
           } else {
             dropId = "stick_pickup";

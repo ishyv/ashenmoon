@@ -11,6 +11,7 @@ import { canCraft as canCraftRecipe } from "$lib/domain/crafting/crafting-system
 import { inspect as inspectKnowledge } from "$lib/state/rpg/knowledge.svelte";
 import { allRecipeList, recipeKnowledge } from "$lib/state/rpg/crafting.svelte";
 import { buildOptionsFromInventory } from "$lib/domain/building-options";
+import { resolveInventoryDoubleClickAction } from "$lib/domain/inventory-item-action";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-actions";
 import ItemGrid from "./inventory/ItemGrid.svelte";
@@ -137,12 +138,32 @@ async function handleDblClickItem(itemId: string) {
   const def = getItemDef(itemId);
   if (!def) return;
 
-  if (def.category === "tool" || traitOf(def, "wearable")) {
+  const action = resolveInventoryDoubleClickAction(def);
+  if (action.kind === "placeBuilding") {
+    engine?.startBuildingPlacement(action.buildableId, () => {}, onClose, itemId);
+    selectedItem = null;
+    onClose();
+  } else if (action.kind === "placeItem") {
+    engine?.startItemPlacement(itemId, () => {}, () => {});
+    selectedItem = null;
+    onClose();
+  } else if (action.kind === "equip") {
     await equipTool(itemId);
-  } else if (getConsumeVerb(itemId) && canConsume(itemId)) {
+  } else if (action.kind === "consume" && getConsumeVerb(itemId) && canConsume(itemId)) {
     consumeItem(itemId);
     selectedItem = null;
   }
+}
+
+function startPlacementForItem(itemId: string): void {
+  const action = resolveInventoryDoubleClickAction(getItemDef(itemId));
+  if (action.kind === "placeBuilding") {
+    engine?.startBuildingPlacement(action.buildableId, () => {}, onClose, itemId);
+  } else {
+    engine?.startItemPlacement(itemId, () => {}, () => {});
+  }
+  selectedItem = null;
+  onClose();
 }
 
 function isEquipped(itemId: string): boolean {
@@ -251,10 +272,7 @@ async function studyBlueprint(itemId: string): Promise<void> {
         {isEquipped}
         onClose={() => (selectedItem = null)}
         onEquip={equipTool}
-        onPlace={(itemId) => {
-          selectedItem = null;
-          engine?.startItemPlacement(itemId, () => {}, () => {});
-        }}
+        onPlace={startPlacementForItem}
         onStudy={studyBlueprint}
       />
     </GamePanel>

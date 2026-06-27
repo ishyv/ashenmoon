@@ -26,7 +26,7 @@ describe("RPG feedback router", () => {
 
     flushRpgFeedbackEvents();
 
-    expect(playSound).toHaveBeenCalledWith("craft");
+    expect(playSound).toHaveBeenCalledWith("craft.bind");
     expect(recipeKnown("flint_axe")).toBe(true);
   });
 
@@ -39,7 +39,7 @@ describe("RPG feedback router", () => {
 
     flushRpgFeedbackEvents();
 
-    expect(playSound).toHaveBeenCalledWith("craft");
+    expect(playSound).toHaveBeenCalledWith("recipe.discovered");
     expect(recipeKnown("binding_cord")).toBe(true);
   });
 
@@ -59,7 +59,7 @@ describe("RPG feedback router", () => {
 
     flushRpgFeedbackEvents();
 
-    expect(playSound).toHaveBeenCalledWith("node.deplete");
+    expect(playSound).toHaveBeenCalledWith("craft.failure");
     expect(recipeKnown("flint_axe")).toBe(false);
   });
 });

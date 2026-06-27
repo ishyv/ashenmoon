@@ -9,6 +9,8 @@ import type { GatherSoundKey } from "$lib/domain/gathering/gatherables";
 import type { RecipeId } from "./recipes";
 
 export type Bus = "music" | "sfx" | "ui" | "ambient" | "entities";
+export type AudioBusId = "master" | Bus;
+export const AUDIO_BUS_IDS: readonly AudioBusId[] = ["master", "music", "sfx", "ui", "ambient", "entities"];
 
 /** Coarse biome for the ambient scheduler (engine maps Cell -> this). */
 export type AmbientBiome = "forest" | "frost" | "water" | "none";
@@ -28,6 +30,19 @@ export interface SoundVariation {
   gainJitter?: number;
 }
 
+export interface SoundLayerDefinition {
+  /** Child sound to trigger as part of a layered parent. */
+  soundId: SoundId;
+  /** Delay relative to the parent play request. */
+  delayMs?: number;
+  /** Gain multiplier applied only to this layer. */
+  gain?: number;
+  /** Detune in cents applied only to this layer. */
+  pitch?: number;
+  /** Conditional override forwarded to the child sound. */
+  conditions?: Record<string, string | number | boolean>;
+}
+
 export interface SoundDef {
   bus: Bus;
   recipe: RecipeId;
@@ -45,6 +60,12 @@ export interface SoundDef {
   sample?: string | string[];
   /** Conditional variations. Evaluated in order; first match wins. */
   variations?: SoundVariation[];
+  /** Ordered child sounds used to build a physical event from multiple textures. */
+  layers?: readonly SoundLayerDefinition[];
+  /** Suggested cadence for generated loop fallbacks. Samples loop natively. */
+  loopIntervalMs?: number;
+  /** Stable grouping for validation, tooling, and future mix passes. */
+  tags?: readonly string[];
 }
 
 export type SoundId =
@@ -58,10 +79,38 @@ export type SoundId =
   | "enemy.death"
   | "pickup"
   | "craft"
+  | "craft.success"
+  | "craft.failure"
+  | "craft.bind"
+  | "craft.cut"
+  | "craft.crush"
+  | "craft.cook.meat"
+  | "recipe.discovered"
   | "consume"
   | "station.boil"
+  | "station.rack.place"
   | "player.swing"
+  | "player.swing.light"
+  | "player.swing.heavy"
+  | "combat.miss.air"
+  | "combat.glancing"
+  | "impact.wood.light"
+  | "impact.wood.heavy"
+  | "impact.stone"
+  | "impact.flesh"
+  | "impact.hide"
+  | "impact.bone"
+  | "gather.leaves"
+  | "gather.branch.snap"
+  | "gather.stone.pickup"
+  | "gather.clay.pull"
+  | "gather.water.collect"
+  | "gather.fiber.pull"
+  | "gather.bark.peel"
   | "player.footstep"
+  | "ui.button.click"
+  | "ui.tab.switch"
+  | "ui.invalid"
   | "ui.panel.open"
   | "ui.panel.close"
   | "ui.inventory.click"
@@ -77,6 +126,13 @@ export type SoundId =
   | "player.fellsweep.cancel"
   | "focused.activate"
   | "build.place"
+  | "campfire.ignite"
+  | "campfire.loop"
+  | "campfire.low"
+  | "rain.loop"
+  | "wind.loop"
+  | "river.loop"
+  | "night.ambience"
   | "ambient.bird"
   | "ambient.wind"
   | "ambient.water"
@@ -92,15 +148,61 @@ export type SoundId =
   | "combo.driving_thrust"
   | "combo.driving_thrust.hit"
   | "combo.driving_thrust.denied"
-  | "wolf.howl.distant";
+  | "wolf.howl.distant"
+  | "wolf.growl.close"
+  | "boar.snort"
+  | "boar.charge"
+  | "rabbit.flee"
+  | "deer.alert";
 
 export const SOUNDS: Record<SoundId, SoundDef> = {
-  "gather.chop": { bus: "sfx", recipe: "chop", spatial: true, throttleMs: 60, pitchJitter: 120, gainJitter: 0.1 },
-  "gather.strike": { bus: "sfx", recipe: "clink", spatial: true, throttleMs: 60, pitchJitter: 100, gainJitter: 0.1 },
-  "gather.dig": { bus: "sfx", recipe: "pickup", spatial: true, throttleMs: 60, pitchJitter: 80, gainJitter: 0.1 },
-  "node.deplete": { bus: "sfx", recipe: "deplete", spatial: true, pitchJitter: 80 },
+  "gather.chop": {
+    bus: "sfx",
+    recipe: "chop",
+    spatial: true,
+    throttleMs: 60,
+    pitchJitter: 120,
+    gainJitter: 0.1,
+    layers: [
+      { soundId: "impact.wood.light", gain: 0.9 },
+      { soundId: "gather.leaves", delayMs: 35, gain: 0.45 },
+    ],
+    tags: ["gather", "wood", "legacy"],
+  },
+  "gather.strike": {
+    bus: "sfx",
+    recipe: "clink",
+    spatial: true,
+    throttleMs: 60,
+    pitchJitter: 100,
+    gainJitter: 0.1,
+    layers: [
+      { soundId: "impact.stone", gain: 0.9 },
+      { soundId: "gather.stone.pickup", delayMs: 45, gain: 0.35 },
+    ],
+    tags: ["gather", "stone", "legacy"],
+  },
+  "gather.dig": {
+    bus: "sfx",
+    recipe: "pickup",
+    spatial: true,
+    throttleMs: 60,
+    pitchJitter: 80,
+    gainJitter: 0.1,
+    layers: [{ soundId: "gather.clay.pull", gain: 0.9 }],
+    tags: ["gather", "earth", "legacy"],
+  },
+  "node.deplete": { bus: "sfx", recipe: "deplete", spatial: true, pitchJitter: 80, tags: ["gather", "depletion"] },
   "node.treefall": { bus: "sfx", recipe: "fall", spatial: true, pitchJitter: 150 },
-  "combat.hit.player": { bus: "sfx", recipe: "fall", spatial: true, throttleMs: 80, pitchJitter: 120, gainJitter: 0.12 },
+  "combat.hit.player": {
+    bus: "sfx",
+    recipe: "fall",
+    spatial: true,
+    throttleMs: 80,
+    pitchJitter: 120,
+    gainJitter: 0.12,
+    layers: [{ soundId: "impact.flesh", gain: 0.9 }],
+  },
   "combat.hit.enemy": {
     bus: "entities",
     recipe: "clink",
@@ -117,9 +219,35 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   },
   "enemy.death": { bus: "entities", recipe: "deplete", spatial: true, pitchJitter: 100 },
   pickup: { bus: "sfx", recipe: "pickup", pitchJitter: 80, gainJitter: 0.08 },
-  craft: { bus: "ui", recipe: "craft", pitchJitter: 50 },
+  craft: { bus: "ui", recipe: "craft", pitchJitter: 50, layers: [{ soundId: "craft.success", gain: 0.85 }], tags: ["craft", "legacy"] },
+  "craft.success": {
+    bus: "sfx",
+    recipe: "craft",
+    pitchJitter: 70,
+    gainJitter: 0.08,
+    layers: [
+      { soundId: "craft.bind", gain: 0.55 },
+      { soundId: "gather.bark.peel", delayMs: 45, gain: 0.35 },
+      { soundId: "ui.tab.switch", delayMs: 90, gain: 0.35 },
+    ],
+    tags: ["craft", "success", "layered"],
+  },
+  "craft.failure": { bus: "sfx", recipe: "craftFail", pitchJitter: 90, gainJitter: 0.08, tags: ["craft", "failure"] },
+  "craft.bind": { bus: "sfx", recipe: "fiberPull", pitchJitter: 110, gainJitter: 0.1, tags: ["craft", "fiber"] },
+  "craft.cut": { bus: "sfx", recipe: "missAir", pitchJitter: 130, gainJitter: 0.08, tags: ["craft", "cut"] },
+  "craft.crush": {
+    bus: "sfx",
+    recipe: "gritScatter",
+    pitchJitter: 90,
+    gainJitter: 0.1,
+    layers: [{ soundId: "impact.stone", gain: 0.35 }],
+    tags: ["craft", "stone", "herb"],
+  },
+  "craft.cook.meat": { bus: "sfx", recipe: "campfireCrackle", pitchJitter: 60, gainJitter: 0.08, tags: ["craft", "meat", "fire"] },
+  "recipe.discovered": { bus: "ui", recipe: "discovery", throttleMs: 120, pitchJitter: 45, gain: 0.75, tags: ["ui", "recipe"] },
   consume: { bus: "sfx", recipe: "pickup", pitchJitter: 100, gainJitter: 0.1 },
-  "station.boil": { bus: "sfx", recipe: "water", throttleMs: 200, pitchJitter: 80 },
+  "station.boil": { bus: "sfx", recipe: "waterCollect", throttleMs: 200, pitchJitter: 80, tags: ["station", "water"] },
+  "station.rack.place": { bus: "sfx", recipe: "fiberPull", throttleMs: 120, pitchJitter: 80, gain: 0.65, tags: ["station", "rack"] },
   "player.swing": {
     bus: "sfx",
     recipe: "chop",
@@ -135,6 +263,96 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
       { conditions: { weaponCategory: "unarmed" }, recipe: "pickup",   gain: 0.6 },
     ],
   },
+  "player.swing.light": { bus: "sfx", recipe: "missAir", throttleMs: 55, pitchJitter: 140, gainJitter: 0.08, tags: ["combat", "swing"] },
+  "player.swing.heavy": {
+    bus: "sfx",
+    recipe: "chop",
+    throttleMs: 75,
+    pitchJitter: 90,
+    gainJitter: 0.08,
+    layers: [
+      { soundId: "combat.miss.air", gain: 0.85 },
+      { soundId: "impact.wood.light", delayMs: 45, gain: 0.2 },
+    ],
+    tags: ["combat", "swing", "heavy"],
+  },
+  "combat.miss.air": { bus: "sfx", recipe: "missAir", spatial: true, throttleMs: 70, pitchJitter: 150, gainJitter: 0.1, tags: ["combat", "miss"] },
+  "combat.glancing": {
+    bus: "sfx",
+    recipe: "toolRebound",
+    spatial: true,
+    throttleMs: 90,
+    pitchJitter: 120,
+    gainJitter: 0.08,
+    layers: [{ soundId: "gather.stone.pickup", delayMs: 30, gain: 0.35 }],
+    tags: ["combat", "glancing"],
+  },
+  "impact.wood.light": {
+    bus: "sfx",
+    recipe: "woodBody",
+    spatial: true,
+    throttleMs: 45,
+    pitchJitter: 115,
+    gainJitter: 0.1,
+    layers: [
+      { soundId: "gather.bark.peel", delayMs: 24, gain: 0.55 },
+      { soundId: "gather.leaves", delayMs: 58, gain: 0.32 },
+    ],
+    tags: ["impact", "wood"],
+  },
+  "impact.wood.heavy": {
+    bus: "sfx",
+    recipe: "woodBody",
+    spatial: true,
+    throttleMs: 65,
+    pitchJitter: 85,
+    gainJitter: 0.1,
+    layers: [
+      { soundId: "impact.wood.light", gain: 1.2 },
+      { soundId: "gather.branch.snap", delayMs: 42, gain: 0.7 },
+    ],
+    tags: ["impact", "wood", "heavy"],
+  },
+  "impact.stone": {
+    bus: "sfx",
+    recipe: "stoneCrack",
+    spatial: true,
+    throttleMs: 55,
+    pitchJitter: 95,
+    gainJitter: 0.1,
+    layers: [
+      { soundId: "gather.stone.pickup", delayMs: 38, gain: 0.45 },
+      { soundId: "combat.glancing", delayMs: 12, gain: 0.18 },
+    ],
+    tags: ["impact", "stone"],
+  },
+  "impact.flesh": {
+    bus: "entities",
+    recipe: "fleshWetHit",
+    spatial: true,
+    throttleMs: 60,
+    pitchJitter: 110,
+    gainJitter: 0.1,
+    layers: [{ soundId: "impact.hide", delayMs: 22, gain: 0.35 }],
+    tags: ["impact", "flesh"],
+  },
+  "impact.hide": { bus: "entities", recipe: "hideTension", spatial: true, throttleMs: 70, pitchJitter: 120, gainJitter: 0.08, tags: ["impact", "hide"] },
+  "impact.bone": {
+    bus: "entities",
+    recipe: "boneDryCrack",
+    spatial: true,
+    throttleMs: 90,
+    pitchJitter: 130,
+    gainJitter: 0.08,
+    tags: ["impact", "bone"],
+  },
+  "gather.leaves": { bus: "sfx", recipe: "leafRustle", spatial: true, throttleMs: 70, pitchJitter: 150, gainJitter: 0.12, tags: ["gather", "leaves"] },
+  "gather.branch.snap": { bus: "sfx", recipe: "branchSnap", spatial: true, throttleMs: 80, pitchJitter: 130, gainJitter: 0.1, tags: ["gather", "wood"] },
+  "gather.stone.pickup": { bus: "sfx", recipe: "gritScatter", spatial: true, throttleMs: 80, pitchJitter: 110, gainJitter: 0.1, tags: ["gather", "stone"] },
+  "gather.clay.pull": { bus: "sfx", recipe: "clayPull", spatial: true, throttleMs: 90, pitchJitter: 90, gainJitter: 0.1, tags: ["gather", "clay"] },
+  "gather.water.collect": { bus: "sfx", recipe: "waterCollect", spatial: true, throttleMs: 100, pitchJitter: 80, gainJitter: 0.08, tags: ["gather", "water"] },
+  "gather.fiber.pull": { bus: "sfx", recipe: "fiberPull", spatial: true, throttleMs: 85, pitchJitter: 120, gainJitter: 0.1, tags: ["gather", "fiber"] },
+  "gather.bark.peel": { bus: "sfx", recipe: "barkCrack", spatial: true, throttleMs: 80, pitchJitter: 135, gainJitter: 0.1, tags: ["gather", "bark"] },
   "player.footstep": {
     bus: "sfx",
     recipe: "pickup",
@@ -147,6 +365,9 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
       { conditions: { terrain: "mud" }, recipe: "water", gain: 0.6 },
     ],
   },
+  "ui.button.click": { bus: "ui", recipe: "uiClick", throttleMs: 40, pitchJitter: 45, gainJitter: 0.05, gain: 0.65, tags: ["ui"] },
+  "ui.tab.switch": { bus: "ui", recipe: "uiTab", throttleMs: 60, pitchJitter: 45, gainJitter: 0.05, gain: 0.65, tags: ["ui"] },
+  "ui.invalid": { bus: "ui", recipe: "uiInvalid", throttleMs: 140, pitchJitter: 20, gain: 0.75, tags: ["ui", "invalid"] },
   "ui.panel.open": {
     bus: "ui",
     recipe: "craft",
@@ -198,6 +419,13 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "player.fellsweep.cancel": { bus: "sfx", recipe: "fellSweepCancel", throttleMs: 120 },
   "focused.activate": { bus: "sfx", recipe: "clink", spatial: true },
   "build.place": { bus: "ui", recipe: "craft" },
+  "campfire.ignite": { bus: "ambient", recipe: "campfireIgnite", spatial: true, throttleMs: 250, pitchJitter: 70, gainJitter: 0.08, tags: ["environment", "fire"] },
+  "campfire.loop": { bus: "ambient", recipe: "campfireCrackle", spatial: true, loopIntervalMs: 420, pitchJitter: 70, gainJitter: 0.12, gain: 0.72, tags: ["environment", "fire", "loop"] },
+  "campfire.low": { bus: "ambient", recipe: "campfireLow", spatial: true, loopIntervalMs: 850, pitchJitter: 60, gainJitter: 0.1, gain: 0.55, tags: ["environment", "fire", "loop"] },
+  "rain.loop": { bus: "ambient", recipe: "rainPulse", loopIntervalMs: 520, pitchJitter: 40, gainJitter: 0.08, gain: 0.58, tags: ["environment", "rain", "loop"] },
+  "wind.loop": { bus: "ambient", recipe: "wind", loopIntervalMs: 760, pitchJitter: 30, gainJitter: 0.08, gain: 0.55, tags: ["environment", "wind", "loop"] },
+  "river.loop": { bus: "ambient", recipe: "riverPulse", spatial: true, loopIntervalMs: 650, pitchJitter: 40, gainJitter: 0.08, gain: 0.62, tags: ["environment", "water", "loop"] },
+  "night.ambience": { bus: "ambient", recipe: "nightBed", loopIntervalMs: 1200, pitchJitter: 30, gainJitter: 0.05, gain: 0.45, tags: ["environment", "night", "loop"] },
   "ambient.bird": { bus: "ambient", recipe: "bird" },
   "ambient.wind": { bus: "ambient", recipe: "wind" },
   "ambient.water": { bus: "ambient", recipe: "water" },
@@ -214,7 +442,12 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "combo.driving_thrust.hit": { bus: "sfx", recipe: "drivingThrustHit", spatial: true, throttleMs: 60 },
   "combo.driving_thrust.denied": { bus: "ui", recipe: "fellSweepDenied", throttleMs: 160 },
   // TODO: replace recipe with a real wolf-howl sample when available.
-  "wolf.howl.distant": { bus: "entities", recipe: "wind", throttleMs: 30_000, gain: 0.6 },
+  "wolf.howl.distant": { bus: "entities", recipe: "wind", spatial: true, throttleMs: 30_000, gain: 0.6, tags: ["entity", "wolf"] },
+  "wolf.growl.close": { bus: "entities", recipe: "wolfGrowl", spatial: true, throttleMs: 2500, pitchJitter: 50, gainJitter: 0.08, gain: 0.9, tags: ["entity", "wolf"] },
+  "boar.snort": { bus: "entities", recipe: "hideTension", spatial: true, throttleMs: 2200, pitchJitter: 80, gainJitter: 0.08, gain: 0.75, tags: ["entity", "boar"] },
+  "boar.charge": { bus: "entities", recipe: "boarCharge", spatial: true, throttleMs: 1600, pitchJitter: 75, gainJitter: 0.1, gain: 1.0, tags: ["entity", "boar", "danger"] },
+  "rabbit.flee": { bus: "entities", recipe: "animalFlee", spatial: true, throttleMs: 1200, pitchJitter: 140, gainJitter: 0.1, gain: 0.65, tags: ["entity", "rabbit"] },
+  "deer.alert": { bus: "entities", recipe: "animalFlee", spatial: true, throttleMs: 1800, pitchJitter: 80, gainJitter: 0.08, gain: 0.75, tags: ["entity", "deer"] },
 };
 
 const GATHER_SOUND_IDS: Record<GatherSoundKey, SoundId> = {

@@ -1,5 +1,5 @@
 import type { InventoryEffect, VitalsEffect } from "./item-effects";
-import type { ItemDefinition } from "./item-types";
+import type { ItemDefinition, ItemId } from "./item-types";
 import { EquippableVisuals, type EquippableVisualsTrait } from "./equippable-visuals";
 
 /**
@@ -10,6 +10,9 @@ export type ItemTrait =
   | TemperatureSensitiveTrait
   | FlammableTrait
   | DecayableTrait
+  | CookableTrait
+  | DampensTrait
+  | DriesTrait
   | ConsumableTrait
   | BoilableTrait
   | TanninSourceTrait
@@ -61,6 +64,42 @@ export interface DecayableTrait {
   kind: "decayable";
   lifespanSec: number;
   effect: InventoryEffect;
+}
+
+/**
+ * Cooks when held at sustained radiant heat above `cookTemp` for `cookSec`,
+ * transforming into `into`. Distinct from `temperature_sensitive` (which models
+ * heat *damage*): cooking is a desirable transform and out-prioritizes decay
+ * while the heat is present. Drives the automatic on-ground cooking path; the
+ * station recipe stays the faster, deliberate route.
+ */
+export interface CookableTrait {
+  kind: "cookable";
+  cookTemp: number;
+  cookSec: number;
+  into: ItemId;
+}
+
+/**
+ * Soaks up rain when exposed (wetness above `wetnessThreshold`) and not near a
+ * drying heat source, becoming a damp variant `into` after `soakSec`.
+ */
+export interface DampensTrait {
+  kind: "dampens";
+  wetnessThreshold: number;
+  soakSec: number;
+  into: ItemId;
+}
+
+/**
+ * Dries out when held at sustained heat above `dryTemp` for `drySec`, reverting
+ * to a dry variant `into`. The other half of the moisture loop with `dampens`.
+ */
+export interface DriesTrait {
+  kind: "dries";
+  dryTemp: number;
+  drySec: number;
+  into: ItemId;
 }
 
 /**
@@ -209,6 +248,48 @@ export function Decayable(input: {
 }): DecayableTrait {
   return {
     kind: "decayable",
+    ...input,
+  };
+}
+
+/**
+ * DSL Helper: Define cooking-by-heat capability.
+ */
+export function Cookable(input: {
+  cookTemp: number;
+  cookSec: number;
+  into: ItemId;
+}): CookableTrait {
+  return {
+    kind: "cookable",
+    ...input,
+  };
+}
+
+/**
+ * DSL Helper: Define rain-soaking capability.
+ */
+export function Dampens(input: {
+  wetnessThreshold: number;
+  soakSec: number;
+  into: ItemId;
+}): DampensTrait {
+  return {
+    kind: "dampens",
+    ...input,
+  };
+}
+
+/**
+ * DSL Helper: Define drying-by-heat capability.
+ */
+export function Dries(input: {
+  dryTemp: number;
+  drySec: number;
+  into: ItemId;
+}): DriesTrait {
+  return {
+    kind: "dries",
     ...input,
   };
 }

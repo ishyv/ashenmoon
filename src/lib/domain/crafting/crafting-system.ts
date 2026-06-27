@@ -5,6 +5,7 @@
  * the two can never drift.
  */
 import { type CraftRecipe, getRecipe, type CraftingContextId } from "./recipes";
+import type { RecipeCost } from "./recipe-types";
 import type { StationId } from "$lib/domain/stations";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
 
@@ -53,6 +54,23 @@ export function getMaterialQty(slots: CraftSlots, itemId: string): number {
 }
 
 /**
+ * Resolves which material (primary or a substitute) should be used for a cost slot.
+ * Returns the first option the player has enough of, preferring the primary.
+ */
+export function resolveCostMaterial(
+  slots: CraftSlots,
+  cost: RecipeCost,
+): { itemId: string; have: number; required: number } {
+  const primaryHave = getMaterialQty(slots, cost.itemId);
+  if (primaryHave >= cost.required) return { itemId: cost.itemId, have: primaryHave, required: cost.required };
+  for (const sub of cost.substitutes ?? []) {
+    const subHave = getMaterialQty(slots, sub.itemId);
+    if (subHave >= sub.required) return { itemId: sub.itemId, have: subHave, required: sub.required };
+  }
+  return { itemId: cost.itemId, have: primaryHave, required: cost.required };
+}
+
+/**
  * Determine whether a recipe can be crafted right now, with a structured reason
  * on failure so the UI can gate buttons and the API can return precise errors.
  */
@@ -86,7 +104,7 @@ export function checkCraft(
   }
 
   const missing = recipe.costs
-    .map((c) => ({ itemId: c.itemId, required: c.required, have: getMaterialQty(slots, c.itemId) }))
+    .map((c) => resolveCostMaterial(slots, c))
     .filter((c) => c.have < c.required);
 
   if (missing.length > 0) {
@@ -118,9 +136,10 @@ export function resolveCraft(
   const next: Record<string, InventorySlot> = { ...slots };
 
   for (const cost of recipe.costs) {
-    const remaining = getMaterialQty(next, cost.itemId) - cost.required;
-    if (remaining <= 0) delete next[cost.itemId];
-    else next[cost.itemId] = { qty: remaining };
+    const resolved = resolveCostMaterial(next, cost);
+    const remaining = resolved.have - resolved.required;
+    if (remaining <= 0) delete next[resolved.itemId];
+    else next[resolved.itemId] = { qty: remaining };
   }
 
   const currentOutput = getMaterialQty(next, recipe.output.itemId);

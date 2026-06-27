@@ -2,12 +2,14 @@ import { GameEvent } from "$lib/domain/game-events";
 import { createGameEventQueue, type QueuedGameEvent } from "$lib/domain/game-event-queue";
 import { STATUS_DEFINITIONS, isStatusId } from "$lib/domain/systems/status-types";
 import { playSound } from "$lib/audio/audio-engine";
+import { resolveCraftSound } from "$lib/audio/audio-feedback";
 import { learnRecipe, recipeKnowledge } from "$lib/state/rpg/crafting.svelte";
 import { CRAFT_RECIPES, getRecipe } from "$lib/domain/crafting/recipes";
 import { triggerQuestEvent } from "$lib/state/rpg/quests.svelte";
 import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { learnAbout, discoverSource } from "$lib/state/rpg/knowledge.svelte";
 import { propertyFromReaction, eurekaRecipesFor } from "$lib/domain/knowledge/knowledge-unlock";
+import type { KnowledgeProperty } from "$lib/domain/knowledge/item-knowledge";
 
 export const rpgEventQueue = createGameEventQueue();
 
@@ -50,7 +52,11 @@ function routeWoundEvent(event: QueuedGameEvent): void {
 
 function routeCraftEvent(event: QueuedGameEvent): void {
   if (event.type === "item_crafted") {
-    playSound("craft");
+    const craftedRecipe = getRecipe(event.recipeId);
+    playSound(resolveCraftSound({
+      outcome: "success",
+      ...(craftedRecipe?.feedbackTags ? { feedbackTags: craftedRecipe.feedbackTags } : {}),
+    }));
     learnRecipe(event.recipeId);
     triggerQuestEvent(GameEvent.Craft, event.recipeId);
 
@@ -71,12 +77,12 @@ function routeCraftEvent(event: QueuedGameEvent): void {
       }
     }
   } else if (event.type === "recipe_discovered") {
-    playSound("craft");
+    playSound(resolveCraftSound({ outcome: "discovered" }));
     learnRecipe(event.recipeId);
     emitPlayerFeedback(`blueprint studied. recipe unlocked.`, "good");
     triggerQuestEvent(GameEvent.Craft, event.recipeId);
   } else if (event.type === "craft_failed") {
-    playSound("node.deplete");
+    playSound(resolveCraftSound({ outcome: "failure" }));
   }
 }
 
@@ -108,6 +114,27 @@ function routeGatheredEvent(event: QueuedGameEvent): void {
   discoverSource(event.itemId, event.sourceName);
 }
 
+/** Which property a world-item reaction teaches; cooking/drying teach nothing. */
+const PLACED_REACTION_KNOWLEDGE: Partial<Record<string, KnowledgeProperty>> = {
+  ignite: "flammable",
+  temperature: "heat_sensitive",
+  decay: "perishable",
+};
+
+/**
+ * Record knowledge from a world-placed item reaction. The floating bark already
+ * shows at the item (presentation feedback-router), so there is no player bark
+ * here, only the quiet learning and any recipe unlock.
+ */
+function routePlacedItemKnowledge(event: QueuedGameEvent): void {
+  if (event.type !== "placed_item_reacted") return;
+  if (event.outcome === "warned") return;
+
+  const prop = PLACED_REACTION_KNOWLEDGE[event.reactionId];
+  if (prop) learnAbout(event.itemId, prop);
+  if (event.intoItemId === "charcoal") learnRecipe("charcoal");
+}
+
 export function flushRpgFeedbackEvents(): readonly QueuedGameEvent[] {
   const events = rpgEventQueue.drain();
   for (const event of events) {
@@ -120,6 +147,7 @@ export function flushRpgFeedbackEvents(): readonly QueuedGameEvent[] {
     routeCraftEvent(event);
     routeReactionKnowledgeEvent(event);
     routeGatheredEvent(event);
+    routePlacedItemKnowledge(event);
   }
   return events;
 }

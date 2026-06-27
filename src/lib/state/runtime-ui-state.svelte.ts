@@ -41,10 +41,25 @@ export const debugConfig = $state<{ zeroCooldowns: boolean; showCollision: boole
   showCollision: false,
 });
 
+export interface FocusedGatherDebugTelemetry {
+  readonly patternId: string;
+  readonly resourceId: string;
+  readonly targetCount: number;
+  readonly totalDistancePx: number;
+  readonly availableTimeMs: number;
+  readonly estimatedRequiredTimeMs: number;
+  readonly feasible: boolean;
+  readonly difficultyScore: number;
+}
+
+export const focusedGatherDebugState = $state<{ last: FocusedGatherDebugTelemetry | null }>({
+  last: null,
+});
+
 export const uiPreferences = $state<UiPreferences>({
   minimalHud: true,
   dynamicEnvironment: true,
-  equipOnlyWithStash: true,
+  equipOnlyWithStash: false,
 });
 
 export function loadUiPreferences(): void {

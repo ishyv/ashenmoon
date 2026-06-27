@@ -29,6 +29,8 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import type { FocusedGatherSession } from "$lib/domain/gathering/focused-gather/focused-gather-types";
 import { resolveFocusedGatherActivation } from "$lib/domain/gathering/focused-gather/focused-gather-activation";
 import { generateTargets } from "$lib/domain/gathering/focused-gather/focused-gather-patterns";
+import { estimateFocusedGatherFeasibility } from "$lib/domain/gathering/focused-gather/focused-gather-feasibility";
+import { focusedGatherDebugState, type FocusedGatherDebugTelemetry } from "$lib/state/runtime-ui-state.svelte";
 import {
   createSession,
   expectedTarget,
@@ -63,6 +65,7 @@ export interface FocusedTargetSprite {
 export class FocusedGatherResource {
   public session: FocusedGatherSession | null = null;
   public node: Entity | null = null;
+  public lastDebug: FocusedGatherDebugTelemetry | null = null;
   /** Remaining cooldown, seconds (HUD reads this). */
   public cooldownSec = 0;
   /** Cooldown duration of the last attempt, seconds (HUD ring denominator). */
@@ -246,6 +249,18 @@ function tryActivate(
 
   const center = nodeCenter(node);
   const targets = generateTargets(profile, center);
+  const feasibility = estimateFocusedGatherFeasibility(targets, profile);
+  focused.lastDebug = {
+    patternId: targets[0]?.patternId ?? "unknown",
+    resourceId: node.resource?.gatherableId ?? "unknown",
+    targetCount: feasibility.targetCount,
+    totalDistancePx: feasibility.totalDistancePx,
+    availableTimeMs: feasibility.availableTimeMs,
+    estimatedRequiredTimeMs: feasibility.estimatedRequiredTimeMs,
+    feasible: feasibility.feasible,
+    difficultyScore: feasibility.difficultyScore,
+  };
+  focusedGatherDebugState.last = focused.lastDebug;
   focused.session = createSession(profile, node.id, center, targets, now);
   focused.node = node;
   focused.cooldownSec = profile.cooldownMs / 1000;
@@ -312,6 +327,10 @@ function finalizeAndReward(
       applyWound({ severity: "cut", contamination: 0.15, toolQuality: getEquippedWeaponId() ? 0.6 : 0, source: "focused-gather" });
     }
 
+    const CD_REFUND: Record<string, number> = { excellent: 0.6, good: 0.4, average: 0.2, poor: 0, ruined: 0 };
+    const refund = CD_REFUND[result.grade] ?? 0;
+    if (refund > 0) focused.cooldownSec = Math.max(0, focused.cooldownSec - focused.cooldownMaxSec * refund);
+
     const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
     const primaryName = items[0]?.itemId ?? def.yieldTable[0]?.itemId ?? "resource";
     spawnEnvFloatingText(
@@ -339,5 +358,4 @@ function finalizeAndReward(
   focused.session = null;
   focused.node = null;
 }
-
 

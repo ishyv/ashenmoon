@@ -54,19 +54,34 @@ describe("checkCraft", () => {
   });
 
   it("enforces station context for work-surface recipes", () => {
-    const inv = slots({ stick: 1, flint_shard: 1, grass_fiber: 1 });
-    expect(checkCraft(inv, "crude_knife", away)).toEqual({
+    const inv = slots({ dried_hide: 1, grass_cord: 2, bone_needle: 1 });
+    expect(checkCraft(inv, "hide_footwraps", away)).toEqual({
       ok: false,
       reason: "requires_station",
       requiredContext: "primitive_work_surface",
     });
-    expect(checkCraft(inv, "crude_knife", atWorkSurface).ok).toBe(true);
+    expect(checkCraft(inv, "hide_footwraps", atWorkSurface).ok).toBe(true);
+  });
+
+  it("crude_knife is craftable by hand", () => {
+    const inv = slots({ stick: 1, flint_shard: 1, grass_fiber: 1 });
+    expect(checkCraft(inv, "crude_knife", away).ok).toBe(true);
+  });
+
+  it("tinder bundle is craftable from early dry leaves and bark", () => {
+    const inv = slots({ dry_leaves: 4, bark: 1 });
+    expect(checkCraft(inv, "tinder_bundle", away).ok).toBe(true);
+  });
+
+  it("crude dressing requires early forest dressing materials", () => {
+    const inv = slots({ green_leaves: 2, moss: 1, grass_fiber: 2 });
+    expect(checkCraft(inv, "moss_dressing", away).ok).toBe(true);
   });
 
   it("keeps recipe definitions descriptive enough for station and feedback UI", () => {
     expect(getRecipe("crude_knife")).toMatchObject({
       category: "tools",
-      requiredContext: "primitive_work_surface",
+      requiredContext: "hand",
       process: "assemble",
       discoverable: true,
       feedbackTags: expect.arrayContaining(["binding", "tool"]),

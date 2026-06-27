@@ -70,8 +70,9 @@ export const medicineRecipes: readonly RecipeInput[] = [
     discoveryText: "The moss holds the fiber in place against a wound.",
     feedbackTags: ["herbal"],
     costs: [
+      { itemId: "green_leaves", name: "green leaves", required: 2, substitutes: [{ itemId: "plantain_leaf", name: "plantain leaf", required: 2 }] },
       { itemId: "moss", name: "moss", required: 1 },
-      { itemId: "grass_fiber", name: "grass fiber", required: 1 },
+      { itemId: "grass_fiber", name: "grass fiber", required: 2 },
     ],
     output: { itemId: "crude_dressing", qty: 1 },
   },

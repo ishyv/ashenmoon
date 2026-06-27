@@ -1,7 +1,7 @@
 import { Category, Rarity, itemId } from "$lib/domain/items/item-types";
 import { Item } from "$lib/domain/items/item-builder";
 import { AddStatus, ChanceOfVitals, RestoreHp, RestoreThirst, RestoreHunger, TransformInto } from "$lib/domain/items/item-effects";
-import { Boilable, Consumable, Decayable, Flammable } from "$lib/domain/items/item-traits";
+import { Boilable, Consumable, Cookable, Decayable, Flammable } from "$lib/domain/items/item-traits";
 import { StatusId } from "$lib/domain/systems/status-types";
 
 
@@ -37,7 +37,8 @@ export const foodWaterItems = {
     physical: { carryClass: "pack", weight: 0.4, stackLimit: 12 },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(4), RestoreHunger(15), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 45))] }),
-    Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) })
+    Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) }),
+    Cookable({ cookTemp: 120, cookSec: 8, into: itemId("cooked_meat") })
   ),
   raw_small_meat: Item({
     id: itemId("raw_small_meat"),
@@ -48,7 +49,8 @@ export const foodWaterItems = {
     physical: { carryClass: "pack", weight: 0.25, stackLimit: 16 },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(3), RestoreHunger(10), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 35))] }),
-    Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) })
+    Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) }),
+    Cookable({ cookTemp: 120, cookSec: 8, into: itemId("cooked_meat") })
   ),
   raw_large_meat: Item({
     id: itemId("raw_large_meat"),
@@ -59,7 +61,8 @@ export const foodWaterItems = {
     physical: { carryClass: "pack", weight: 0.65, stackLimit: 8 },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(5), RestoreHunger(25), ChanceOfVitals(0.35, AddStatus(StatusId.Sickness, 50))] }),
-    Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) })
+    Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) }),
+    Cookable({ cookTemp: 120, cookSec: 8, into: itemId("cooked_meat") })
   ),
   fatty_meat: Item({
     id: itemId("fatty_meat"),
@@ -71,7 +74,8 @@ export const foodWaterItems = {
     physical: { carryClass: "pack", weight: 0.6, stackLimit: 16 },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(4), RestoreHunger(20)] }),
-    Decayable({ lifespanSec: 600, effect: TransformInto(itemId("spoiled_meat")) })
+    Decayable({ lifespanSec: 600, effect: TransformInto(itemId("spoiled_meat")) }),
+    Cookable({ cookTemp: 120, cookSec: 8, into: itemId("cooked_meat") })
   ),
   spoiled_meat: Item({
     id: itemId("spoiled_meat"),

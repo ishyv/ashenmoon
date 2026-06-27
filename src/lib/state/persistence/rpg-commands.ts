@@ -11,6 +11,7 @@ import type {
   RpgInventorySlot,
   RpgPlayerState,
   RpgReactionTriggered,
+  RpgWorldEntity,
 } from "$lib/domain/rpg-types";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
 import { devFlags } from "$lib/state/dev-flags.svelte";
@@ -142,8 +143,34 @@ export function createDefaultProfile(): RpgPlayerState["profile"] {
       necklace: null,
     },
     buildings: [],
+    worldEntities: [],
     gatheredPickups: [],
   };
+}
+
+function normalizeWorldEntities(value: unknown): RpgWorldEntity[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).flatMap((entity) => {
+    if (
+      entity.kind === "placed_item" &&
+      typeof entity.id === "string" &&
+      typeof entity.itemId === "string" &&
+      typeof entity.x === "number" &&
+      typeof entity.y === "number"
+    ) {
+      return [{
+        id: entity.id,
+        kind: "placed_item" as const,
+        itemId: entity.itemId,
+        x: entity.x,
+        y: entity.y,
+        quantity: typeof entity.quantity === "number" && Number.isFinite(entity.quantity)
+          ? Math.max(1, Math.floor(entity.quantity))
+          : 1,
+      }];
+    }
+    return [];
+  });
 }
 
 function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
@@ -173,6 +200,7 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
   const gatheredPickups = Array.isArray(value.gatheredPickups)
     ? value.gatheredPickups.filter((id): id is string => typeof id === "string")
     : defaults.gatheredPickups;
+  const worldEntities = normalizeWorldEntities(value.worldEntities);
 
   const worldSeedVal = typeof value.worldSeed === "number" && Number.isFinite(value.worldSeed) ? value.worldSeed : defaults.worldSeed;
 
@@ -190,6 +218,7 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
       necklace: normalizeEquipmentSlot(loadout.necklace),
     },
     ...(buildings !== undefined ? { buildings } : {}),
+    worldEntities,
     ...(gatheredPickups !== undefined ? { gatheredPickups } : {}),
     ...(typeof value.characterLevel === "number" && Number.isFinite(value.characterLevel)
       ? { characterLevel: value.characterLevel }
@@ -499,7 +528,7 @@ function environmentTick(env: { temperature: number; humidity: number; toxins: n
   return { mutated, reactions, playerState: state };
 }
 
-function placeItem(itemId: string, qty = 1): RpgPlayerState {
+function placeItem(itemId: string, qty = 1, x?: number, y?: number): RpgPlayerState {
   const placeQuantity = Math.max(1, Math.floor(qty));
   return mutateAndSave((state) => {
     const slots = { ...state.inventory.slots };
@@ -508,6 +537,19 @@ function placeItem(itemId: string, qty = 1): RpgPlayerState {
     }
     removeQty(slots, itemId, placeQuantity);
     state.inventory = { slots };
+    if (typeof x === "number" && typeof y === "number") {
+      state.profile.worldEntities = [
+        ...(state.profile.worldEntities ?? []),
+        {
+          id: `world_item_${itemId}_${Date.now()}`,
+          kind: "placed_item",
+          itemId,
+          x,
+          y,
+          quantity: placeQuantity,
+        },
+      ];
+    }
   });
 }
 

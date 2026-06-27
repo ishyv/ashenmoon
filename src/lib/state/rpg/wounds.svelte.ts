@@ -26,6 +26,7 @@ export function applyWound(input: {
   readonly contamination?: number;
   readonly toolQuality?: number;
   readonly source?: string;
+  readonly maxHp?: number | undefined;
 }): WoundState {
   const woundInput: Parameters<typeof createWound>[0] = {
     id: `wound_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -43,8 +44,26 @@ export function applyWound(input: {
     severity: wound.severity,
     ...(input.source !== undefined ? { source: input.source } : {}),
   });
+  const isTrivial = input.source === "hazard:gather";
   for (const status of statusIdsForWound(wound)) {
-    applyStatusEffect(status, status === StatusId.Bleeding ? 180 : 600, input.source ?? "wound");
+    let durationSec: number;
+    let nonLethal: boolean;
+    if (isTrivial) {
+      const maxHp = input.maxHp ?? 100;
+      const cap15pct = maxHp * 0.15;
+      if (status === StatusId.Bleeding) {
+        // -2 HP per 5s; cap pulses so total ≤ 15% max HP
+        durationSec = Math.max(5, Math.floor(cap15pct / 2) * 5);
+      } else {
+        // Cut: -1 HP per 5s
+        durationSec = Math.max(5, Math.floor(cap15pct / 1) * 5);
+      }
+      nonLethal = true;
+    } else {
+      durationSec = status === StatusId.Bleeding ? 180 : 600;
+      nonLethal = false;
+    }
+    applyStatusEffect(status, durationSec, input.source ?? "wound", nonLethal);
   }
   saveWounds();
   return wound;
@@ -128,7 +147,7 @@ export function treatActiveWound(
   const wound = woundState.active[index]!;
 
   // 3. Apply treatment
-  const result = treatWound(wound, treatment);
+  const result = treatWound(wound, treatment, { itemId: itemCostId });
   if (result.wound === wound) {
     return { success: false, feedback: result.feedback };
   }

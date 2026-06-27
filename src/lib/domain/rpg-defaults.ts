@@ -35,6 +35,7 @@ export function createDefaultProfile(opts?: {
       necklace: null,
     },
     buildings: [],
+    worldEntities: [],
     gatheredPickups: [],
   };
 }

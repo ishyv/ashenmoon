@@ -134,6 +134,43 @@ describe("local RPG commands", () => {
     expect(() => localRpgCommands.placeItem("clay", 1)).toThrow("Insufficient clay in inventory");
   });
 
+  it("persists placed items as generic world entities", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.clay = { qty: 1 };
+    saveLocalRpgState(state);
+
+    const next = localRpgCommands.placeItem("clay", 1, 12, 7);
+
+    expect(next.inventory.slots.clay).toBeUndefined();
+    expect(next.profile.worldEntities).toEqual([
+      expect.objectContaining({
+        kind: "placed_item",
+        itemId: "clay",
+        x: 12,
+        y: 7,
+        quantity: 1,
+      }),
+    ]);
+    expect(getLocalRpgState().profile.worldEntities).toEqual(next.profile.worldEntities);
+  });
+
+  it("normalizes saved world entity records", () => {
+    const normalized = normalizePlayerState({
+      profile: {
+        worldEntities: [
+          { id: "world_item_clay_1", kind: "placed_item", itemId: "clay", x: 3, y: 4, quantity: 2 },
+          { id: "bad", kind: "unknown", x: 3, y: 4 },
+        ],
+      },
+      inventory: { slots: {} },
+      skills: {},
+    });
+
+    expect(normalized.profile.worldEntities).toEqual([
+      { id: "world_item_clay_1", kind: "placed_item", itemId: "clay", x: 3, y: 4, quantity: 2 },
+    ]);
+  });
+
   it("equips, unequips, and persists gear locally using localRpgCommands", () => {
     const state = createDefaultPlayerState();
     state.inventory.slots.hide_cloak = { qty: 1 };

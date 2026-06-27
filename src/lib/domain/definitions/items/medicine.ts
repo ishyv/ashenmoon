@@ -113,7 +113,7 @@ export const medicineItems = {
     category: Category.Reagent,
     physical: { carryClass: "pocket", weight: 0.06, stackLimit: 10 },
   }).with(
-    Consumable({ verb: "apply", onConsume: [RestoreHp(6)] })
+    Consumable({ verb: "apply", onConsume: [RestoreHp(2)] })
   ),
   herb_poultice: Item({
     id: itemId("herb_poultice"),

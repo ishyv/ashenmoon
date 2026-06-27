@@ -11,6 +11,8 @@ import {
   AttractsPredators,
   ArmorMaterial,
   InsulationMaterial,
+  Dampens,
+  Dries,
 } from "$lib/domain/items/item-traits";
 
 
@@ -100,7 +102,7 @@ export const materialItems = {
     icon: "🍃",
     physical: { carryClass: "pocket", weight: 0.05, stackLimit: 50 },
   }).with(
-    Decayable({ lifespanSec: 900, effect: TransformInto(itemId("dry_leaves")) })
+    Decayable({ lifespanSec: 120, effect: TransformInto(itemId("dry_leaves")) })
   ),
   bark: Item({
     id: itemId("bark"),
@@ -182,7 +184,19 @@ export const materialItems = {
     category: Category.Timber,
     physical: { carryClass: "pack", weight: 1.8, stackLimit: 8 },
   }).with(
-    Flammable({ ignitionTemp: 105, burnDurationSec: 24, effect: TransformInto(itemId("charcoal")) })
+    Flammable({ ignitionTemp: 105, burnDurationSec: 24, effect: TransformInto(itemId("charcoal")) }),
+    Dampens({ wetnessThreshold: 0.5, soakSec: 30, into: itemId("damp_firewood") })
+  ),
+  damp_firewood: Item({
+    id: itemId("damp_firewood"),
+    name: "Damp Firewood",
+    description: "Rain-soaked branches. Hard to light, and they burn out fast once they catch.",
+    rarity: Rarity.Common,
+    category: Category.Timber,
+    physical: { carryClass: "pack", weight: 2.1, stackLimit: 8 },
+  }).with(
+    Flammable({ ignitionTemp: 250, burnDurationSec: 10, effect: TransformInto(itemId("charcoal")) }),
+    Dries({ dryTemp: 120, drySec: 12, into: itemId("firewood_bundle") })
   ),
   binding_cord: Item({
     id: itemId("binding_cord"),

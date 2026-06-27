@@ -61,6 +61,18 @@ describe("gatherable definitions", () => {
     ]);
   });
 
+  it("makes dry leaves and tree leaves naturally obtainable", () => {
+    expect(getGatherableDefinition("leaf_litter")?.yieldTable).toEqual(
+      expect.arrayContaining([{ itemId: "dry_leaves", quantity: expect.any(Number) }]),
+    );
+
+    const oakYield = getGatherableDefinition("oak_tree")?.yieldTable ?? [];
+    expect(oakYield).toEqual(expect.arrayContaining([
+      expect.objectContaining({ itemId: "dry_leaves" }),
+      expect.objectContaining({ itemId: "green_leaves" }),
+    ]));
+  });
+
   it("rolls configured risks with injected rng", () => {
     const flint = getGatherableDefinition("flint_shard_pickup")!;
     expect(rollGatherRisk(flint, { hasTool: false }, () => 0)).toEqual({

@@ -35,7 +35,7 @@ export type RpgCommand =
   | { type: "build"; buildingType: string; x: number; y: number; sourceItemId?: string }
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "upgradeBuilding"; buildingId: string }
-  | { type: "placeItem"; itemId: string; quantity?: number }
+  | { type: "placeItem"; itemId: string; quantity?: number; x?: number; y?: number }
   | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
 
 type CommandData = {

@@ -40,6 +40,8 @@ export type GatherSoundKey = "chop" | "strike" | "dig";
 export interface GatherYield {
   itemId: string;
   quantity: number;
+  /** If present, the drop only occurs this fraction of the time (0–1). Absent means always. */
+  chance?: number;
 }
 
 export interface GatherRiskDefinition {
@@ -142,7 +144,7 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     displayName: "Leaf Litter",
     interactionKind: "pickup",
     baseDurationSec: 0.1,
-    yieldTable: [{ itemId: "leaves", quantity: 2 }],
+    yieldTable: [{ itemId: "dry_leaves", quantity: 2 }],
     depletion: { removeOnGather: true },
     renderKind: "forage",
     solidKind: "none",
@@ -215,7 +217,11 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "wood", quantity: 1 }],
+    yieldTable: [
+      { itemId: "wood", quantity: 1 },
+      { itemId: "dry_leaves", quantity: 2, chance: 0.5 },
+      { itemId: "green_leaves", quantity: 1, chance: 0.25 },
+    ],
     depletion: { hp: 15 },
     renderKind: "tree",
     solidKind: "tree",
@@ -232,7 +238,11 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "wood", quantity: 1 }],
+    yieldTable: [
+      { itemId: "wood", quantity: 1 },
+      { itemId: "dry_leaves", quantity: 2, chance: 0.45 },
+      { itemId: "green_leaves", quantity: 1, chance: 0.3 },
+    ],
     depletion: { hp: 15 },
     renderKind: "tree_crimson",
     solidKind: "tree",
@@ -249,7 +259,11 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "wood", quantity: 1 }],
+    yieldTable: [
+      { itemId: "wood", quantity: 1 },
+      { itemId: "dry_leaves", quantity: 2, chance: 0.35 },
+      { itemId: "green_leaves", quantity: 1, chance: 0.35 },
+    ],
     depletion: { hp: 15 },
     renderKind: "tree_fungal",
     solidKind: "tree",
@@ -266,7 +280,11 @@ export const GATHERABLE_DEFINITIONS: Record<string, GatherableDefinition> = {
     requiredToolKind: "axe",
     gatherSound: "chop",
     baseDurationSec: 0.6,
-    yieldTable: [{ itemId: "wood", quantity: 1 }],
+    yieldTable: [
+      { itemId: "wood", quantity: 1 },
+      { itemId: "dry_leaves", quantity: 2, chance: 0.3 },
+      { itemId: "green_leaves", quantity: 1, chance: 0.2 },
+    ],
     depletion: { hp: 15 },
     renderKind: "tree_frost",
     solidKind: "tree",
@@ -471,13 +489,12 @@ export function getGatherableBySyncLocation(id: string): GatherableDefinition | 
 export function resolveGatherYield(
   def: GatherableDefinition,
   ctx: GatherYieldContext = {},
-  _rng: () => number = Math.random,
+  rng: () => number = Math.random,
 ): GatherYield[] {
   const multiplier = Math.max(1, Math.floor(ctx.quantityMultiplier ?? 1));
-  return def.yieldTable.map((entry) => ({
-    itemId: entry.itemId,
-    quantity: entry.quantity * multiplier,
-  }));
+  return def.yieldTable
+    .filter((entry) => entry.chance === undefined || rng() < entry.chance)
+    .map((entry) => ({ itemId: entry.itemId, quantity: entry.quantity * multiplier }));
 }
 
 export function rollGatherRisk(

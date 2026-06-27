@@ -61,6 +61,29 @@ describe("RPG reducer", () => {
     expect(result.playerState.inventory.slots.clay).toBeUndefined();
   });
 
+  it("records placed inventory items as world entities", () => {
+    const state = createDefaultPlayerState();
+    state.inventory.slots.clay = { qty: 2 };
+
+    const result = reduceRpgCommand(state, {
+      type: "placeItem",
+      itemId: "clay",
+      quantity: 1,
+      x: 12,
+      y: 7,
+    } satisfies RpgReducerCommand, { now: () => 123 });
+
+    expect(result.playerState.inventory.slots.clay).toEqual({ qty: 1 });
+    expect(result.playerState.profile.worldEntities).toContainEqual({
+      id: "world_item_clay_123",
+      kind: "placed_item",
+      itemId: "clay",
+      x: 12,
+      y: 7,
+      quantity: 1,
+    });
+  });
+
   it("handles equipping and unequipping wearable gear, transferring items between inventory and slots", () => {
     const state = createDefaultPlayerState();
     state.inventory.slots.hide_cloak = { qty: 1 };

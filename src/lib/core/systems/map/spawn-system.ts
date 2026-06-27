@@ -23,6 +23,7 @@ import { getItemDef } from "$lib/domain/items/item-definitions";
 import { EntityId, GameEvent } from "$lib/domain/game-events";
 import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import { createLitCampfireState } from "$lib/core/systems/camp/campfire-runtime-system";
+import { syncCampfireEmitters } from "$lib/core/systems/environment/environment-signal-system";
 import { CollisionFootprints, resolveCollisionAabb, type CollisionFootprint } from "$lib/domain/collision";
 import { coordKey } from "$lib/utils/coord-utils";
 import type { InteractionResource } from "$lib/core/systems/interaction/interaction-system";
@@ -260,14 +261,17 @@ export function spawnCampSystem(
   interaction.campfireSprite = campfire;
   entitySprites.set(EntityId.Campfire, campfireContainer);
 
-  world.add({
+  const campfireEntity: Entity = {
     id: EntityId.Campfire,
     position: { x: startX, y: startY, targetX: startX, targetY: startY },
     interactable: { name: "Campfire", action: "refuel" },
     collider: { isSolid: true },
     station: { stationId: "campfire" },
     campfire: createLitCampfireState(90_000),
-  });
+    emitter: [],
+  };
+  syncCampfireEmitters(campfireEntity);
+  world.add(campfireEntity);
   setTileFootprint(spawnX, spawnY, CollisionFootprints.campfire);
 
   // NPC Vane

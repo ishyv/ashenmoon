@@ -61,6 +61,8 @@ export type FocusedGatherTargetState = "pending" | "active" | "hit" | "missed";
 
 export interface FocusedGatherTarget {
   id: string;
+  /** Pattern template that generated this target, for dev tuning telemetry. */
+  patternId?: FocusedGatherPatternType;
   orderIndex: number;
   /** Relative to session start. */
   spawnAtMs: number;

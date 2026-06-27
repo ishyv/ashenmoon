@@ -1,4 +1,5 @@
 import { TIME_WEATHER_CONFIG } from "./time-config";
+import { OPEN_FLAME_BONUS } from "$lib/domain/exposure/exposure-context";
 
 export type WorldEventSoundId = "ambient.wind" | "node.deplete";
 
@@ -81,6 +82,21 @@ export function nightEnvironmentModifiers(input: {
     visibilityMultiplier: input.nearLitCampfire ? 0.72 : 0.42,
     temperatureDelta: Math.round((-12 * input.shelterColdMultiplier) + warmth),
   };
+}
+
+const MAX_PLAYER_RADIANT_WARMTH_C = 10;
+
+export function effectivePlayerTemperature(input: {
+  ambientTemperature: number;
+  nightTemperatureDelta: number;
+  radiantHeat: number;
+}): number {
+  const radiantWarmth = Math.min(
+    MAX_PLAYER_RADIANT_WARMTH_C,
+    Math.max(0, input.radiantHeat / OPEN_FLAME_BONUS) * MAX_PLAYER_RADIANT_WARMTH_C,
+  );
+
+  return Math.round(input.ambientTemperature + input.nightTemperatureDelta + radiantWarmth);
 }
 
 export function createWorldEventState(): WorldEventState {

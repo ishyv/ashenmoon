@@ -36,7 +36,7 @@ export const toolRecipes: readonly RecipeInput[] = [
     name: "Crude Knife",
     description: "You bind a flint edge to a stick with rough cord.",
     category: "tools",
-    requiredContext: "primitive_work_surface",
+    requiredContext: "hand",
     discoverable: true,
     discoveryText: "The flint bites cleanly once it is bound tight.",
     feedbackTags: ["binding", "tool", "sharp"],

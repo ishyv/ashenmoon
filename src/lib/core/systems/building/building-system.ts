@@ -30,6 +30,7 @@ import {
 } from "$lib/core/assets/ashenmoon-assets";
 
 import { gameState } from "$lib/state/game-state.svelte";
+import { syncShelterEmitter } from "$lib/core/systems/environment/environment-signal-system";
 
 export class BuildingResource {
   public isPlacementMode = false;
@@ -359,7 +360,7 @@ export function spawnBuildingSystem(
         ? { name: spec.displayName, action: "process" as const }
         : undefined;
 
-  world.add({
+  const entity = world.add({
     id,
     position: { x: ex, y: ey, targetX: ex, targetY: ey },
     collider: { isSolid: currentStage >= 2 },
@@ -368,7 +369,10 @@ export function spawnBuildingSystem(
     ...(campStructure ? { campStructure } : {}),
     ...(interactable ? { interactable } : {}),
     building: { type, stage: currentStage },
+    ...((campfire || campStructure) ? { emitter: [] } : {}),
   });
+
+  if (campStructure) syncShelterEmitter(entity);
 
   // Only block movement if building stage is at least 2 (Columns)
   if (currentStage >= 2) {
@@ -481,7 +485,10 @@ export function upgradeBuildingSystem(
 
     if (station) entity.station = station;
     if (campfire) entity.campfire = campfire;
-    if (campStructure) entity.campStructure = campStructure;
+    if (campStructure) {
+      entity.campStructure = campStructure;
+      syncShelterEmitter(entity);
+    }
     if (interactable) {
       entity.interactable = interactable;
     } else {

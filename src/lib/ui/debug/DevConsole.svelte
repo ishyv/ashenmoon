@@ -133,7 +133,7 @@ function onInputKey(e: KeyboardEvent): void {
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.8rem;
     color: rgba(255, 255, 255, 0.82);
-    z-index: 50;
+    z-index: 500;
     backdrop-filter: blur(2px);
   }
 

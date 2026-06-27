@@ -1,4 +1,5 @@
 import type { ReactionKind } from "$lib/domain/systems/item-reactions";
+import type { PlacedReactionId } from "$lib/domain/exposure/placed-reactions";
 
 export type DamageEventType = "physical" | "magic" | "true" | string;
 
@@ -122,6 +123,23 @@ export type QueuedGameEvent =
       readonly actorId: string;
       readonly itemId: string;
       readonly reactionKind: ReactionKind;
+    }
+  | {
+      /**
+       * An item placed/dropped in the world underwent an environmental reaction
+       * at its tile (cooked, dampened, dried, ignited, decayed, ...). Carries the
+       * world position so the feedback router can spawn floating text + particles
+       * at the item, and a pre-built lowercase bark. Distinct from `item_reacted`,
+       * which is for inventory items and only drives knowledge.
+       */
+      readonly type: "placed_item_reacted";
+      readonly entityId: string;
+      readonly position: { readonly x: number; readonly y: number };
+      readonly outcome: "warned" | "transformed" | "destroyed";
+      readonly reactionId: PlacedReactionId;
+      readonly itemId: string;
+      readonly intoItemId?: string;
+      readonly message: string;
     }
   | {
       /**

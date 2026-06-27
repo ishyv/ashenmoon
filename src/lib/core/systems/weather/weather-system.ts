@@ -1,7 +1,7 @@
 import type { Graphics, Container } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import { calculatePlayerWarmth } from "$lib/domain/exposure/placed-exposure";
+import { calculatePlayerWarmth } from "$lib/domain/exposure/player-warmth";
 import { gameState } from "$lib/state/game-state.svelte";
 import { TIME_WEATHER_CONFIG } from "$lib/domain/weather/time-config";
 import {
@@ -19,7 +19,7 @@ import {
 } from "$lib/domain/weather/weather-events";
 import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import { spawnEnvParticles, type VFXResource } from "$lib/core/vfx/vfx";
-import { isPointNearLitCampfire } from "$lib/core/systems/camp/campfire-runtime-system";
+import { sampleEnvironmentAt } from "$lib/core/systems/environment/environment-signal-system";
 import { TILE } from "$lib/core/systems/map/map";
 import type { MapResource } from "$lib/core/systems/map/map";
 import { applyStatusEffect } from "$lib/state/rpg/status-effects.svelte";
@@ -282,10 +282,12 @@ export function weatherOverlaySystem(
   if (nightOverlay && playerEntity.position) {
     const pgx = Math.round(playerEntity.position.x / TILE);
     const pgy = Math.round(playerEntity.position.y / TILE);
-    const nearCampfire = isPointNearLitCampfire(world, {
+    const playerCenter = {
       x: playerEntity.position.x + TILE / 2,
       y: playerEntity.position.y + TILE / 2,
-    });
+    };
+    const signals = sampleEnvironmentAt(world, weather, playerCenter);
+    const nearCampfire = signals.heat > 0;
 
     const nightMods = nightEnvironmentModifiers({
       timeOfDay: weather.state.timeOfDay,
@@ -294,7 +296,7 @@ export function weatherOverlaySystem(
     });
 
     const { color: targetColor, alpha: targetAlphaBase } = getCycleColorAndAlpha(weather.state.timeOfDay);
-    
+
     // Scale darkness slightly near campfires
     const darknessFactor = nearCampfire ? 0.65 : 1.0;
     const targetAlpha = targetAlphaBase * darknessFactor;
