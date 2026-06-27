@@ -158,6 +158,12 @@ import { tickWetnessState, wetnessState } from "$lib/state/rpg/wetness.svelte";
 import { setColdAccumulator } from "$lib/state/rpg/cold-exposure.svelte";
 import { tickPlacedReactionSystem } from "$lib/core/systems/exposure/exposure-system";
 import { ExposureResource } from "$lib/core/systems/exposure/exposure-resource";
+import {
+  VisualPresentationResource,
+  registerCampfireVisual,
+  tickVisualPresentation,
+  clearVisualPresentation,
+} from "$lib/core/systems/visual/visual-presentation-system.js";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import {
@@ -248,6 +254,7 @@ export class GameEngine {
   public buildingResource = new BuildingResource();
   public itemPlacementResource = new ItemPlacementResource();
   public exposureResource = new ExposureResource();
+  public visualPresentationResource = new VisualPresentationResource();
   public combatConfig = new CombatConfig();
   public combatResource = new CombatResource();
   public eventQueue = createGameEventQueue();
@@ -314,9 +321,6 @@ export class GameEngine {
   private playerShadow!: Sprite;
   private attachmentSprites = new Map<string, Sprite>();
   private lastEquippedLoadout: Record<string, string | null> = {};
-
-  // Campfire glow
-  private campfireGlow!: Sprite;
 
   // Night/weather overlays â€” screen-space, above worldContainer, below DOM HUD
   private nightOverlay!: Graphics;
@@ -519,6 +523,7 @@ export class GameEngine {
     registerPlayerHp(null);
 
     this.app.destroy(true, { children: true });
+    clearVisualPresentation(this.visualPresentationResource);
     world.clear();
     this.entitySprites.clear();
 
@@ -999,6 +1004,7 @@ export class GameEngine {
       );
 
       tickCampfireEntities(world, dt, { raining: this.weatherResource.state.raining });
+      tickVisualPresentation(world, this.weatherResource, this.vfxResource, this.entityLayer, this.visualPresentationResource, dt);
 
       // Wetness system — must run before weatherOverlaySystem so its multiplier is fresh
       if (this.playerEntity.position) {
@@ -1275,13 +1281,6 @@ export class GameEngine {
         this.entitySprites
       );
 
-      // Update campfire glow flicker
-      if (this.campfireGlow) {
-        const baseRadius = getCampfireHeatRadiusTiles(world.with("campfire").entities.find((entity) => entity.id === EntityId.Campfire));
-        const flicker = 1.0 + Math.sin(performance.now() * ENGINE_CONFIG.CAMPFIRE_GLOW.FLICKER_SPEED) * ENGINE_CONFIG.CAMPFIRE_GLOW.FLICKER_INTENSITY;
-        this.campfireGlow.scale.set(((baseRadius * TILE * ENGINE_CONFIG.CAMPFIRE_GLOW.SCALE_MULT) / ENGINE_CONFIG.CAMPFIRE_GLOW.BASE_RADIUS_PX) * flicker);
-      }
-
       weatherOverlaySystem(
         world,
         this.weatherResource,
@@ -1419,7 +1418,7 @@ export class GameEngine {
 
     // Campfire + Commander Vane. Base world always; scenarios only when opted in.
     if (wantCamp) {
-      const { campfireGlow } = spawnCampSystem(
+      const { campfireGlow, campfireSprite } = spawnCampSystem(
         spawnX,
         spawnY,
         startX,
@@ -1431,7 +1430,16 @@ export class GameEngine {
         generateCampfireGlowTexture(),
         (gx, gy, fp) => this.setTileFootprint(gx, gy, fp)
       );
-      this.campfireGlow = campfireGlow;
+      const campfireEntity = world.with("campfire").entities.find((e) => e.id === EntityId.Campfire);
+      if (campfireEntity?.campfire) {
+        registerCampfireVisual(
+          this.visualPresentationResource,
+          EntityId.Campfire,
+          campfireSprite,
+          campfireGlow,
+          campfireEntity.campfire,
+        );
+      }
     }
 
     // Scatter resource nodes
@@ -2457,11 +2465,6 @@ export class GameEngine {
       const campfire = world.with("position").entities.find((entity) => entity.id === entityId);
       if (campfire) refuelCampfireEntity(campfire, fuel.fuelMs);
       triggerQuestEvent(GameEvent.Refuel);
-      
-      // Update campfire visual sprite (reset frames / alpha)
-      if (this.campfireGlow) {
-        this.campfireGlow.alpha = 0.5;
-      }
       return true;
     } catch (err) {
       console.error("Refuel error:", err);

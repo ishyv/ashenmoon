@@ -234,7 +234,7 @@ export function spawnCampSystem(
   map: MapResource,
   lightTexture: Texture,
   setTileFootprint: (gx: number, gy: number, footprint: CollisionFootprint) => void
-): { campfireGlow: Sprite } {
+): { campfireGlow: Sprite; campfireSprite: AnimatedSprite } {
   // Campfire entity
   const campfireContainer = new Container();
   campfireContainer.x = startX + TILE / 2;
@@ -306,7 +306,7 @@ export function spawnCampSystem(
   entityLayer.addChild(vaneSprite);
   entitySprites.set(EntityId.NpcVane, vaneSprite);
 
-  return { campfireGlow };
+  return { campfireGlow, campfireSprite: campfire };
 }
 
 let dropSeq = 0;
