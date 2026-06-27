@@ -10,13 +10,14 @@ import {
   TilingSprite,
 } from "pixi.js";
 import {
-  generateCampfireGlowTexture,
-  loadGameAssets,
   type UnitColor,
 } from "$lib/core/assets/assets";
 import {
+  createRenderResourceCache,
+  type RenderResourceCache,
+} from "$lib/core/assets/render-resource-cache";
+import {
   createStandeeShadow,
-  getAshenmoonActorFrames,
   getAshenmoonStructureKeyForBuildingType,
   getAshenmoonStructureTexture,
   getAshenmoonTextureByKey,
@@ -262,6 +263,7 @@ export class GameEngine {
   public weatherResource = new WeatherResource();
   public fogSystem = new FogSystem();
   public rainEffectSystem = new RainEffectSystem();
+  public renderResources: RenderResourceCache = createRenderResourceCache();
   private visionSystem = new VisionSystem();
 
   // Facing vector
@@ -382,7 +384,7 @@ export class GameEngine {
       this.containerEl.appendChild(this.app.canvas);
 
       // Load first-party Ashenmoon bundle only; old sprite-pack bundles must not be eagerly preloaded.
-      await loadGameAssets();
+      await this.renderResources.preloadAll();
 
       // Setup listeners via input resource
       const canvas = this.app.canvas as HTMLCanvasElement;
@@ -720,7 +722,8 @@ export class GameEngine {
               this.entitySprites,
               triggerQuestEvent,
               () => this.cancelBuildingPlacement(),
-              this.buildingResource.onPlacementCompleteCb
+              this.buildingResource.onPlacementCompleteCb,
+              this.visualPresentationResource,
             );
           } else {
             spawnEnvFloatingText(
@@ -931,7 +934,7 @@ export class GameEngine {
         this.vfxResource,
         this.entityLayer,
         this.entitySprites,
-        (_entity, state) => getAshenmoonActorFrames("wolf", state as AnimState),
+        (_entity, state) => this.renderResources.actorFrames("wolf", state as AnimState) as Texture[],
         this.eventQueue
       );
 
@@ -1403,7 +1406,7 @@ export class GameEngine {
     const startW = gameState.rpg.profile?.loadout?.weapon;
     this.lastEquippedWeapon = startW ? (typeof startW === "string" ? startW : startW.itemId) : null;
 
-    this.playerSprite = new AnimatedSprite(getAshenmoonActorFrames("player"));
+    this.playerSprite = new AnimatedSprite(this.renderResources.actorFrames("player") as Texture[]);
     this.playerSprite.animationSpeed = 0.12;
     this.playerSprite.play();
     const scale = (TILE * ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_HEIGHT_TILES) / this.playerSprite.texture.height;
@@ -1427,7 +1430,7 @@ export class GameEngine {
         this.entitySprites,
         this.interactionResource,
         this.mapResource,
-        generateCampfireGlowTexture(),
+        this.renderResources.generatedTexture("campfireGlow"),
         (gx, gy, fp) => this.setTileFootprint(gx, gy, fp)
       );
       const campfireEntity = world.with("campfire").entities.find((e) => e.id === EntityId.Campfire);
@@ -1472,7 +1475,8 @@ export class GameEngine {
           this.mapResource,
           this.entityLayer,
           this.entitySprites,
-          b.stage
+          b.stage,
+          this.visualPresentationResource,
         );
       }
     }
@@ -1695,7 +1699,8 @@ export class GameEngine {
       this.mapResource,
       this.entityLayer,
       this.entitySprites,
-      stage
+      stage,
+      this.visualPresentationResource,
     );
   }
 
@@ -1732,7 +1737,7 @@ export class GameEngine {
     this.playerAnimState = state;
     this.lastEquippedWeapon = currentWeaponId;
 
-    const frames = getAshenmoonActorFrames("player", state);
+    const frames = this.renderResources.actorFrames("player", state) as Texture[];
     this.playerSprite.textures = frames;
 
     if (state === "attack" || state === "gather" || state === "gather_tired") {
@@ -2216,7 +2221,7 @@ export class GameEngine {
   }
 
   public upgradeBuilding(buildingId: string, stage: number): void {
-    upgradeBuildingSystem(buildingId, stage, world, this.mapResource, this.entitySprites);
+    upgradeBuildingSystem(buildingId, stage, world, this.mapResource, this.entitySprites, this.visualPresentationResource);
   }
 
   public isNearCampfire(): boolean {

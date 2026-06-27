@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, Sprite, Text, TextStyle } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
@@ -27,7 +27,13 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import {
   getAshenmoonStructureKeyForBuildingType,
   getAshenmoonStructureTexture,
+  getAshenmoonPropTexture,
 } from "$lib/core/assets/ashenmoon-assets";
+import { generateCampfireGlowTexture } from "$lib/core/assets/assets";
+import {
+  type VisualPresentationResource,
+  registerCampfireVisual,
+} from "$lib/core/systems/visual/visual-presentation-system";
 
 import { gameState } from "$lib/state/game-state.svelte";
 import { syncShelterEmitter } from "$lib/core/systems/environment/environment-signal-system";
@@ -105,6 +111,25 @@ export function isValidPlacement(
   playerPos: { x: number; y: number },
 ): boolean {
   return isValidBuildingPlacement(mx, my, type, placementContext(map, playerPos));
+}
+
+function setupCampfireInShell(
+  shellContainer: Container,
+): { sprite: AnimatedSprite; glow: Sprite } {
+  shellContainer.removeChildren().forEach((c) => c.destroy());
+  const glow = new Sprite(generateCampfireGlowTexture());
+  glow.anchor.set(0.5);
+  glow.blendMode = "add";
+  glow.alpha = 0.5;
+  glow.scale.set(1.5);
+  shellContainer.addChild(glow);
+  const tex = getAshenmoonPropTexture("firepitCold"); // bridge sets correct texture on first step
+  const fireSprite = new AnimatedSprite([tex]);
+  fireSprite.anchor.set(0.5, 0.72);
+  fireSprite.scale.set((TILE * 1.45) / tex.width);
+  fireSprite.stop();
+  shellContainer.addChild(fireSprite);
+  return { sprite: fireSprite, glow };
 }
 
 export function drawBuildingVisuals(
@@ -329,6 +354,7 @@ export function spawnBuildingSystem(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   stage?: number,
+  visualPresentationResource?: VisualPresentationResource,
 ): void {
   const ex = gx * TILE;
   const ey = gy * TILE;
@@ -409,7 +435,14 @@ export function spawnBuildingSystem(
   container.addChild(interiorContainer);
   container.addChild(shellContainer);
 
-  drawBuildingVisuals(type, currentStage, interiorContainer, shellContainer);
+  if (type === "campfire" && currentStage === 5) {
+    const refs = setupCampfireInShell(shellContainer);
+    if (visualPresentationResource && entity.campfire) {
+      registerCampfireVisual(visualPresentationResource, id, refs.sprite, refs.glow, entity.campfire);
+    }
+  } else {
+    drawBuildingVisuals(type, currentStage, interiorContainer, shellContainer);
+  }
 
   entityLayer.addChild(container);
   entitySprites.set(id, container);
@@ -421,6 +454,7 @@ export function upgradeBuildingSystem(
   world: World<Entity>,
   map: MapResource,
   entitySprites: Map<string, Container>,
+  visualPresentationResource?: VisualPresentationResource,
 ): void {
   const container = entitySprites.get(id);
   if (!container) return;
@@ -438,7 +472,14 @@ export function upgradeBuildingSystem(
   const interiorContainer = container.children[0] as Container;
   const shellContainer = container.children[1] as Container;
   if (interiorContainer && shellContainer) {
-    drawBuildingVisuals(type, stage, interiorContainer, shellContainer);
+    if (type === "campfire" && stage === 5) {
+      const refs = setupCampfireInShell(shellContainer);
+      if (visualPresentationResource && entity.campfire) {
+        registerCampfireVisual(visualPresentationResource, id, refs.sprite, refs.glow, entity.campfire);
+      }
+    } else {
+      drawBuildingVisuals(type, stage, interiorContainer, shellContainer);
+    }
   }
 
   // Upgrade collision if transitioning to stage 2 (Columns) or above
@@ -513,6 +554,7 @@ export async function placeBuildingSystem(
   triggerQuestEvent: (evt: string, val?: any) => void,
   cancelPlacement: () => void,
   onCompleteCb: (() => void) | undefined,
+  visualPresentationResource?: VisualPresentationResource,
 ): Promise<void> {
   const result = await syncBuild(type, gx, gy, sourceItemId ?? undefined);
   const player = getPlayerEntity();
@@ -532,7 +574,7 @@ export async function placeBuildingSystem(
 
   const id = result.data.profile.buildings?.at(-1)?.id ?? `building_${type}_${Date.now()}`;
   const newBuilding = result.data.profile.buildings?.find((b) => b.id === id);
-  spawnBuildingSystem(id, type, gx, gy, world, map, entityLayer, entitySprites, newBuilding?.stage);
+  spawnBuildingSystem(id, type, gx, gy, world, map, entityLayer, entitySprites, newBuilding?.stage, visualPresentationResource);
 
   playSound("build.place");
   const isMultiStage = !!getBuildingSpec(type).isMultiStage;
