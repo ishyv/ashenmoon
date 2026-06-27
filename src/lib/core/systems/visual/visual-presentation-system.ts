@@ -130,7 +130,7 @@ function buildInitialPresentation(
 
   return {
     baseState: resolved.baseState,
-    activeLoops: new Set(resolved.soundLoops),
+    activeLoops: new Set<VisualSoundId>(), // nothing actually playing yet; first step starts correct loops
     emitterTimers: new Map(),
     ignitionElapsedSec: campfireState.isLit ? 1.0 : 0,
     everBurned: campfireState.isLit,
