@@ -237,6 +237,7 @@ export class InputResource {
     const onMouseDown = (e: MouseEvent): void => {
       unlock();
       if (devConsole.open) return;
+      if (menuController.active) return;
       if (e.button === 0) {
         this.handlePrimaryMouseDown({
           nowMs: performance.now(),
@@ -294,6 +295,9 @@ export class InputResource {
   }
 
   public isActionPressed(action: string): boolean {
+    // WHY: keys held before a menu opened remain in this.keys; block at the
+    // read side so movement/sprint/gather never fire while the menu owns input.
+    if (menuController.active) return false;
     const keysList = this.bindings[action] ?? [];
     return keysList.some((k) => this.keys[k.toLowerCase()]);
   }

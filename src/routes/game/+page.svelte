@@ -78,29 +78,18 @@ function handleInteract(target: Entity) {
 
 function handleContextMenu(target: WorldContextMenuTarget) {
   contextMenu = target;
-}
-
-function closeContextMenu() {
-  contextMenu = null;
-}
-
-// Keep menuController in sync with the context menu. When the menu opens,
-// derive a typed item list so arrow keys / Enter / RShift / Del can navigate it
-// without touching the mouse.
-$effect(() => {
-  if (!contextMenu) {
-    menuController.clear();
-    return;
-  }
+  // Synchronous mount — must happen before any keydown fires so the gate is live
+  // immediately. An $effect would defer to the next microtask, creating a window
+  // where arrow keys still reach the game.
   const items: MenuControllerItem[] = [];
-  if (contextMenu.action && contextMenu.action !== "destroy") {
+  if (target.action && target.action !== "destroy") {
     items.push({
-      label: contextMenu.action === "gather" ? "harvest" : contextMenu.action,
+      label: target.action === "gather" ? "harvest" : target.action,
       action: () => { engine?.triggerInteract(); closeContextMenu(); },
     });
   }
-  if (contextMenu.buildingId) {
-    const bid = contextMenu.buildingId;
+  if (target.buildingId) {
+    const bid = target.buildingId;
     items.push({
       label: "destroy",
       role: "danger",
@@ -109,7 +98,12 @@ $effect(() => {
   }
   items.push({ label: "close", role: "close", action: closeContextMenu });
   menuController.mount(items);
-});
+}
+
+function closeContextMenu() {
+  contextMenu = null;
+  menuController.clear();
+}
 
 function toggleSkills() {
   showSkills ? overlayStack.close(OverlayId.Skills) : overlayStack.push(OverlayId.Skills);
