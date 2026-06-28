@@ -1,5 +1,6 @@
 import type { Application, Container } from "pixi.js";
 import { devConsole } from "$lib/ui/debug/dev-console";
+import { menuController } from "$lib/state/menu-controller.svelte";
 import { InputAction, StorageKeys } from "$lib/domain/game-events";
 import { unlock } from "$lib/audio/audio-engine";
 import { chargeProgressFromHeldMs } from "$lib/domain/combat/fell-sweep";
@@ -14,6 +15,18 @@ import {
 } from "$lib/domain/combat/driving-thrust";
 import type { AttackInputSnapshot } from "$lib/domain/combat/input-intent";
 
+const DEFAULT_BINDINGS: Record<string, string[]> = {
+  [InputAction.MoveUp]: ["w", "arrowup"],
+  [InputAction.MoveDown]: ["s", "arrowdown"],
+  [InputAction.MoveLeft]: ["a", "arrowleft"],
+  [InputAction.MoveRight]: ["d", "arrowright"],
+  [InputAction.Harvest]: ["e"],
+  [InputAction.FocusedGather]: ["f"],
+  [InputAction.Console]: ["/"],
+  [InputAction.Sprint]: ["shift"],
+  [InputAction.StanceModifier]: ["control"],
+};
+
 function directionBetween(start: Vec2, end: Vec2): Vec2 | null {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
@@ -23,17 +36,7 @@ function directionBetween(start: Vec2, end: Vec2): Vec2 | null {
 
 export class InputResource {
   public keys: Record<string, boolean> = {};
-  public bindings: Record<string, string[]> = {
-    [InputAction.MoveUp]: ["w", "arrowup"],
-    [InputAction.MoveDown]: ["s", "arrowdown"],
-    [InputAction.MoveLeft]: ["a", "arrowleft"],
-    [InputAction.MoveRight]: ["d", "arrowright"],
-    [InputAction.Harvest]: ["e"],
-    [InputAction.FocusedGather]: ["f"],
-    [InputAction.Console]: ["/"],
-    [InputAction.Sprint]: ["shift"],
-    [InputAction.StanceModifier]: ["control"],
-  };
+  public bindings: Record<string, string[]> = { ...DEFAULT_BINDINGS };
 
   public mouseWorld = { x: 0, y: 0 };
   public mouseScreen = { x: 0, y: 0 };
@@ -200,12 +203,18 @@ export class InputResource {
   ): () => void {
     const onKeyDown = (e: KeyboardEvent): void => {
       unlock();
+      // Block browser shortcuts while the game is running (F12 intentionally left open)
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+      if (/^F([1-9]|10|11)$/.test(e.key)) e.preventDefault();
+      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) e.preventDefault();
       if (e.key === "Escape" && isPlacementMode()) {
         cancelPlacement();
         e.preventDefault();
         return;
       }
       if (devConsole.open) return;
+      // WHY: menu context controller owns arrow/action keys while any menu is open
+      if (menuController.active) return;
       this.handleKeyDown(e.key, e.repeat);
     };
 
@@ -295,7 +304,7 @@ export class InputResource {
   }
 
   public updateBindings(newBindings: Record<string, string[]>): void {
-    this.bindings = newBindings;
+    this.bindings = { ...DEFAULT_BINDINGS, ...newBindings };
   }
 
   public handleKeyDown(key: string, repeat = false, now = performance.now()): void {
@@ -331,7 +340,7 @@ export class InputResource {
       if (data) {
         const parsed = JSON.parse(data);
         if (parsed && typeof parsed === "object") {
-          this.bindings = parsed;
+          this.bindings = { ...DEFAULT_BINDINGS, ...parsed };
         }
       }
     } catch (e) {

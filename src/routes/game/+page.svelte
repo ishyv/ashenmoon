@@ -25,6 +25,7 @@ import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 import { loadGameState } from "$lib/state/game-state.svelte";
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
+import { menuController, type MenuControllerItem } from "$lib/state/menu-controller.svelte";
 import { dialogueState, activeQuests } from "$lib/state/rpg/quests.svelte";
 import StationPanel from "$lib/ui/panels/StationPanel.svelte";
 import CarcassPanel from "$lib/ui/panels/CarcassPanel.svelte";
@@ -83,6 +84,33 @@ function closeContextMenu() {
   contextMenu = null;
 }
 
+// Keep menuController in sync with the context menu. When the menu opens,
+// derive a typed item list so arrow keys / Enter / RShift / Del can navigate it
+// without touching the mouse.
+$effect(() => {
+  if (!contextMenu) {
+    menuController.clear();
+    return;
+  }
+  const items: MenuControllerItem[] = [];
+  if (contextMenu.action && contextMenu.action !== "destroy") {
+    items.push({
+      label: contextMenu.action === "gather" ? "harvest" : contextMenu.action,
+      action: () => { engine?.triggerInteract(); closeContextMenu(); },
+    });
+  }
+  if (contextMenu.buildingId) {
+    const bid = contextMenu.buildingId;
+    items.push({
+      label: "destroy",
+      role: "danger",
+      action: () => { engine?.destroyBuilding(bid); closeContextMenu(); },
+    });
+  }
+  items.push({ label: "close", role: "close", action: closeContextMenu });
+  menuController.mount(items);
+});
+
 function toggleSkills() {
   showSkills ? overlayStack.close(OverlayId.Skills) : overlayStack.push(OverlayId.Skills);
 }
@@ -130,6 +158,15 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
   if (devConsole.open) return;
   const tag = (e.target as HTMLElement)?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+  // Menu context controller: route navigation keys into the open menu first.
+  if (menuController.active) {
+    if (e.key === "ArrowUp")                                    { menuController.moveUp();              e.preventDefault(); return; }
+    if (e.key === "ArrowDown")                                  { menuController.moveDown();            e.preventDefault(); return; }
+    if (e.key === "ArrowRight" || e.key === "Enter")            { menuController.activateFocused();     e.preventDefault(); return; }
+    if (e.key === "ArrowLeft"  || e.key === "Backspace")        { closeContextMenu();                   e.preventDefault(); return; }
+    if (e.code === "ShiftRight" || e.key === "Delete")          { menuController.activateByRole("danger"); e.preventDefault(); return; }
+  }
 
   if (e.key === "Escape") {
     if (engine?.isInPlacementMode()) return;
@@ -513,23 +550,43 @@ onDestroy(() => {
   {/if}
 
   {#if contextMenu}
+    {@const hasAction = !!(contextMenu.action && contextMenu.action !== "destroy")}
+    {@const hasDestroy = !!contextMenu.buildingId}
+    {@const actionRi = 0}
+    {@const destroyRi = hasAction ? 1 : 0}
+    {@const closeRi = (hasAction ? 1 : 0) + (hasDestroy ? 1 : 0)}
     <div
       class="ctx-menu"
       style="left:{contextMenu.screenX}px; top:{contextMenu.screenY}px"
       role="menu"
     >
       <div class="ctx-header">{contextMenu.name}</div>
-      {#if contextMenu.action && contextMenu.action !== "destroy"}
-        <button class="ctx-item" role="menuitem" onclick={() => { engine?.triggerInteract(); closeContextMenu(); }}>
+      {#if hasAction}
+        <button
+          class="ctx-item"
+          class:ctx-focused={actionRi === menuController.focusedIndex}
+          role="menuitem"
+          onclick={() => { engine?.triggerInteract(); closeContextMenu(); }}
+        >
           {contextMenu.action === "gather" ? "harvest" : contextMenu.action}
         </button>
       {/if}
-      {#if contextMenu.buildingId}
-        <button class="ctx-item ctx-danger" role="menuitem" onclick={() => { engine?.destroyBuilding(contextMenu!.buildingId!); closeContextMenu(); }}>
+      {#if hasDestroy}
+        <button
+          class="ctx-item ctx-danger"
+          class:ctx-focused={destroyRi === menuController.focusedIndex}
+          role="menuitem"
+          onclick={() => { engine?.destroyBuilding(contextMenu!.buildingId!); closeContextMenu(); }}
+        >
           destroy
         </button>
       {/if}
-      <button class="ctx-item ctx-close" role="menuitem" onclick={closeContextMenu}>close</button>
+      <button
+        class="ctx-item ctx-close"
+        class:ctx-focused={closeRi === menuController.focusedIndex}
+        role="menuitem"
+        onclick={closeContextMenu}
+      >close</button>
     </div>
   {/if}
 
@@ -722,7 +779,8 @@ onDestroy(() => {
     transition: background 0.08s;
   }
 
-  .ctx-item:hover {
+  .ctx-item:hover,
+  .ctx-item.ctx-focused {
     background: rgba(255, 220, 120, 0.1);
     color: rgba(255, 255, 255, 0.95);
   }
