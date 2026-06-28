@@ -67,6 +67,8 @@ import {
 import type { GameEventQueue } from "$lib/domain/game-event-queue";
 import { handleHitFeedbackSystem as _handleHitFeedback } from "$lib/core/systems/interaction/hit-feedback-system";
 import { depleteNodeSystem as _depleteNode } from "$lib/core/systems/interaction/node-depletion-system";
+import { gatherTargetKindForDefinition } from "$lib/domain/animation/player-animation";
+import type { PlayerAnimationResource } from "$lib/core/systems/player-animation/player-animation-system";
 
 export { setHighlight, updateTargetSystem } from "$lib/core/systems/interaction/targeting-system";
 
@@ -271,6 +273,8 @@ export class InteractionResource {
   public activeProcess: StationProcessRuntime | null = null;
   /** Active timed world-object action; null when no object action is running. */
   public activeWorldAction: WorldActionRuntime | null = null;
+  /** True when a precision tap was registered during the current activeWorldAction cycle. */
+  public activeWorldActionPrecision = false;
 }
 
 /**
@@ -389,6 +393,7 @@ export function runInteractionSystem(
   stationTickContext: StationProcessTickContext = { raining: false },
   onOpenCarcassPanel?: (targetId: string) => void,
   eventQueue?: GameEventQueue,
+  playerAnimation?: PlayerAnimationResource,
 ): void {
   const tickActiveProcess = (): void => {
     if (!interaction.activeProcess) return;
@@ -503,9 +508,11 @@ export function runInteractionSystem(
     }
 
     if (tickedAction.completed) {
+      const precision = interaction.activeWorldActionPrecision;
       interaction.activeWorldAction = null;
+      interaction.activeWorldActionPrecision = false;
       if (tickedAction.action.executeIntent.kind === "carcass.process") {
-        completeCarcassWorldAction(target, tickedAction, vfx, entityLayer, entitySprites, eventQueue);
+        completeCarcassWorldAction(target, tickedAction, vfx, entityLayer, entitySprites, eventQueue, precision);
       }
       enqueueWorldActionCompletedEvent({
         queue: eventQueue,
@@ -544,6 +551,7 @@ export function runInteractionSystem(
   const tickGatherLoop = (): boolean => {
     if (isPlacementMode) {
       interaction.gatheringTarget = null;
+      playerAnimation?.clearGathering();
       interaction.gatherCooldownTimer = 0;
       return true;
     }
@@ -558,6 +566,7 @@ export function runInteractionSystem(
         inputs.isActionPressed(InputAction.MoveRight) ||
         isDashing;
       if (moving || interaction.currentTarget !== interaction.gatheringTarget) {
+        playerAnimation?.clearGathering(interaction.gatheringTarget.id);
         interaction.gatheringTarget = null;
       }
     }
@@ -652,7 +661,8 @@ export function runInteractionSystem(
         const gate = checkGatherTool(weaponId, expectedKind);
         if (!gate.ok) {
           interaction.gatheringTarget = null;
-          setPlayerAnim("idle");
+          playerAnimation?.clearGathering(target.id);
+          if (!playerAnimation) setPlayerAnim("idle");
           return false;
         }
       }
@@ -668,7 +678,11 @@ export function runInteractionSystem(
       const isExhausted = statusState.active.some((s) => s.id === StatusId.Exhaustion);
       const isTired = currentStamina < 25 || isExhausted;
 
-      setPlayerAnim(isTired ? "gather_tired" : "gather");
+      if (gatherable) {
+        const targetKind = gatherTargetKindForDefinition(gatherable);
+        if (targetKind) playerAnimation?.startGathering({ targetKind, targetId: target.id });
+      }
+      if (!playerAnimation) setPlayerAnim(isTired ? "gather_tired" : "gather");
 
       if (playerEntity.position && target.position) {
         const playerCenter = {
@@ -725,6 +739,7 @@ export function runInteractionSystem(
             (e) => { if (interaction.currentTarget === e) interaction.currentTarget = null; },
             vfx, entityLayer, entitySprites, triggerQuestEvent, map,
           );
+          playerAnimation?.clearGathering(target.id);
           interaction.gatheringTarget = null;
         }
       }

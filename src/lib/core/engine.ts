@@ -56,7 +56,6 @@ import {
   shockwaveUpdateSystem,
   slashArcUpdateSystem,
   cameraShakeSystem,
-  gatherRingUpdateSystem,
   selectionRingUpdateSystem,
   cloudDriftSystem,
   footstepParticleSystem,
@@ -65,31 +64,29 @@ import {
   spawnDeathBurst,
   spawnLevelUpBurst,
   triggerCameraShake,
-  updateFourfoldSlashVFX,
-  crosscutIndicatorUpdateSystem,
 } from "$lib/core/vfx/vfx";
+import { updateStrikeRing, ringColorForSolidKind } from "$lib/core/vfx/action-timers/gathering-strike-ring";
+import { updateTremorLine } from "$lib/core/vfx/action-timers/butcher-tremor-line";
+import { updatePlacementCompass } from "$lib/core/vfx/action-timers/building-placement-compass";
 import {
   MovementConfig,
   MovementResource,
   playerMovementSystem,
 } from "$lib/core/systems/movement/movement";
 import {
+  PlayerAnimationResource,
+  legacyAnimStateForClip,
+  runPlayerAnimationSystem,
+} from "$lib/core/systems/player-animation/player-animation-system";
+import {
   CombatConfig,
   CombatResource,
-  playerAttackSystem,
-  renderFellSweepChargeFeedback,
-  trackMovementCombo,
-  fellSweepSystem,
   tickEnemyBleedSystem,
   knockbackSystem,
   despawnEntity,
-  updateFellSweepChargeSystem,
 } from "$lib/core/systems/combat/combat";
-import {
-  drivingThrustSystem,
-  renderDrivingThrustPreview,
-} from "$lib/core/systems/combat/driving-thrust";
-import { weaponAttackSystem } from "$lib/core/systems/combat/weapon-attack-system";
+import { updateWeaponGuardSystem, weaponAttackSystem } from "$lib/core/systems/combat/weapon-attack-system";
+import { applyPlayerWeaponPresentation } from "$lib/core/systems/combat/player-weapon-presentation";
 import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
 import { animalEcologySystem, spawnInitialAnimalsSystem } from "$lib/core/systems/animals/animal-ecology-system";
 import { createAnimalSprite } from "$lib/core/systems/animals/animal-rendering";
@@ -137,8 +134,10 @@ import {
   isNight,
 } from "$lib/domain/weather/weather-events";
 import { syncRefuel } from "$lib/state/persistence/remote-sync";
-import { getItemQty } from "$lib/state/rpg/inventory-api";
+import { getEquippedWeaponId, getItemQty } from "$lib/state/rpg/inventory-api";
 import { getItemDef } from "$lib/domain/items";
+import { inventoryEncumbranceRatio } from "$lib/domain/animation/player-animation";
+import { toolKindOf } from "$lib/domain/gathering/gather-system";
 import { OPEN_FLAME_BONUS } from "$lib/domain/exposure/exposure-context";
 import { gameState } from "$lib/state/game-state.svelte";
 import { setRpgProfile, equipLocalWeapon, applyRpgState } from "$lib/state/rpg-actions.svelte";
@@ -151,6 +150,7 @@ import {
   getStatusModifiers,
   loadStatuses,
   applyStatusEffect,
+  statusState,
 } from "$lib/state/rpg/status-effects.svelte";
 import { loadWounds, tickWounds } from "$lib/state/rpg/wounds.svelte";
 import { registerPlayerFeedback, registerPlayerHp, emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
@@ -166,13 +166,15 @@ import {
   clearVisualPresentation,
 } from "$lib/core/systems/visual/visual-presentation-system.js";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
-import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
+import { Category, ITEM_DEFINITIONS, resolveItemVisuals, traitOf } from "$lib/domain/items";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 import {
   ItemPlacementResource,
   updateItemPlacementPreviewSystem,
   placeItemSystem,
   spawnPlacedItemSystem,
   getItemTexture,
+  applyGroundItemVisualScale,
   isValidItemPlacementGrid,
 } from "$lib/core/systems/item-placement/item-placement-system";
 import { StatusId } from "$lib/domain/systems/status-types";
@@ -250,6 +252,7 @@ export class GameEngine {
   public vfxResource = new VFXResource();
   public movementConfig = new MovementConfig();
   public movementResource = new MovementResource();
+  public playerAnimationResource = new PlayerAnimationResource();
   public interactionResource = new InteractionResource();
   public focusedGatherResource = new FocusedGatherResource();
   public buildingResource = new BuildingResource();
@@ -298,6 +301,7 @@ export class GameEngine {
   private tileLayer = new Container();
   private entityLayer = new Container();
   private collisionOverlay = new Graphics();
+  private _crosshair: Graphics | null = null;
 
   // Entity Sprite registry
   private entitySprites = new Map<string, Container>();
@@ -307,6 +311,7 @@ export class GameEngine {
     vfx: this.vfxResource,
     movementConfig: this.movementConfig,
     movement: this.movementResource,
+    playerAnimation: this.playerAnimationResource,
     interaction: this.interactionResource,
     focusedGather: this.focusedGatherResource,
     building: this.buildingResource,
@@ -322,6 +327,7 @@ export class GameEngine {
   private playerSprite!: AnimatedSprite;
   private playerShadow!: Sprite;
   private attachmentSprites = new Map<string, Sprite>();
+  private attachmentBasePoses = new Map<string, { x: number; y: number; rotation: number }>();
   private lastEquippedLoadout: Record<string, string | null> = {};
 
   // Night/weather overlays â€” screen-space, above worldContainer, below DOM HUD
@@ -451,6 +457,14 @@ export class GameEngine {
       // Debug environment inspector — top of stage so it's never occluded
       this.environmentInspector = new EnvironmentInspector(this.app.stage);
 
+      // Virtual cursor crosshair — shown only when pointer lock is active
+      this._crosshair = new Graphics();
+      this._crosshair.moveTo(-8, 0).lineTo(8, 0).stroke({ width: 1.5, color: 0xffffff });
+      this._crosshair.moveTo(0, -8).lineTo(0, 8).stroke({ width: 1.5, color: 0xffffff });
+      this._crosshair.circle(0, 0, 2).fill({ color: 0xffffff, alpha: 0.7 });
+      this._crosshair.visible = false;
+      this.app.stage.addChild(this._crosshair);
+
       // Draw map tiles
       drawTerrainSystem(this.mapResource, this.tileLayer);
 
@@ -545,7 +559,9 @@ export class GameEngine {
     this.vfxResource.activeShakes.clear();
     this.vfxResource.baseScales.clear();
 
-    this.vfxResource.gatherRing?.destroy();
+    this.vfxResource.strikeRing?.destroy();
+    this.vfxResource.tremorLine?.destroy();
+    this.vfxResource.placementCompass?.destroy();
     this.vfxResource.selectionRing?.destroy();
     this.vfxResource.comboRing?.destroy();
     this.vfxResource.fourfoldRing?.destroy();
@@ -597,7 +613,8 @@ export class GameEngine {
         this.playerSprite,
         (state) => this.setPlayerAnim(state),
         this.entityLayer,
-        this.combatResource
+        this.combatResource,
+        this.playerAnimationResource,
       );
 
       // Zoom Lerp update
@@ -619,16 +636,14 @@ export class GameEngine {
       const localMouse = this.worldContainer.toLocal(this.inputResource.mouseScreen);
       this.inputResource.mouseWorld = { x: localMouse.x, y: localMouse.y };
 
-      updateFellSweepChargeSystem(
-        this.inputResource,
-        this.combatResource,
-        this.vfxResource,
-        dt,
-        this.playerEntity,
-        this.entityLayer,
-        this.movementResource.isDashing,
-        this.buildingResource.isPlacementMode
-      );
+      // Sync virtual crosshair to cursor position (visible only during pointer lock)
+      if (this._crosshair) {
+        this._crosshair.visible = this.inputResource.isPointerLocked;
+        this._crosshair.position.set(
+          this.inputResource.mouseScreen.x,
+          this.inputResource.mouseScreen.y,
+        );
+      }
 
       // Update targeting selections based on mouse coordinates
       updateTargetSystem(
@@ -797,6 +812,7 @@ export class GameEngine {
           { raining: this.weatherResource.state.raining },
           this.onOpenCarcassPanel,
           this.eventQueue,
+          this.playerAnimationResource,
         );
       }
 
@@ -817,13 +833,20 @@ export class GameEngine {
       if (playerHealth.invulnTimer > 0) playerHealth.invulnTimer -= dt;
       if (this.attackAnimLockTimer > 0) this.attackAnimLockTimer -= dt;
 
-      trackMovementCombo(this.combatResource, this.inputResource);
       // The player's own swings pause during a focused-gathering session; clicks
       // belong to the minigame.
       if (!focusedGatherActive) {
-        // Weapon-driven path first: it claims the gesture for weapons that have an
-        // explicit definition and clears the legacy pending flags so the old combo
-        // systems below stay dormant for those weapons.
+        // Weapon-driven combat owns all normal player attacks. Legacy combo
+        // systems remain in source for isolated tests/dev comparison, but are not
+        // reachable from normal play.
+        updateWeaponGuardSystem({
+          inputs: this.inputResource,
+          combat: this.combatResource,
+          player: this.playerEntity,
+          isPlacementMode: this.buildingResource.isPlacementMode,
+          isDashing: this.movementResource.isDashing,
+          events: this.eventQueue,
+        });
         weaponAttackSystem({
           world,
           inputs: this.inputResource,
@@ -831,6 +854,7 @@ export class GameEngine {
           config: this.combatConfig,
           vfx: this.vfxResource,
           entityLayer: this.entityLayer,
+          map: this.mapResource,
           dt,
           player: this.playerEntity,
           setPlayerAnim: (state) => this.setPlayerAnim(state),
@@ -847,79 +871,6 @@ export class GameEngine {
           events: this.eventQueue,
         });
 
-        drivingThrustSystem(
-          world,
-          this.inputResource,
-          this.combatResource,
-          this.combatConfig,
-          this.vfxResource,
-          dt,
-          this.playerEntity,
-          this.playerSprite,
-          (state) => this.setPlayerAnim(state),
-          this.entityLayer,
-          this.movementResource,
-          this.mapResource,
-          this.buildingResource.isPlacementMode,
-          (enemy) => handleEnemyDeathSystem(
-            enemy,
-            this.vfxResource,
-            this.entityLayer,
-            this.entitySprites,
-            this.enemyColors,
-            this.playerEntity.position!
-          ),
-          this.eventQueue
-        );
-
-        playerAttackSystem(
-          world,
-          this.inputResource,
-          this.combatResource,
-          this.combatConfig,
-          this.vfxResource,
-          dt,
-          this.playerEntity,
-          this.playerSprite,
-          (state) => this.setPlayerAnim(state),
-          this.entityLayer,
-          this.movementResource,
-          this.buildingResource.isPlacementMode,
-          (enemy) => handleEnemyDeathSystem(
-            enemy,
-            this.vfxResource,
-            this.entityLayer,
-            this.entitySprites,
-            this.enemyColors,
-            this.playerEntity.position!
-          ),
-          this.eventQueue
-        );
-
-        fellSweepSystem(
-          world,
-          this.inputResource,
-          this.combatResource,
-          this.combatConfig,
-          this.vfxResource,
-          dt,
-          this.playerEntity,
-          this.playerSprite,
-          (state) => this.setPlayerAnim(state),
-          this.entityLayer,
-          this.movementResource.isDashing,
-          this.buildingResource.isPlacementMode,
-          gameState.rpg.skills?.fellSweep?.level ?? 1,
-          (enemy) => handleEnemyDeathSystem(
-            enemy,
-            this.vfxResource,
-            this.entityLayer,
-            this.entitySprites,
-            this.enemyColors,
-            this.playerEntity.position!
-          ),
-          this.eventQueue
-        );
       } else {
         this.inputResource.pendingDrivingThrust = null;
       }
@@ -977,6 +928,7 @@ export class GameEngine {
       // Pin the player sprite after any knockback displacement.
       this.playerSprite.x = this.playerEntity.position!.x + TILE / 2;
       this.playerSprite.y = this.playerEntity.position!.y + TILE;
+      this.updateAdaptivePlayerAnimation(dt);
       this.updatePlayerVisualFeedback(dt);
 
       // --- Survival ---
@@ -1100,7 +1052,6 @@ export class GameEngine {
 
       // Run VFX particle movements
       particleUpdateSystem(this.vfxResource, dt, this.entityLayer);
-      crosscutIndicatorUpdateSystem(this.vfxResource, dt, this.entityLayer);
       spriteParticleUpdateSystem(this.vfxResource, dt, this.entityLayer);
       hitFlashUpdateSystem(this.vfxResource, dt, this.entityLayer);
       floatingTextUpdateSystem(this.vfxResource, dt, this.entityLayer);
@@ -1207,72 +1158,112 @@ export class GameEngine {
         }
       }
 
-      // Render progress ring
+      // Render action timer displays
+      const anyActionActive = !!(
+        this.buildingChannel ||
+        this.interactionResource.activeWorldAction ||
+        this.interactionResource.gatheringTarget
+      );
+      const precisionTap = anyActionActive && this.inputResource.focusedGatherTriggered;
+      if (precisionTap) this.inputResource.focusedGatherTriggered = false;
+
       if (this.buildingChannel) {
-        this.vfxResource.gatherRing.visible = true;
-        this.vfxResource.gatherRing.x = this.playerEntity.position!.x + TILE / 2;
-        this.vfxResource.gatherRing.y = this.playerEntity.position!.y + TILE / 2;
-        const progress = this.buildingChannel.timer / this.buildingChannel.duration;
-        this.vfxResource.gatherRing.clear();
-        this.vfxResource.gatherRing.circle(0, 0, 26).stroke({ color: Colors.ui.stroke, width: 3, alpha: 0.22 });
-        if (progress > 0.01) {
-          const endAngle = -Math.PI / 2 + progress * Math.PI * 2;
-          this.vfxResource.gatherRing.arc(0, 0, 26, -Math.PI / 2, endAngle);
-          this.vfxResource.gatherRing.stroke({ color: 0xffdc78, width: 3, alpha: 0.85 });
+        const buildingEnt = world.entities.find((e) => e.id === this.buildingChannel!.buildingId);
+        const buildCenter = (buildingEnt?.position && buildingEnt.building)
+          ? (() => {
+              const spec = getBuildingSpec(buildingEnt.building!.type ?? "");
+              return {
+                x: buildingEnt.position!.x + (spec.footprint.w * TILE) / 2,
+                y: buildingEnt.position!.y + (spec.footprint.h * TILE) / 2,
+              };
+            })()
+          : null;
+        this.vfxResource.tremorLine.visible = false;
+        this.vfxResource.strikeRing.visible = false;
+        if (buildCenter) {
+          const progress = this.buildingChannel.timer / this.buildingChannel.duration;
+          const snap = updatePlacementCompass(
+            this.vfxResource.placementCompass, buildCenter, progress, precisionTap,
+          );
+          if (snap) this.buildingChannel.timer = this.buildingChannel.duration;
+        } else {
+          this.vfxResource.placementCompass.visible = false;
         }
       } else if (this.interactionResource.activeWorldAction) {
-        this.vfxResource.gatherRing.visible = true;
-        this.vfxResource.gatherRing.x = this.playerEntity.position!.x + TILE / 2;
-        this.vfxResource.gatherRing.y = this.playerEntity.position!.y + TILE / 2;
-        const progress = this.interactionResource.activeWorldAction.elapsedSec / this.interactionResource.activeWorldAction.durationSec;
-        this.vfxResource.gatherRing.clear();
-        this.vfxResource.gatherRing.circle(0, 0, 26).stroke({ color: Colors.ui.stroke, width: 3, alpha: 0.22 });
-        if (progress > 0.01) {
-          const endAngle = -Math.PI / 2 + progress * Math.PI * 2;
-          this.vfxResource.gatherRing.arc(0, 0, 26, -Math.PI / 2, endAngle);
-          this.vfxResource.gatherRing.stroke({ color: 0xd9534f, width: 3, alpha: 0.85 });
+        const runtime = this.interactionResource.activeWorldAction;
+        const carcassEnt = world.entities.find(
+          (e) => e.id === runtime.action.executeIntent.targetId,
+        );
+        const carcassCenter = carcassEnt?.position
+          ? { x: carcassEnt.position.x + TILE / 2, y: carcassEnt.position.y + TILE * 0.72 }
+          : null;
+        this.vfxResource.placementCompass.visible = false;
+        this.vfxResource.strikeRing.visible = false;
+        if (carcassCenter) {
+          const actionProgress = runtime.elapsedSec / runtime.durationSec;
+          const hit = updateTremorLine(
+            this.vfxResource.tremorLine,
+            carcassCenter,
+            runtime.elapsedSec,
+            actionProgress,
+            precisionTap,
+          );
+          if (hit) this.interactionResource.activeWorldActionPrecision = true;
+        } else {
+          this.vfxResource.tremorLine.visible = false;
         }
       } else {
-        gatherRingUpdateSystem(
-          this.vfxResource,
-          this.playerEntity.position!,
-          this.interactionResource.gatheringTarget,
-          this.interactionResource.currentGatherInterval,
-          this.interactionResource.gatherCooldownTimer
-        );
+        this.vfxResource.placementCompass.visible = false;
+        this.vfxResource.tremorLine.visible = false;
+        this.interactionResource.activeWorldActionPrecision = false;
+        const target = this.interactionResource.gatheringTarget;
+        if (target?.position) {
+          const solidKind = target.resource?.gatherableId
+            ? (getGatherableDefinition(target.resource.gatherableId)?.solidKind ?? "none")
+            : "none";
+          const progress =
+            1 - Math.max(0, this.interactionResource.gatherCooldownTimer) /
+            this.interactionResource.currentGatherInterval;
+          const hit = updateStrikeRing(
+            this.vfxResource.strikeRing,
+            { x: target.position.x + TILE / 2, y: target.position.y + TILE / 2 },
+            progress,
+            solidKind,
+            precisionTap,
+          );
+          if (hit) {
+            this.interactionResource.gatherCooldownTimer *= 0.7;
+            const burstColor = ringColorForSolidKind(solidKind);
+            const bx = target.position.x + TILE / 2;
+            const by = target.position.y + TILE / 2;
+            for (let i = 0; i < 7; i++) {
+              const g = new Graphics();
+              g.circle(0, 0, 2.5).fill({ color: burstColor, alpha: 0.9 });
+              const angle = (i / 7) * Math.PI * 2;
+              const speed = 60 + Math.random() * 50;
+              g.x = bx + Math.cos(angle) * 14;
+              g.y = by + Math.sin(angle) * 14;
+              this.vfxResource.particles.push({
+                graphic: g,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 20,
+                gravity: 80,
+                life: 0,
+                maxLife: 0.3 + Math.random() * 0.2,
+              });
+              this.entityLayer.addChild(g);
+            }
+          }
+        } else {
+          this.vfxResource.strikeRing.visible = false;
+        }
       }
-
-      renderFellSweepChargeFeedback(
-        this.combatResource,
-        this.vfxResource,
-        dt,
-        this.playerEntity,
-        this.playerSprite,
-        this.entityLayer
-      );
-
-      renderDrivingThrustPreview(
-        this.vfxResource,
-        this.entityLayer,
-        this.playerEntity.position,
-        this.inputResource,
-        this.combatResource.drivingThrustConfig
-      );
 
       selectionRingUpdateSystem(
         this.vfxResource,
         dt,
         this.interactionResource.currentTarget,
         this.entitySprites
-      );
-
-      updateFourfoldSlashVFX(
-        this.vfxResource,
-        this.playerEntity.position,
-        this.combatResource.fourfoldState,
-        this.combatResource.fourfoldConfig,
-        this.combatResource.currentTimeMs,
-        this.combatConfig.reach
       );
 
       // Cull offscreen viewport entities/tiles
@@ -1527,9 +1518,17 @@ export class GameEngine {
     }
 
     // Setup indicators overlay rings
-    this.vfxResource.gatherRing = new Graphics();
-    this.vfxResource.gatherRing.visible = false;
-    this.entityLayer.addChild(this.vfxResource.gatherRing);
+    this.vfxResource.strikeRing = new Graphics();
+    this.vfxResource.strikeRing.visible = false;
+    this.entityLayer.addChild(this.vfxResource.strikeRing);
+
+    this.vfxResource.tremorLine = new Graphics();
+    this.vfxResource.tremorLine.visible = false;
+    this.entityLayer.addChild(this.vfxResource.tremorLine);
+
+    this.vfxResource.placementCompass = new Graphics();
+    this.vfxResource.placementCompass.visible = false;
+    this.entityLayer.addChild(this.vfxResource.placementCompass);
 
     this.vfxResource.selectionRing = new Graphics();
     this.vfxResource.selectionRing.visible = false;
@@ -1640,7 +1639,9 @@ export class GameEngine {
     for (const ft of this.vfxResource.floatingTexts) ft.textObj.zIndex = 100_000;
     for (const ring of this.vfxResource.shockwaveRings) ring.graphic.zIndex = 88_000;
     for (const arc of this.vfxResource.slashArcs) arc.graphic.zIndex = 89_000;
-    if (this.vfxResource.gatherRing) this.vfxResource.gatherRing.zIndex = 85_000;
+    if (this.vfxResource.strikeRing) this.vfxResource.strikeRing.zIndex = 85_000;
+    if (this.vfxResource.tremorLine) this.vfxResource.tremorLine.zIndex = 85_000;
+    if (this.vfxResource.placementCompass) this.vfxResource.placementCompass.zIndex = 85_000;
     if (this.vfxResource.selectionRing) this.vfxResource.selectionRing.zIndex = 85_000;
   }
 
@@ -1710,6 +1711,50 @@ export class GameEngine {
   private playerBaseScale = 1;
   private playerVisualClock = 0;
 
+  private updateAdaptivePlayerAnimation(dt: number): void {
+    const pos = this.playerEntity.position;
+    if (!pos) return;
+
+    const equippedItemId = getEquippedWeaponId();
+    const equippedDef = equippedItemId ? ITEM_DEFINITIONS[equippedItemId] : undefined;
+    const toolKind = equippedItemId ? toolKindOf(equippedItemId) : null;
+    const equippedToolKind =
+      toolKind ??
+      (equippedItemId?.includes("knife") ? "knife" : equippedDef?.category === Category.Container ? "container" : null);
+    const combatActive = this.combatResource.weaponAttack.active || (this.attackAnimLockTimer > 0 && this.playerAnimState === "attack");
+    const gathering = this.playerAnimationResource.gathering;
+    const action = combatActive
+      ? "combat"
+      : gathering
+        ? "gathering"
+        : this.playerAnimationResource.movement.velocityPxPerSec > 1
+          ? "moving"
+          : "idle";
+    const selection = runPlayerAnimationSystem({
+      resource: this.playerAnimationResource,
+      sprite: this.playerSprite,
+      renderResources: this.renderResources,
+      context: {
+        action,
+        velocityPxPerSec: this.playerAnimationResource.movement.velocityPxPerSec,
+        sprinting: this.playerAnimationResource.movement.sprinting,
+        staminaRatio: staminaConfig.max > 0 ? stamina.current / staminaConfig.max : 1,
+        encumbranceRatio: inventoryEncumbranceRatio(gameState.rpg.inventory?.slots, ITEM_DEFINITIONS, 45),
+        wetness: wetnessState.level,
+        statuses: statusState.active.map((status) => status.id),
+        equippedToolKind,
+        gatherTargetKind: gathering?.targetKind ?? null,
+        combatActive,
+        guardActive: this.combatResource.guard.active,
+      },
+      actorId: this.playerEntity.id,
+      position: { x: pos.x + TILE / 2, y: pos.y + TILE / 2 },
+      dt,
+      events: this.eventQueue,
+    });
+    this.playerAnimState = legacyAnimStateForClip(selection.clipId);
+  }
+
   private setPlayerAnim(state: AnimState): void {
     const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
     const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
@@ -1770,13 +1815,23 @@ export class GameEngine {
     const weaponId = this.lastEquippedWeapon;
     const def = weaponId ? ITEM_DEFINITIONS[weaponId] : undefined;
     const visual = def ? traitOf(def, "equippable_visuals") : undefined;
+    const animationModifiers = new Set(this.playerAnimationResource.selection.modifiers);
+    const gaitDrag = animationModifiers.has("injured")
+      ? 0.58
+      : animationModifiers.has("encumbered")
+        ? 0.72
+        : animationModifiers.has("exhausted") || animationModifiers.has("wet")
+          ? 0.82
+          : 1;
 
     if (this.playerAnimState === "run") {
-      const stride = Math.sin(this.playerVisualClock * 16);
+      const stride = Math.sin(this.playerVisualClock * 16 * gaitDrag);
       yOffset = -Math.abs(stride) * ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_RUN_BOB_PX;
       scaleX = 1 + Math.abs(stride) * 0.035;
       scaleY = 1 - Math.abs(stride) * 0.045;
-      rotation = facing * Math.sin(this.playerVisualClock * 8) * 0.045;
+      rotation = facing * Math.sin(this.playerVisualClock * 8 * gaitDrag) * 0.045;
+      if (animationModifiers.has("encumbered")) yOffset += 1.5;
+      if (animationModifiers.has("strained")) rotation *= 1.25;
 
       // Spawn extra dust puff when running at random intervals
       if (Math.random() < 0.22 && this.playerEntity.position) {
@@ -1797,11 +1852,20 @@ export class GameEngine {
         this.entityLayer.addChild(dust);
       }
     } else if (this.playerAnimState === "walk") {
-      const stride = Math.sin(this.playerVisualClock * 10);
+      const stride = Math.sin(this.playerVisualClock * 10 * gaitDrag);
       yOffset = -Math.abs(stride) * (ENGINE_CONFIG.ACTOR_VISUALS.PLAYER_RUN_BOB_PX * 0.5);
       scaleX = 1 + Math.abs(stride) * 0.02;
       scaleY = 1 - Math.abs(stride) * 0.025;
-      rotation = facing * Math.sin(this.playerVisualClock * 5) * 0.025;
+      rotation = facing * Math.sin(this.playerVisualClock * 5 * gaitDrag) * 0.025;
+      if (animationModifiers.has("injured")) {
+        yOffset += Math.max(0, Math.sin(this.playerVisualClock * 5)) * 2.5;
+        rotation += facing * 0.04;
+      } else if (animationModifiers.has("encumbered")) {
+        yOffset += 2;
+        scaleY *= 0.98;
+      } else if (animationModifiers.has("wet")) {
+        yOffset += 1;
+      }
     } else if (this.playerAnimState === "attack" || (this.attackAnimLockTimer > 0 && this.playerAnimState !== "gather" && this.playerAnimState !== "gather_tired")) {
       const level = getCharacterLevel();
       const powerFactor = 1 + (level - 1) * 0.05; // scales lunge and stretch by level
@@ -1875,12 +1939,57 @@ export class GameEngine {
       } else {
         weaponSprite.rotation = visual?.visualAsset?.rotation ?? 0.2; // resting angle
       }
+      applyPlayerWeaponPresentation({
+        combat: this.combatResource,
+        playerSprite: this.playerSprite,
+        weaponSprite,
+        facing: facing > 0 ? 1 : -1,
+        basePose: this.attachmentBasePoses.get("weapon") ?? { x: weaponSprite.x, y: weaponSprite.y, rotation: visual?.visualAsset?.rotation ?? 0.2 },
+      });
+    } else {
+      applyPlayerWeaponPresentation({
+        combat: this.combatResource,
+        playerSprite: this.playerSprite,
+        weaponSprite: undefined,
+        facing: facing > 0 ? 1 : -1,
+        basePose: { x: 0, y: 0, rotation: 0.2 },
+      });
     }
 
     this.playerSprite.scale.set(facing * this.playerBaseScale * scaleX, this.playerBaseScale * scaleY);
     this.playerSprite.x += xOffset;
     this.playerSprite.y += yOffset;
     this.playerSprite.rotation = rotation;
+    this.renderGuardIndicator();
+  }
+
+  private renderGuardIndicator(): void {
+    const ring = this.vfxResource.comboRing;
+    const pos = this.playerEntity.position;
+    if (!ring || !pos || !this.combatResource.guard.active) {
+      if (ring) {
+        ring.visible = false;
+        ring.clear();
+      }
+      return;
+    }
+
+    const guard = this.combatResource.guard;
+    const radius = TILE * 0.82;
+    const inner = TILE * 0.42;
+    const halfArc = (guard.frontalArcDegrees * Math.PI) / 360;
+    const a0 = guard.angleRad - halfArc;
+    const a1 = guard.angleRad + halfArc;
+
+    ring.visible = true;
+    ring.clear();
+    ring.x = pos.x + TILE / 2;
+    ring.y = pos.y + TILE * 0.58;
+    ring.moveTo(Math.cos(a0) * inner, Math.sin(a0) * inner);
+    ring.arc(0, 0, radius, a0, a1);
+    ring.arc(0, 0, inner, a1, a0, true);
+    ring.fill({ color: 0x9bd7ff, alpha: 0.12 });
+    ring.arc(0, 0, radius, a0, a1).stroke({ color: 0xbfe8ff, width: 2, alpha: 0.55 });
   }
 
   private checkLoadoutChanged(): void {
@@ -1908,6 +2017,7 @@ export class GameEngine {
       sprite.destroy();
     }
     this.attachmentSprites.clear();
+    this.attachmentBasePoses.clear();
 
     const loadout = gameState.rpg.profile?.loadout;
     if (!loadout) return;
@@ -1972,16 +2082,22 @@ export class GameEngine {
 
       sprite.x = baseX + customX;
       sprite.y = baseY + customY;
+      this.attachmentBasePoses.set(key, { x: sprite.x, y: sprite.y, rotation: sprite.rotation });
 
-      let targetHeight = 32;
-      if (key === "helmet") targetHeight = 24;
-      else if (key === "chest") targetHeight = 48;
-      else if (key === "pants") targetHeight = 36;
-      else if (key === "boots") targetHeight = 16;
-      else if (key === "weapon" || key === "shield") targetHeight = 40;
-
-      const visualScale = targetHeight / texture.height;
-      sprite.scale.set(visualScale);
+      const fallbackHeightTiles = key === "helmet"
+        ? 0.38
+        : key === "chest"
+          ? 0.75
+          : key === "pants"
+            ? 0.56
+            : key === "boots"
+              ? 0.25
+              : 0.62;
+      const visualSize = key === "weapon" || key === "shield"
+        ? resolveItemVisuals(def).equipped
+        : { heightTiles: fallbackHeightTiles };
+      const visualScale = resolveWorldVisualScale({ spec: visualSize, texture, tilePx: TILE });
+      sprite.scale.set(visualScale.x, visualScale.y);
 
       this.playerSprite.addChild(sprite);
       this.attachmentSprites.set(key, sprite);
@@ -2365,7 +2481,7 @@ export class GameEngine {
     this.itemPlacementResource.previewSprite = new Sprite(tex);
     this.itemPlacementResource.previewSprite.anchor.set(0.5, 1);
     this.itemPlacementResource.previewSprite.alpha = 0.6;
-    this.itemPlacementResource.previewSprite.scale.set((TILE * 0.4) / 64);
+    applyGroundItemVisualScale(this.itemPlacementResource.previewSprite, itemId);
 
     this.itemPlacementResource.previewIndicator = new Graphics();
     this.itemPlacementResource.previewIndicator.rect(0, 0, TILE, TILE);

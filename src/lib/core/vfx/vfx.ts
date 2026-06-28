@@ -34,7 +34,9 @@ export class VFXResource {
   public slashArcs: SlashArc[] = [];
   public crosscutIndicators: CrosscutIndicator[] = [];
   public fellSweepChargeArc: Graphics | null = null;
-  public gatherRing!: Graphics;
+  public strikeRing!: Graphics;
+  public tremorLine!: Graphics;
+  public placementCompass!: Graphics;
   public selectionRing!: Graphics;
   public comboRing!: Graphics;
   public fourfoldRing!: Graphics;
@@ -231,32 +233,6 @@ export function cameraShakeSystem(
   worldContainer.y = Math.round(screen.height / 2 - camY * zoom + shakeY);
 }
 
-export function gatherRingUpdateSystem(
-  vfx: VFXResource,
-  playerPos: { x: number; y: number },
-  gatheringTarget: Entity | null,
-  gatherInterval: number,
-  gatherCooldownTimer: number
-): void {
-  if (gatheringTarget === null) {
-    vfx.gatherRing.visible = false;
-    return;
-  }
-  vfx.gatherRing.visible = true;
-  vfx.gatherRing.x = playerPos.x + TILE / 2;
-  vfx.gatherRing.y = playerPos.y + TILE / 2;
-
-  const progress = 1 - Math.max(0, gatherCooldownTimer) / gatherInterval;
-  vfx.gatherRing.clear();
-  // Track
-  vfx.gatherRing.circle(0, 0, 26).stroke({ color: Colors.ui.stroke, width: 3, alpha: 0.22 });
-  // Progress
-  if (progress > 0.01) {
-    const endAngle = -Math.PI / 2 + progress * Math.PI * 2;
-    vfx.gatherRing.arc(0, 0, 26, -Math.PI / 2, endAngle);
-    vfx.gatherRing.stroke({ color: Colors.vfx.gatherRing, width: 3, alpha: 0.85 });
-  }
-}
 
 /**
  * Ember-gathering charge feedback. Spawns small sparks in a ring around the

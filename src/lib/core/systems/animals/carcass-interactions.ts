@@ -58,6 +58,7 @@ export function completeCarcassWorldAction(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   events?: GameEventQueue,
+  precisionBonus = false,
 ): void {
   const carcass = target.carcass;
   const player = getPlayerEntity();
@@ -148,7 +149,8 @@ export function completeCarcassWorldAction(
   }
 
   for (const risk of result.risks) {
-    if (Math.random() < risk.chance) {
+    const effectiveChance = precisionBonus ? risk.chance * 0.5 : risk.chance;
+    if (Math.random() < effectiveChance) {
       if (risk.status === StatusId.Cut) {
         applyWound({
           severity: toolQuality === "bare_hands" ? "deep_cut" : "cut",

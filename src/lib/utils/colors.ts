@@ -56,7 +56,6 @@ export const Colors = {
   vfx: {
     highlight: 0xffe9a8,
     selectionRing: 0xffe9a8,
-    gatherRing: 0xffe066,
     chargeRing: 0xff6600,
     focusedGather: 0xffa500,
     campfire: 0xff6600,
@@ -101,5 +100,14 @@ export const Colors = {
     starburstCross: 0x9d4edd,  // Electric Violet
     vortexSlice: 0xff8f00,     // Amber Orange
     crosswindCut: 0xc7a75c,    // Muted Sand
+  },
+  actionTimer: {
+    strikeRingWood:  0xd4a843, // amber-gold  (solidKind "tree")
+    strikeRingRock:  0x9e9e9e, // cool grey   (solidKind "rock")
+    strikeRingPlant: 0x8aab5c, // muted green (solidKind "none")
+    tremorLine: 0xb0bec5,      // cold grey-white — the tension line
+    tremorMark: 0xc62828,      // dark red — the oscillating mark
+    tremorZone: 0xfff3b0,      // warm white-gold — the clean zone
+    compassGold: 0xc79c57,     // matches --accent gold
   },
 } as const;
