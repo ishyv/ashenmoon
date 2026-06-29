@@ -4,6 +4,7 @@ import {
   BOAR_CHARGE_ATTACK,
   BOAR_COMBAT_TUNING,
   resolveBoarChargeOutcome,
+  resolveBoarWeaponCounter,
   type BoarCombatRuntime,
 } from "./boar-combat";
 
@@ -91,5 +92,28 @@ describe("boar combat", () => {
   it("keeps the charge windup readable enough to dodge on reaction", () => {
     expect(BOAR_COMBAT_TUNING.chargeWindupMs).toBeGreaterThanOrEqual(650);
     expect(BOAR_CHARGE_ATTACK.movement?.speedPxPerSec).toBeLessThanOrEqual(460);
+  });
+
+  it("lets spear hits brace an active charge into a crash punish window", () => {
+    expect(resolveBoarWeaponCounter({ state: "charge", weaponFamily: "spear", damageType: "pierce" })).toEqual({
+      kind: "brace",
+      nextState: "crash",
+      damageMultiplier: 1.25,
+      feedback: "spear_braced_charge",
+    });
+  });
+
+  it("rewards clean hits during crash and recovery without making every charge interruptible", () => {
+    expect(resolveBoarWeaponCounter({ state: "recover", weaponFamily: "knife", damageType: "slash" })).toMatchObject({
+      kind: "punish",
+      nextState: "recover",
+      damageMultiplier: 1.35,
+      feedback: "boar_punished",
+    });
+    expect(resolveBoarWeaponCounter({ state: "charge", weaponFamily: "knife", damageType: "slash" })).toEqual({
+      kind: "none",
+      damageMultiplier: 1,
+      feedback: null,
+    });
   });
 });

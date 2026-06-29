@@ -20,6 +20,16 @@ export type BoarCombatFeedback =
 
 export type BoarChargeOutcome = "crash" | "hit" | "miss" | "continue";
 
+export type BoarWeaponCounterKind = "none" | "brace" | "punish";
+export type BoarWeaponCounterFeedback = "spear_braced_charge" | "boar_punished" | null;
+
+export interface BoarWeaponCounterResult {
+  readonly kind: BoarWeaponCounterKind;
+  readonly nextState?: BoarCombatState;
+  readonly damageMultiplier: number;
+  readonly feedback: BoarWeaponCounterFeedback;
+}
+
 export interface BoarCombatRuntime {
   readonly state: BoarCombatState;
   readonly stateElapsedMs: number;
@@ -156,4 +166,31 @@ export function resolveBoarChargeOutcome(input: {
   if (input.hitPlayer) return "hit";
   if (input.chargeDistancePx >= (input.maxDistancePx ?? BOAR_COMBAT_TUNING.chargeMaxDistancePx)) return "miss";
   return "continue";
+}
+
+export function resolveBoarWeaponCounter(input: {
+  readonly state: BoarCombatState;
+  readonly weaponFamily: string;
+  readonly damageType: string;
+}): BoarWeaponCounterResult {
+  const isPiercingSpear = input.weaponFamily === "spear" && input.damageType === "pierce";
+  if (input.state === "charge" && isPiercingSpear) {
+    return {
+      kind: "brace",
+      nextState: "crash",
+      damageMultiplier: 1.25,
+      feedback: "spear_braced_charge",
+    };
+  }
+
+  if (input.state === "crash" || input.state === "recover") {
+    return {
+      kind: "punish",
+      nextState: "recover",
+      damageMultiplier: input.weaponFamily === "knife" ? 1.35 : 1.2,
+      feedback: "boar_punished",
+    };
+  }
+
+  return { kind: "none", damageMultiplier: 1, feedback: null };
 }

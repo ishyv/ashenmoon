@@ -8,6 +8,7 @@ import { gameState } from "$lib/state/game-state.svelte";
 import { setStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { CombatConfig, CombatResource } from "./combat";
 import { updateWeaponGuardSystem, weaponAttackSystem } from "./weapon-attack-system";
+import type { BoarCombatRuntime } from "$lib/domain/combat/enemies/boar-combat";
 
 vi.mock("$lib/core/vfx/vfx", async () => {
   const actual = await vi.importActual<typeof import("$lib/core/vfx/vfx")>("$lib/core/vfx/vfx");
@@ -138,6 +139,30 @@ function queueTap(inputs: InputResource, upAtMs = 80): void {
   };
 }
 
+function addBoarTarget(world: World<Entity>, boarCombat: BoarCombatRuntime): Entity {
+  const boar: Entity = {
+    id: "boar",
+    position: { x: 110, y: 0, targetX: 110, targetY: 0 },
+    health: { current: 100, max: 100, faction: "hostile", invulnTimer: 0 },
+    animal: {
+      speciesId: "boar",
+      behavior: boarCombat.state,
+      hunger: 0,
+      threatened: true,
+      attackCooldownSec: 0,
+      home: { x: 110, y: 0 },
+      wanderTimerSec: 0,
+      facingX: 1,
+      animState: boarCombat.state,
+      awarenessLevel: "alert",
+      awarenessDecaySec: 0,
+      boarCombat,
+    },
+  };
+  world.add(boar);
+  return boar;
+}
+
 describe("weaponAttackSystem", () => {
   it("claims generic equipped weapons and clears legacy pending combo flags", () => {
     const { inputs, combat, events } = runWeaponAttack("hardened_spear");
@@ -233,5 +258,61 @@ describe("weaponAttackSystem", () => {
     expect(secondMove).toBeGreaterThan(firstMove);
     expect(secondMove).toBeLessThanOrEqual(combat.weaponAttack.plan?.attack.movement.lungePx ?? 0);
     expect(combat.weaponAttack.movementAppliedPx).toBeGreaterThan(secondMove);
+  });
+
+  it("lets spear hits brace a charging boar into its crash punish window", () => {
+    const { inputs, world, args, events } = makeWeaponHarness("hardened_spear");
+    const boar = addBoarTarget(world, {
+      state: "charge",
+      stateElapsedMs: 120,
+      position: { x: 142, y: 32 },
+      lockedDirection: { x: -1, y: 0 },
+      chargeDistancePx: 40,
+    });
+    queueTap(inputs);
+
+    weaponAttackSystem(args);
+    weaponAttackSystem({ ...args, dt: 0.13 });
+
+    expect(boar.animal?.boarCombat?.state).toBe("crash");
+    expect(boar.animal?.behavior).toBe("crash");
+    expect(events.drain()).toContainEqual(expect.objectContaining({
+      type: "feedback_requested",
+      message: "You set the spear. The boar breaks against it!",
+      tone: "good",
+    }));
+  });
+
+  it("gives knife hits bonus payoff only during the boar recovery punish window", () => {
+    const recovering = makeWeaponHarness("crude_knife");
+    const recoveringBoar = addBoarTarget(recovering.world, {
+      state: "recover",
+      stateElapsedMs: 120,
+      position: { x: 80, y: 0 },
+      lockedDirection: { x: -1, y: 0 },
+      chargeDistancePx: 0,
+    });
+    queueTap(recovering.inputs);
+    weaponAttackSystem(recovering.args);
+    weaponAttackSystem({ ...recovering.args, dt: 0.12 });
+
+    const charging = makeWeaponHarness("crude_knife");
+    const chargingBoar = addBoarTarget(charging.world, {
+      state: "charge",
+      stateElapsedMs: 120,
+      position: { x: 80, y: 0 },
+      lockedDirection: { x: -1, y: 0 },
+      chargeDistancePx: 40,
+    });
+    queueTap(charging.inputs);
+    weaponAttackSystem(charging.args);
+    weaponAttackSystem({ ...charging.args, dt: 0.12 });
+
+    expect(recoveringBoar.health?.current).toBeLessThan(chargingBoar.health?.current ?? 100);
+    expect(recovering.events.drain()).toContainEqual(expect.objectContaining({
+      type: "feedback_requested",
+      message: "Clean punish — the boar is exposed!",
+      tone: "good",
+    }));
   });
 });

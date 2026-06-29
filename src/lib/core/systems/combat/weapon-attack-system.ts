@@ -35,6 +35,7 @@ import { hitShapeContains } from "$lib/domain/combat/weapons/hit-shapes";
 import { getWeaponTechnique } from "$lib/domain/combat/weapons/weapon-techniques";
 import { createInitialWeaponComboRuntime, phaseAtElapsed } from "$lib/domain/combat/weapons/attack-runtime";
 import type { AttackHitShapeDefinition, WeaponDefinition, Vec2 } from "$lib/domain/combat/weapons/weapon-types";
+import { resolveBoarWeaponCounter } from "$lib/domain/combat/enemies/boar-combat";
 import { applyDamage, type CombatConfig, type CombatResource } from "./combat";
 import type { VFXResource } from "$lib/core/vfx/vfx";
 
@@ -434,6 +435,15 @@ function runHitDetection(args: WeaponAttackSystemArgs, plan: AttackPlan): void {
       }
     }
 
+    const boarCounter = target.animal?.speciesId === "boar" && target.animal.boarCombat
+      ? resolveBoarWeaponCounter({
+          state: target.animal.boarCombat.state,
+          weaponFamily: weaponDef.family,
+          damageType: plan.attack.damageType,
+        })
+      : { kind: "none" as const, damageMultiplier: 1, feedback: null };
+    damage *= boarCounter.damageMultiplier;
+
     const finalDamage = Math.max(1, Math.round(damage));
     const knockback = knockbackForWeight(weightClass, config.knockback);
     const lethal = applyDamage(
@@ -452,6 +462,26 @@ function runHitDetection(args: WeaponAttackSystemArgs, plan: AttackPlan): void {
 
     runtime.hitEntityIds.add(target.id);
     runtime.didHit = true;
+
+    if (target.animal?.speciesId === "boar" && target.animal.boarCombat && boarCounter.kind !== "none") {
+      if (boarCounter.nextState) {
+        target.animal.boarCombat = {
+          ...target.animal.boarCombat,
+          state: boarCounter.nextState,
+          stateElapsedMs: 0,
+          chargeDistancePx: 0,
+        };
+        target.animal.behavior = boarCounter.nextState;
+      }
+      events.push({
+        type: "feedback_requested",
+        channel: "ui",
+        message: boarCounter.feedback === "spear_braced_charge"
+          ? "You set the spear. The boar breaks against it!"
+          : "Clean punish — the boar is exposed!",
+        tone: "good",
+      });
+    }
 
     if (bleed && !lethal) {
       target.bleed = {
