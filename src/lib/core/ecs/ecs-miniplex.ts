@@ -4,6 +4,7 @@ import type { StationId } from "$lib/domain/stations";
 import type { AiState, AnimState, Faction } from "$lib/core/types";
 import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import type { CarcassProcessAction, CarcassState } from "$lib/domain/animals/carcass-processing";
+import type { BoarCombatRuntime } from "$lib/domain/combat/enemies/boar-combat";
 import type { CampfireState, CampStructureType } from "$lib/domain/camp/camp-state";
 import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 import type { EnvironmentEmitter } from "$lib/domain/environment/signals";
@@ -95,6 +96,8 @@ export interface Entity {
     dyingSec?: number;
     /** Dynamic scaled damage for the animal. */
     damage?: number;
+    /** Boar-specific charge/readability runtime. Domain owns transitions; core owns movement and presentation. */
+    boarCombat?: BoarCombatRuntime;
   };
 
   /**

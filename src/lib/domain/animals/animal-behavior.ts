@@ -6,8 +6,12 @@ export type AnimalBehaviorState =
   | "alert"
   | "flee"
   | "threaten"
+  | "charge_windup"
   | "attack"
   | "charge"
+  | "crash"
+  | "recover"
+  | "reset"
   | "hunt"
   | "eat"
   | "rest";

@@ -45,6 +45,8 @@ export const BOAR_COMBAT_TUNING = {
   alertMs: 800,
   threatenMs: 1000,
   chargeWindupMs: 500,
+  crashMs: 1500,
+  recoverMs: 1000,
   chargeMaxDistancePx: 240,
 } as const;
 
@@ -135,8 +137,12 @@ export function advanceBoarCombat(input: BoarCombatAdvanceInput): BoarCombatAdva
       return resultFrom(boar, "charge", null, {}, BOAR_CHARGE_ATTACK);
 
     case "crash":
+      if (elapsed >= BOAR_COMBAT_TUNING.crashMs) return resultFrom(boar, "recover", null);
+      return resultFrom(boar, "crash", null);
+
     case "recover":
-      return resultFrom(boar, boar.state, null);
+      if (elapsed >= BOAR_COMBAT_TUNING.recoverMs) return resultFrom(boar, "reset", null, { lockedDirection: null });
+      return resultFrom(boar, "recover", null);
   }
 }
 
@@ -144,9 +150,10 @@ export function resolveBoarChargeOutcome(input: {
   readonly hitPlayer: boolean;
   readonly hitObstacle: boolean;
   readonly chargeDistancePx: number;
+  readonly maxDistancePx?: number;
 }): BoarChargeOutcome {
   if (input.hitObstacle) return "crash";
   if (input.hitPlayer) return "hit";
-  if (input.chargeDistancePx >= BOAR_COMBAT_TUNING.chargeMaxDistancePx) return "miss";
+  if (input.chargeDistancePx >= (input.maxDistancePx ?? BOAR_COMBAT_TUNING.chargeMaxDistancePx)) return "miss";
   return "continue";
 }

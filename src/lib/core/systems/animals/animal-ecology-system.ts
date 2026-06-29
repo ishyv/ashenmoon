@@ -27,6 +27,7 @@ import {
   tryAnimalAttackPlayer,
   tryAnimalAttackPrey,
 } from "$lib/core/systems/animals/animal-combat-bridge";
+import { updateBoarCombatEntity } from "$lib/core/systems/animals/boar-combat-system";
 import { spawnCarcassEntity, buildCarcassSprite } from "$lib/core/systems/animals/carcass-runtime";
 import { despawnEntity } from "$lib/core/systems/combat/combat";
 import { M3_CARCASS_DEFINITIONS } from "$lib/domain/animals/carcass-processing";
@@ -310,6 +311,22 @@ export function animalEcologySystem(
     tickAwareness(entity, playerDistPx, isRaining, dt);
 
     if (handleScaredAnimal(entity, map, dt)) {
+      syncAnimalSprite(entity, entitySprites, entityLayer);
+      continue;
+    }
+
+    if (updateBoarCombatEntity({
+      entity,
+      player,
+      map,
+      dt,
+      config,
+      combat,
+      vfx,
+      entityLayer,
+      entitySprites,
+      ...(events !== undefined ? { events } : {}),
+    })) {
       syncAnimalSprite(entity, entitySprites, entityLayer);
       continue;
     }

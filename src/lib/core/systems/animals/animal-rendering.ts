@@ -54,9 +54,9 @@ export type AnimalAnimState = "idle" | "walk" | "eat" | "attack";
 /** Maps behavior state to the animation key the spec should play. */
 export function behaviorToAnimState(b: AnimalBehaviorState): AnimalAnimState {
   if (b === "graze" || b === "eat") return "eat";
-  if (b === "attack" || b === "hunt" || b === "charge") return "attack";
+  if (b === "attack" || b === "hunt" || b === "charge" || b === "charge_windup" || b === "crash") return "attack";
   if (b === "alert" || b === "rest") return "idle";
-  if (b === "wander" || b === "flee" || b === "curious") return "walk";
+  if (b === "wander" || b === "flee" || b === "curious" || b === "reset" || b === "recover") return "walk";
   return "idle";
 }
 

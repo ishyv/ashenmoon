@@ -70,4 +70,20 @@ describe("boar combat", () => {
     expect(resolveBoarChargeOutcome({ hitPlayer: true, hitObstacle: false, chargeDistancePx: 80 })).toBe("hit");
     expect(resolveBoarChargeOutcome({ hitPlayer: false, hitObstacle: false, chargeDistancePx: 260 })).toBe("miss");
   });
+
+  it("leaves crash and recovery after their punish windows", () => {
+    const crashed = advanceBoarCombat({
+      boar: runtime({ state: "crash", stateElapsedMs: 1400 }),
+      player: { x: 80, y: 0 },
+      dtMs: 300,
+    });
+    expect(crashed.state).toBe("recover");
+
+    const recovered = advanceBoarCombat({
+      boar: runtime({ state: "recover", stateElapsedMs: 900 }),
+      player: { x: 220, y: 0 },
+      dtMs: 300,
+    });
+    expect(recovered.state).toBe("reset");
+  });
 });
