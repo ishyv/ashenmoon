@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   advanceBoarCombat,
   BOAR_CHARGE_ATTACK,
+  BOAR_COMBAT_TUNING,
   resolveBoarChargeOutcome,
   type BoarCombatRuntime,
 } from "./boar-combat";
@@ -55,7 +56,7 @@ describe("boar combat", () => {
 
   it("enters charge after windup without changing the locked direction", () => {
     const next = advanceBoarCombat({
-      boar: runtime({ state: "charge_windup", stateElapsedMs: 450, lockedDirection: { x: 1, y: 0 } }),
+      boar: runtime({ state: "charge_windup", stateElapsedMs: BOAR_COMBAT_TUNING.chargeWindupMs - 50, lockedDirection: { x: 1, y: 0 } }),
       player: { x: -100, y: 0 },
       dtMs: 100,
     });
@@ -85,5 +86,10 @@ describe("boar combat", () => {
       dtMs: 300,
     });
     expect(recovered.state).toBe("reset");
+  });
+
+  it("keeps the charge windup readable enough to dodge on reaction", () => {
+    expect(BOAR_COMBAT_TUNING.chargeWindupMs).toBeGreaterThanOrEqual(650);
+    expect(BOAR_CHARGE_ATTACK.movement?.speedPxPerSec).toBeLessThanOrEqual(460);
   });
 });

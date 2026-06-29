@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceBoarChargeBody, boarChargeContactsPlayer } from "$lib/core/systems/animals/boar-combat-system";
+import { advanceBoarChargeBody, boarChargeContactsPlayer, buildBoarChargeOutcomeFeedback } from "$lib/core/systems/animals/boar-combat-system";
 
 describe("boar combat runtime movement", () => {
   it("moves along the locked charge direction instead of homing toward the player", () => {
@@ -48,5 +48,12 @@ describe("boar combat runtime movement", () => {
   it("only contacts the player when the charging body reaches them", () => {
     expect(boarChargeContactsPlayer({ boarCenter: { x: 0, y: 0 }, playerCenter: { x: 120, y: 0 } })).toBe(false);
     expect(boarChargeContactsPlayer({ boarCenter: { x: 0, y: 0 }, playerCenter: { x: 24, y: 10 } })).toBe(true);
+  });
+
+  it("gives the player readable outcome feedback for dodges and crashes", () => {
+    expect(buildBoarChargeOutcomeFeedback("miss")?.tone).toBe("good");
+    expect(buildBoarChargeOutcomeFeedback("miss")?.message).toContain("overcommits");
+    expect(buildBoarChargeOutcomeFeedback("crash")?.message).toContain("crashes");
+    expect(buildBoarChargeOutcomeFeedback("continue")).toBeNull();
   });
 });

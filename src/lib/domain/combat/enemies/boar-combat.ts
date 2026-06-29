@@ -41,10 +41,10 @@ export interface BoarCombatAdvanceResult extends BoarCombatRuntime {
 
 export const BOAR_COMBAT_TUNING = {
   awarenessRadiusPx: 155,
-  threatRadiusPx: 96,
+  threatRadiusPx: 116,
   alertMs: 800,
-  threatenMs: 1000,
-  chargeWindupMs: 500,
+  threatenMs: 900,
+  chargeWindupMs: 700,
   crashMs: 1500,
   recoverMs: 1000,
   chargeMaxDistancePx: 240,
@@ -62,7 +62,7 @@ export const BOAR_CHARGE_ATTACK: EnemyAttackDefinition = {
   knockbackPx: 96,
   hitShape: { kind: "capsule", lengthPx: BOAR_COMBAT_TUNING.chargeMaxDistancePx, widthPx: 34 },
   telegraph: { kind: "line", windupColor: 0xff7a33 },
-  movement: { kind: "charge", speedPxPerSec: 520, maxDistancePx: BOAR_COMBAT_TUNING.chargeMaxDistancePx, turnLock: true },
+  movement: { kind: "charge", speedPxPerSec: 440, maxDistancePx: BOAR_COMBAT_TUNING.chargeMaxDistancePx, turnLock: true },
   statusEffects: [{ kind: "bleed", chancePct: 28, magnitude: 2, durationSec: 6, tickEverySec: 1 }],
 };
 

@@ -63,6 +63,19 @@ export function boarChargeContactsPlayer(input: {
   return Math.hypot(input.boarCenter.x - input.playerCenter.x, input.boarCenter.y - input.playerCenter.y) <= (input.contactRadiusPx ?? 34);
 }
 
+export function buildBoarChargeOutcomeFeedback(outcome: BoarChargeOutcome): { readonly message: string; readonly tone: "good" | "error" } | null {
+  switch (outcome) {
+    case "miss":
+      return { message: "The boar overcommits. Strike while it recovers!", tone: "good" };
+    case "crash":
+      return { message: "The boar crashes and stumbles!", tone: "good" };
+    case "hit":
+      return { message: "The boar charge hammers you sideways!", tone: "error" };
+    case "continue":
+      return null;
+  }
+}
+
 function createInitialBoarCombat(entity: Entity): BoarCombatRuntime {
   return {
     state: "graze",
@@ -92,6 +105,12 @@ function chargeCollisionFor(entity: Entity, map: MapResource): (nextPosition: { 
     );
 }
 
+function pushBoarOutcomeFeedback(events: GameEventQueue | undefined, outcome: BoarChargeOutcome): void {
+  const feedback = buildBoarChargeOutcomeFeedback(outcome);
+  if (!feedback) return;
+  events?.push({ type: "feedback_requested", channel: "ui", ...feedback });
+}
+
 function applyBoarChargeHit(input: {
   readonly entity: Entity;
   readonly player: Entity;
@@ -119,7 +138,7 @@ function applyBoarChargeHit(input: {
 
   if ((input.player.health?.current ?? previousHealth) === previousHealth) return;
   applyStatusEffect(StatusId.Injured, 15, "hazard:boar-charge");
-  input.events?.push({ type: "feedback_requested", channel: "ui", message: "The boar charge hammers you sideways!", tone: "error" });
+  pushBoarOutcomeFeedback(input.events, "hit");
 }
 
 function playBoarFeedback(entity: Entity, feedback: string | null, vfx: VFXResource, entityLayer: Container, events?: GameEventQueue): void {
@@ -164,7 +183,7 @@ export function updateBoarCombatEntity(input: {
 
   if (runtime.state === "charge" && runtime.lockedDirection) {
     const movement = BOAR_CHARGE_ATTACK.movement;
-    const speedPxPerSec = movement?.speedPxPerSec ?? 520;
+    const speedPxPerSec = movement?.speedPxPerSec ?? 440;
     const movementResult = advanceBoarChargeBody({
       position: animalCenter(entity),
       lockedDirection: runtime.lockedDirection,
@@ -199,7 +218,11 @@ export function updateBoarCombatEntity(input: {
         playAt("boar.charge", pos, { gain: 0.8 });
         spawnShockwaveRing(vfx, entityLayer, pos.x, pos.y, Colors.resource.wood, 0.35);
         triggerCameraShake(vfx, 5, 0.18);
-        events?.push({ type: "feedback_requested", channel: "ui", message: "The boar crashes and stumbles!", tone: "good" });
+        pushBoarOutcomeFeedback(events, "crash");
+      } else if (outcome === "miss") {
+        const pos = animalCenter(entity);
+        spawnEnvParticles(vfx, Colors.resource.wood, 4, "smoke", { x: pos.x - 32, y: pos.y - 32 }, entityLayer);
+        pushBoarOutcomeFeedback(events, "miss");
       }
       runtime = {
         ...runtime,
