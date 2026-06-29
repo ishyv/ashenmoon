@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
+  <!-- Encumbered walk 1: UPRIGHT posture (not hunched), arms held OUT from body to brace load, very short shuffled steps -->
+  <!-- Distinct from exhausted: these feet are planted wide, body is UPRIGHT, arms brace not dangle -->
+  <ellipse cx="80" cy="207" rx="32" ry="7" fill="#080706" opacity="0.58"/>
+  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Head -->
+    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
+    <!-- Hair -->
+    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <!-- Eyes -->
+    <path d="M72 50h3m14 0h3" stroke-width="4"/>
+    <!-- Neck -->
+    <path d="M72 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
+    <!-- Shoulder arch — compressed under load -->
+    <path d="M47 93c10-11 22-17 33-17s23 6 33 17" fill="#263326" stroke-width="8"/>
+    <!-- Torso -->
+    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
+    <!-- Vest -->
+    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
+    <!-- Center seam -->
+    <path d="M80 88v57" fill="none" stroke-width="4"/>
+    <!-- Chest strap -->
+    <path d="M60 122c13 5 30 6 44 0" fill="none" stroke="#8a6a45" stroke-width="6"/>
+    <!-- Left arm HELD OUT — elbow wide, bracing load on left -->
+    <path d="M54 96c-16 8-20 18-18 34" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M36 130c-2 8-2 15 2 22" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- Right arm HELD OUT — elbow wide, bracing load on right -->
+    <path d="M106 96c16 8 20 18 18 34" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M124 130c2 8 2 15-2 22" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- Belt -->
+    <path d="M55 145c15 6 34 7 50 0" fill="none" stroke-width="6"/>
+    <!-- Tool stub -->
+    <path d="M101 147l15 13" fill="none" stroke="#34322d" stroke-width="5"/>
+    <path d="M116 160l8 7" fill="none" stroke="#d9c28e" stroke-width="4"/>
+    <!-- Hips -->
+    <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
+    <!-- Left leg — very short step, feet planted wide -->
+    <path d="M66 154l-10 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <!-- Right leg — very short step -->
+    <path d="M94 154l10 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <!-- Left foot -->
+    <path d="M48 198h22" stroke-width="8"/>
+    <!-- Right foot -->
+    <path d="M95 198h22" stroke-width="8"/>
+    <!-- Highlights -->
+    <path d="M65 99c-3 14-3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.6"/>
+    <path d="M96 99c3 14 3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.5"/>
+  </g>
+</svg>

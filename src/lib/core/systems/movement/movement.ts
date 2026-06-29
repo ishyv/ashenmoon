@@ -16,6 +16,7 @@ import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
 import { fellSweepMoveMultiplier } from "$lib/domain/combat/fell-sweep";
 import type { AnimState } from "$lib/core/types";
+import type { PlayerAnimationResource } from "$lib/core/systems/player-animation/player-animation-system";
 
 // Hitbox configuration constants
 const HITBOX_X = TILE * 0.45;
@@ -43,6 +44,8 @@ export class MovementResource {
   public invulnTimer = 0;
   public sprintLockTimer = 0;
   public lastMoveDirection = { x: 0, y: 1 };
+  public velocity = { x: 0, y: 0 };
+  public isSprinting = false;
   public noclip = false;
 }
 
@@ -232,7 +235,8 @@ export function playerMovementSystem(
   playerSprite: AnimatedSprite,
   setPlayerAnim: (state: AnimState) => void,
   entityLayer: Container,
-  combat?: CombatResource
+  combat?: CombatResource,
+  playerAnimation?: PlayerAnimationResource,
 ): boolean {
   if (inputs.dashTriggered) {
     inputs.dashTriggered = false;
@@ -305,6 +309,12 @@ export function playerMovementSystem(
 
     playerSprite.x = pos.x + TILE / 2;
     playerSprite.y = pos.y + TILE;
+    movement.velocity = { x: movement.dashVelocity.x, y: movement.dashVelocity.y };
+    movement.isSprinting = false;
+    playerAnimation?.setMovementFacts({
+      velocityPxPerSec: Math.hypot(movement.dashVelocity.x, movement.dashVelocity.y),
+      sprinting: false,
+    });
 
     // Spawn ghost trail after-image
     if (Math.random() < 0.35) {
@@ -362,7 +372,10 @@ export function playerMovementSystem(
   }
 
   if (inputX === 0 && inputY === 0) {
-    setPlayerAnim("idle");
+    movement.velocity = { x: 0, y: 0 };
+    movement.isSprinting = false;
+    playerAnimation?.setMovementFacts({ velocityPxPerSec: 0, sprinting: false });
+    if (!playerAnimation) setPlayerAnim("idle");
     playerSprite.x = pos.x + TILE / 2;
     playerSprite.y = pos.y + TILE;
     return false;
@@ -390,8 +403,20 @@ export function playerMovementSystem(
   if (combat?.fellSweepChargeState.isCharging) {
     currentSpeed *= fellSweepMoveMultiplier(combat.fellSweepChargeState.chargeProgress);
   }
+  if (combat?.guard.active) {
+    currentSpeed *= combat.guard.moveSpeedMultiplier;
+  }
+  if (combat?.weaponAttack.active && combat.weaponAttack.plan) {
+    currentSpeed *= combat.weaponAttack.plan.attack.movement.moveSpeedMultiplier;
+  }
   const moveX = dirX * currentSpeed * dt;
   const moveY = dirY * currentSpeed * dt;
+  movement.velocity = { x: dirX * currentSpeed, y: dirY * currentSpeed };
+  movement.isSprinting = isSprinting;
+  playerAnimation?.setMovementFacts({
+    velocityPxPerSec: currentSpeed,
+    sprinting: isSprinting,
+  });
 
   const newCx = cx + moveX;
   if (movement.noclip || !collidesWithSolid(newCx, cy, HITBOX_X, HITBOX_Y, map)) {
@@ -429,7 +454,7 @@ export function playerMovementSystem(
     if (dirX > 0) playerSprite.scale.x = Math.abs(playerSprite.scale.x);
   }
 
-  setPlayerAnim(isSprinting ? "run" : "walk");
+  if (!playerAnimation) setPlayerAnim(isSprinting ? "run" : "walk");
   playerSprite.x = pos.x + TILE / 2;
   playerSprite.y = pos.y + TILE;
 

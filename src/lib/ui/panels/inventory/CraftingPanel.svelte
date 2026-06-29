@@ -3,6 +3,15 @@ import { getItemDef } from "$lib/domain/items";
 import type { CraftRecipe } from "$lib/domain/crafting/recipes";
 import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 import { getKnownSources } from "$lib/state/rpg/knowledge.svelte";
+import { ChevronLeft, ChevronRight, CornerUpLeft, CornerUpRight } from "lucide-svelte";
+import {
+  EMPTY_RECIPE_HISTORY,
+  adjacentRecipeId,
+  currentRecipeFromHistory,
+  selectRecipeInHistory,
+  stepRecipeHistory,
+  type RecipeHistoryState,
+} from "./crafting-navigation";
 
 function formatSources(sources: readonly string[]): string {
   if (sources.length === 0) return "source unknown";
@@ -29,6 +38,7 @@ let {
 let selectedRecipeId = $state<string | null>(null);
 let categoryFilter = $state<"all" | "tool" | "resource">("all");
 let craftingSearchQuery = $state("");
+let recipeHistory = $state<RecipeHistoryState>(EMPTY_RECIPE_HISTORY);
 
 const selectedRecipe = $derived(
   selectedRecipeId ? allRecipes.find((r) => r.id === selectedRecipeId) ?? null : null
@@ -48,6 +58,11 @@ const filteredRecipes = $derived(
 );
 
 const nearCampfire = $derived(isNearCampfire());
+const filteredRecipeIds = $derived(filteredRecipes.map((recipe) => recipe.id));
+const canGoBack = $derived(recipeHistory.index > 0);
+const canGoForward = $derived(recipeHistory.index >= 0 && recipeHistory.index < recipeHistory.entries.length - 1);
+const previousRecipeId = $derived(adjacentRecipeId(filteredRecipeIds, selectedRecipeId, -1));
+const nextRecipeId = $derived(adjacentRecipeId(filteredRecipeIds, selectedRecipeId, 1));
 
 const totalSlots = $derived(selectedRecipe ? selectedRecipe.costs.length : 3);
 const slotIndices = $derived(Array.from({ length: totalSlots }, (_, i) => i));
@@ -60,6 +75,42 @@ function isRecipeReady(recipe: CraftRecipe): boolean {
   return isKnown(recipe.id) && canCraft(recipe);
 }
 
+function selectRecipe(recipeId: string, pushHistory = true): void {
+  selectedRecipeId = recipeId;
+  if (pushHistory) {
+    recipeHistory = selectRecipeInHistory(recipeHistory, recipeId);
+  }
+}
+
+function stepHistory(direction: -1 | 1): void {
+  const nextHistory = stepRecipeHistory(recipeHistory, direction);
+  if (nextHistory === recipeHistory) return;
+  recipeHistory = nextHistory;
+  selectedRecipeId = currentRecipeFromHistory(nextHistory);
+}
+
+function selectAdjacentRecipe(direction: -1 | 1): void {
+  const adjacent = adjacentRecipeId(filteredRecipeIds, selectedRecipeId, direction);
+  if (adjacent) selectRecipe(adjacent);
+}
+
+$effect(() => {
+  if (filteredRecipes.length === 0) {
+    selectedRecipeId = null;
+    return;
+  }
+
+  // Only auto-select when the current selection is absent from allRecipes entirely
+  // (i.e., it is null or was deleted). Deliberate navigation via handleComponentClick
+  // or selectRecipe always picks a valid allRecipes entry, so we must not override it
+  // just because categoryFilter changed and the recipe isn't in the filtered sidebar.
+  const existsInAll = selectedRecipeId && allRecipes.some((r) => r.id === selectedRecipeId);
+  if (existsInAll) return;
+
+  const firstKnown = filteredRecipes.find((recipe) => isKnown(recipe.id));
+  selectedRecipeId = (firstKnown ?? filteredRecipes[0])?.id ?? null;
+});
+
 function getItemQty(itemId: string): number {
   return items.find((i) => i.itemId === itemId)?.qty ?? 0;
 }
@@ -71,14 +122,11 @@ function isCostSatisfied(cost: import("$lib/domain/crafting/recipe-types").Recip
 
 function handleComponentClick(costItemId: string) {
   const componentRecipe = allRecipes.find((r) => r.output.itemId === costItemId);
-  if (componentRecipe) {
-    selectedRecipeId = componentRecipe.id;
-    // Auto-switch category filter so the recipe displays in the left sidebar
-    const def = getItemDef(costItemId);
-    if (def) {
-      categoryFilter = def.category === "tool" ? "tool" : "resource";
-    }
-  }
+  if (!componentRecipe) return;
+  // Navigate to the component recipe and widen the filter to "all" so it is
+  // always visible in the sidebar regardless of the current category.
+  selectRecipe(componentRecipe.id);
+  categoryFilter = "all";
 }
 
 async function handleComponentDblClick(costItemId: string) {
@@ -136,7 +184,7 @@ async function handleComponentDblClick(costItemId: string) {
               class:selected={selectedRecipeId === recipe.id}
               class:craftable={craftable}
               class:locked={!known}
-              onclick={() => (selectedRecipeId = recipe.id)}
+              onclick={() => selectRecipe(recipe.id)}
               title={recipe.name.toLowerCase()}
             >
               <div class="medallion-inner">
@@ -158,6 +206,52 @@ async function handleComponentDblClick(costItemId: string) {
 
   <!-- Right Pane: Detail & Circle -->
   <main class="recipe-detail-pane">
+    <nav class="recipe-nav" aria-label="recipe navigation">
+      <div class="history-controls">
+        <button
+          type="button"
+          class="nav-icon-btn"
+          disabled={!canGoBack}
+          aria-label="go back to previous recipe"
+          title="back"
+          onclick={() => stepHistory(-1)}
+        >
+          <CornerUpLeft size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          class="nav-icon-btn"
+          disabled={!canGoForward}
+          aria-label="go forward to next recipe in history"
+          title="forward"
+          onclick={() => stepHistory(1)}
+        >
+          <CornerUpRight size={14} aria-hidden="true" />
+        </button>
+      </div>
+      <div class="sequence-controls">
+        <button
+          type="button"
+          class="nav-step-btn"
+          disabled={!previousRecipeId}
+          aria-label="select previous visible recipe"
+          onclick={() => selectAdjacentRecipe(-1)}
+        >
+          <ChevronLeft size={14} aria-hidden="true" />
+          <span>prev</span>
+        </button>
+        <button
+          type="button"
+          class="nav-step-btn"
+          disabled={!nextRecipeId}
+          aria-label="select next visible recipe"
+          onclick={() => selectAdjacentRecipe(1)}
+        >
+          <span>next</span>
+          <ChevronRight size={14} aria-hidden="true" />
+        </button>
+      </div>
+    </nav>
     {#if selectedRecipe}
       {@const known = isKnown(selectedRecipe.id)}
       <div class="detail-split-container">
@@ -217,15 +311,16 @@ async function handleComponentDblClick(costItemId: string) {
             {/each}
 
             <!-- Central core -->
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
+            <button
+              type="button"
               class="crucible-core lift"
               class:has-heat={nearCampfire}
               class:craftable={isRecipeReady(selectedRecipe)}
+              disabled={!isRecipeReady(selectedRecipe)}
               onclick={() => {
                 if (isRecipeReady(selectedRecipe)) craftItem(selectedRecipe);
               }}
+              aria-label="assemble {selectedRecipe.name.toLowerCase()}"
               title="assemble {selectedRecipe.name.toLowerCase()}"
             >
               <div class="core-aura"></div>
@@ -245,7 +340,7 @@ async function handleComponentDblClick(costItemId: string) {
                   🔥
                 </div>
               {/if}
-            </div>
+            </button>
           </div>
         </div>
 
@@ -269,36 +364,56 @@ async function handleComponentDblClick(costItemId: string) {
               <div class="materials-header">required materials</div>
               <div class="materials-scroll-wrapper">
                 <ul class="materials-list">
-                  {#each selectedRecipe.costs as cost}
+                  {#each selectedRecipe.costs as cost (cost.itemId)}
                     {@const meta = getItemDef(cost.itemId)}
                     {@const current = getItemQty(cost.itemId)}
                     {@const satisfied = isCostSatisfied(cost)}
                     {@const sources = getKnownSources(cost.itemId)}
                     {@const componentRecipe = allRecipes.find((r) => r.output.itemId === cost.itemId)}
                     {@const isClickable = !!componentRecipe}
-                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                    <li
-                      class="material-item"
-                      class:satisfied={satisfied}
-                      class:clickable={isClickable}
-                      onclick={() => isClickable && handleComponentClick(cost.itemId)}
-                      ondblclick={() => isClickable && handleComponentDblClick(cost.itemId)}
-                    >
-                      <div class="material-left">
-                        <div class="material-icon-wrapper">
-                          <ItemIcon itemId={cost.itemId} def={meta} />
+                    <li class="material-list-row">
+                      {#if isClickable}
+                        <button
+                          type="button"
+                          class="material-item"
+                          class:satisfied={satisfied}
+                          class:clickable={isClickable}
+                          onclick={() => handleComponentClick(cost.itemId)}
+                          ondblclick={() => handleComponentDblClick(cost.itemId)}
+                          aria-label="open recipe for {meta?.name.toLowerCase() ?? cost.itemId}"
+                        >
+                          <div class="material-left">
+                            <div class="material-icon-wrapper">
+                              <ItemIcon itemId={cost.itemId} def={meta} />
+                            </div>
+                            <span class="material-name">{meta?.name.toLowerCase() ?? cost.itemId}</span>
+                            <span class="material-sources" class:unknown={sources.length === 0} title={sources.length > 0 ? `Known sources: ${sources.join(', ')}` : "Source unknown"}>
+                              ({formatSources(sources)})
+                            </span>
+                          </div>
+                          <span class="material-jump">recipe</span>
+                          <span class="material-qty" class:missing={!satisfied}>
+                            {current} / {cost.required}
+                          </span>
+                        </button>
+                      {:else}
+                        <div class="material-item" class:satisfied={satisfied}>
+                          <div class="material-left">
+                            <div class="material-icon-wrapper">
+                              <ItemIcon itemId={cost.itemId} def={meta} />
+                            </div>
+                            <span class="material-name">{meta?.name.toLowerCase() ?? cost.itemId}</span>
+                            <span class="material-sources" class:unknown={sources.length === 0} title={sources.length > 0 ? `Known sources: ${sources.join(', ')}` : "Source unknown"}>
+                              ({formatSources(sources)})
+                            </span>
+                          </div>
+                          <span class="material-qty" class:missing={!satisfied}>
+                            {current} / {cost.required}
+                          </span>
                         </div>
-                        <span class="material-name">{meta?.name.toLowerCase() ?? cost.itemId}</span>
-                        <span class="material-sources" class:unknown={sources.length === 0} title={sources.length > 0 ? `Known sources: ${sources.join(', ')}` : "Source unknown"}>
-                          ({formatSources(sources)})
-                        </span>
-                      </div>
-                      <span class="material-qty" class:missing={!satisfied}>
-                        {current} / {cost.required}
-                      </span>
+                      {/if}
                     </li>
-                    {#each cost.substitutes ?? [] as sub}
+                    {#each cost.substitutes ?? [] as sub (sub.itemId)}
                       {@const subMeta = getItemDef(sub.itemId)}
                       {@const subQty = getItemQty(sub.itemId)}
                       {@const subSatisfied = subQty >= sub.required}
@@ -557,12 +672,72 @@ async function handleComponentDblClick(costItemId: string) {
     background: rgba(0, 0, 0, 0.15);
     position: relative;
     padding: 0.8rem;
+    gap: 0.55rem;
+  }
+
+  .recipe-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 1.75rem;
+    flex-shrink: 0;
+  }
+
+  .history-controls,
+  .sequence-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .nav-icon-btn,
+  .nav-step-btn {
+    height: 1.55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    border: 1px solid var(--inv-border-muted);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--inv-text-muted);
+    font-family: "Cinzel", serif;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+
+  .nav-icon-btn {
+    width: 1.65rem;
+    padding: 0;
+  }
+
+  .nav-step-btn {
+    padding: 0 0.45rem;
+  }
+
+  .nav-icon-btn:hover:not(:disabled),
+  .nav-step-btn:hover:not(:disabled) {
+    border-color: var(--inv-accent);
+    background: var(--inv-accent-dim);
+    color: var(--inv-accent);
+  }
+
+  .nav-icon-btn:disabled,
+  .nav-step-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
   }
 
   .detail-split-container {
     display: flex;
     gap: 1.2rem;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     width: 100%;
     align-items: stretch;
   }
@@ -708,6 +883,7 @@ async function handleComponentDblClick(costItemId: string) {
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
     cursor: default;
     transition: all 0.2s ease;
+    padding: 0;
   }
 
   .crucible-core.craftable {
@@ -731,6 +907,10 @@ async function handleComponentDblClick(costItemId: string) {
 
   .crucible-core.craftable:active {
     transform: scale(0.96);
+  }
+
+  .crucible-core:disabled {
+    color: inherit;
   }
 
   .core-visual {
@@ -970,12 +1150,23 @@ async function handleComponentDblClick(costItemId: string) {
     gap: 0.35rem;
   }
 
+  .material-list-row {
+    margin: 0;
+    padding: 0;
+  }
+
   .material-item {
+    width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-size: 0.72rem;
     color: var(--inv-text-muted);
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    text-align: left;
   }
 
   .material-item.satisfied {
@@ -1029,6 +1220,20 @@ async function handleComponentDblClick(costItemId: string) {
     margin-left: 0.5rem;
   }
 
+  .material-jump {
+    flex-shrink: 0;
+    margin-left: 0.45rem;
+    padding: 0.05rem 0.25rem;
+    border: 1px solid rgba(255, 220, 120, 0.16);
+    border-radius: 3px;
+    color: rgba(255, 220, 120, 0.5);
+    font-family: "Cinzel", serif;
+    font-size: 0.52rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
   .material-qty.missing {
     color: #ef4444;
   }
@@ -1037,9 +1242,15 @@ async function handleComponentDblClick(costItemId: string) {
     cursor: pointer;
   }
 
-  .material-item.clickable:hover .material-name {
+  .material-item.clickable:hover .material-name,
+  .material-item.clickable:focus-visible .material-name {
     text-decoration: underline;
     color: var(--inv-accent);
+  }
+
+  .material-item.clickable:focus-visible {
+    outline: 1px solid var(--inv-accent);
+    outline-offset: 2px;
   }
 
   .material-substitute {

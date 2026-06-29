@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
+  <!-- Axe swing frame 2: SWING — body torqued right, axe swung down-right, arms extended, strong follow-through -->
+  <ellipse cx="83" cy="207" rx="32" ry="7" fill="#080706" opacity="0.55"/>
+  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round" transform="rotate(12 80 120)">
+    <!-- Head — torqued, looking right -->
+    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
+    <!-- Hair -->
+    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <!-- Eyes -->
+    <path d="M72 50h3m14 0h3" stroke-width="4"/>
+    <!-- Neck -->
+    <path d="M72 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
+    <!-- Shoulder arch -->
+    <path d="M49 91c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
+    <!-- Torso -->
+    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
+    <!-- Vest -->
+    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
+    <!-- Center seam -->
+    <path d="M80 88v57" fill="none" stroke-width="4"/>
+    <!-- Both arms SWUNG DOWN-RIGHT — strong follow-through position -->
+    <path d="M106 96c12 8 18 18 18 30" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M124 126c2 8 0 14-4 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <path d="M54 96c8 8 12 18 12 30" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M66 126c0 8-2 14-6 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- AXE — now swung to the right side, handle diagonal -->
+    <path d="M120 112l36 26" fill="none" stroke="#5c3d20" stroke-width="6"/>
+    <!-- Axe head at right end -->
+    <path d="M152 134l8 12m-8-12l14 4" fill="none" stroke="#8c8c8c" stroke-width="7"/>
+    <!-- Belt -->
+    <path d="M55 145c15 6 34 7 50 0" fill="none" stroke-width="6"/>
+    <!-- Hips -->
+    <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
+    <!-- Feet — wide braced stance for swing -->
+    <path d="M66 154l-10 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M94 154l14 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M47 198h24" stroke-width="8"/>
+    <path d="M99 198h26" stroke-width="8"/>
+  </g>
+</svg>

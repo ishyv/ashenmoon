@@ -14,6 +14,7 @@ export {
   itemId,
   type CarryClass,
   type ItemPhysicalProperties,
+  type ItemVisualProperties,
   type ItemId,
   type ItemDefinition,
   type ItemInstance,
@@ -101,3 +102,4 @@ export { ITEM_DEFINITIONS, ITEM_TRAIT_INDEX, getItemDef } from "./item-definitio
 
 // presentational helpers
 export { reactsInto } from "./item-view";
+export { resolveItemVisuals } from "./item-visuals";

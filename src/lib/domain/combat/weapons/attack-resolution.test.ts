@@ -38,6 +38,10 @@ const weapon: WeaponDefinition = {
     heavy: attack("heavy", { inputKind: "hold", damageMultiplier: 2, staminaCostMultiplier: 1.5 }),
     swipe: attack("swipe", { inputKind: "swipe", techniqueId: "drawing_cut", hitShape: { kind: "capsule", lengthPx: 140, widthPx: 40 } }),
   },
+  extraAttacks: {
+    follow: attack("follow", { inputKind: "tap", damageMultiplier: 1.3 }),
+  },
+  comboLinks: [{ fromAttackId: "quick", inputKind: "tap", toAttackId: "follow" }],
   animationProfile: "small_slash",
   soundProfile: "sword",
 };
@@ -48,33 +52,51 @@ function intent(kind: InputIntent["kind"]): InputIntent {
 
 describe("selectAttack", () => {
   it("maps each intent to its attack-set slot", () => {
-    expect(selectAttack(intent("tap"), weapon).id).toBe("quick");
-    expect(selectAttack(intent("hold"), weapon).id).toBe("heavy");
-    expect(selectAttack(intent("swipe"), weapon).id).toBe("swipe");
+    expect(selectAttack(intent("tap"), weapon)?.id).toBe("quick");
+    expect(selectAttack(intent("hold"), weapon)?.id).toBe("heavy");
+    expect(selectAttack(intent("swipe"), weapon)?.id).toBe("swipe");
   });
 
-  it("falls back to quick when the weapon has no attack for the intent", () => {
+  it("does not silently fall back when the weapon has no attack for the intent", () => {
     // stance_hold maps to `charged`, which this weapon lacks.
-    expect(selectAttack(intent("stance_hold"), weapon).id).toBe("quick");
+    expect(selectAttack(intent("stance_hold"), weapon)).toBeNull();
+  });
+
+  it("selects authored combo follow-ups inside the current window", () => {
+    expect(selectAttack(intent("tap"), weapon, {
+      weaponDefId: "test_weapon",
+      lastAttackId: "quick",
+      expiresAtMs: 500,
+      nowMs: 250,
+    })?.id).toBe("follow");
+  });
+
+  it("ignores combo links outside the current filtered order/window", () => {
+    expect(selectAttack(intent("tap"), weapon, {
+      weaponDefId: "test_weapon",
+      lastAttackId: "quick",
+      expiresAtMs: 100,
+      nowMs: 250,
+    })?.id).toBe("quick");
   });
 });
 
 describe("resolveAttack", () => {
   it("derives weapon damage and stamina from the weapon, not a global config", () => {
     const plan = resolveAttack(intent("hold"), weapon);
-    expect(plan.weaponDamage).toBe(40); // 20 base × 2 heavy multiplier
-    expect(plan.staminaCost).toBe(15); // 10 base × 1.5
-    expect(plan.weaponDefId).toBe("test_weapon");
+    expect(plan?.weaponDamage).toBe(40); // 20 base x 2 heavy multiplier
+    expect(plan?.staminaCost).toBe(15); // 10 base x 1.5
+    expect(plan?.weaponDefId).toBe("test_weapon");
   });
 
   it("carries the slotted technique id and reach extent for a swipe", () => {
     const plan = resolveAttack(intent("swipe"), weapon);
-    expect(plan.techniqueId).toBe("drawing_cut");
-    expect(plan.reachPx).toBe(140); // capsule length
+    expect(plan?.techniqueId).toBe("drawing_cut");
+    expect(plan?.reachPx).toBe(140); // capsule length
   });
 
   it("passes the intent direction through", () => {
     const plan = resolveAttack({ kind: "tap", direction: { x: 0, y: -1 }, holdDurationMs: 0 }, weapon);
-    expect(plan.direction).toEqual({ x: 0, y: -1 });
+    expect(plan?.direction).toEqual({ x: 0, y: -1 });
   });
 });

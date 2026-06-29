@@ -16,15 +16,8 @@ export interface Vec2 {
   y: number;
 }
 
-export type WeaponFamily =
-  | "unarmed"
-  | "knife"
-  | "sword"
-  | "curved_sword"
-  | "axe"
-  | "spear"
-  | "club"
-  | "hammer";
+export type WeaponFamilyId = string;
+export type WeaponFamily = WeaponFamilyId;
 
 /** Physical damage flavour. Distinct from the engine's mitigation `DamageType`
  * ("physical" | "magic" | "true"); this drives feel, resistances, and feedback. */
@@ -51,6 +44,8 @@ export type AttackHitShapeDefinition =
 export interface AttackMovementDefinition {
   /** Forward commitment applied on the active frame (world px). */
   lungePx?: number;
+  /** Backward commitment applied after the active frame starts (world px). */
+  retreatPx?: number;
   /** Movement speed allowed while the attack runs (× normal). */
   moveSpeedMultiplier: number;
   /** Facing is locked once the attack commits. */
@@ -80,10 +75,20 @@ export interface WeaponAttackDefinition {
   recoveryMs: number;
   hitShape: AttackHitShapeDefinition;
   movement: AttackMovementDefinition;
+  /** Optional offset from attacker centre along aim direction for hit testing. */
+  hitOriginOffsetPx?: number;
+  /** Time after recovery where this attack can feed an authored follow-up. */
+  comboWindowMs?: number;
+  presentation?: WeaponAttackPresentation;
   /** Slotted technique id (registered in weapon-techniques). Ashes of War. */
   techniqueId?: string;
   statusEffects?: AttackStatusEffectDefinition[];
   tags?: string[];
+}
+
+export interface WeaponAttackPresentation {
+  trail: "arc" | "thrust" | "heavy";
+  pose: "quick" | "guarded" | "extended" | "committed";
 }
 
 /**
@@ -97,6 +102,20 @@ export interface WeaponAttackSet {
   swipe?: WeaponAttackDefinition;
   charged?: WeaponAttackDefinition;
   stanceSpecial?: WeaponAttackDefinition;
+}
+
+export interface WeaponComboLink {
+  fromAttackId: string;
+  inputKind: AttackInputKind;
+  toAttackId: string;
+}
+
+export interface WeaponGuardProfile {
+  moveSpeedMultiplier: number;
+  frontalArcDegrees: number;
+  reductionPct: number;
+  staminaCostMultiplier: number;
+  breakFeedback: "guard_broken";
 }
 
 export interface WeaponHandlingProfile {
@@ -131,6 +150,9 @@ export interface WeaponDefinition {
   baseDamage: number;
   handling: WeaponHandlingProfile;
   attacks: WeaponAttackSet;
+  extraAttacks?: Record<string, WeaponAttackDefinition>;
+  comboLinks?: readonly WeaponComboLink[];
+  guard?: WeaponGuardProfile;
   animationProfile: string;
   soundProfile: string;
   statModifiers?: WeaponStatModifier[];

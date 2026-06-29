@@ -1,5 +1,6 @@
 import { isStatusId, type StatusId } from "$lib/domain/systems/status-types";
 import type { CollisionFootprint } from "$lib/domain/collision";
+import { formatDevItemIdUsage, resolveDevItemId } from "$lib/domain/dev-item-aliases";
 
 export type CommandSource = "player" | "ui" | "dev" | "test" | "script";
 
@@ -267,11 +268,17 @@ function parseStatus(args: string[]): CommandParseResult {
 
 function parseRpg(args: string[]): CommandParseResult {
   if (!args[0]) return { ok: true, command: { type: "rpg.inspect" } };
-  if (args[0] === "equip") return !args[1] ? invalid("usage: rpg equip <itemId>") : { ok: true, command: { type: "rpg.equip", itemId: args[1] } };
+  if (args[0] === "equip") {
+    if (!args[1]) return invalid("usage: rpg equip <itemId>");
+    const itemId = resolveDevItemId(args[1]);
+    return itemId ? { ok: true, command: { type: "rpg.equip", itemId } } : invalid(formatDevItemIdUsage(args[1]));
+  }
   if (args[0] === "unequip") return { ok: true, command: { type: "rpg.equip", itemId: null } };
   if (args[0] === "give") {
     const qty = int(args[2]) ?? 1;
-    return !args[1] || qty <= 0 ? invalid("usage: rpg give <itemId> [qty]") : { ok: true, command: { type: "rpg.give", itemId: args[1], qty } };
+    if (!args[1] || qty <= 0) return invalid("usage: rpg give <itemId> [qty]");
+    const itemId = resolveDevItemId(args[1]);
+    return itemId ? { ok: true, command: { type: "rpg.give", itemId, qty } } : invalid(formatDevItemIdUsage(args[1]));
   }
   if (args[0] === "hp") {
     const hp = int(args[1]);

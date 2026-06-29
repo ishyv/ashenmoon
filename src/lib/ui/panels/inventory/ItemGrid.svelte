@@ -28,11 +28,10 @@ let {
     <div class="empty-state">nothing gathered yet.</div>
   {:else}
     <div class="grid">
-      {#each items as { itemId, qty }}
+      {#each items as { itemId, qty } (itemId)}
         {@const meta = getItemDef(itemId)}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
+        <button
+          type="button"
           class="item-cell {selectedItem === itemId ? 'selected' : ''} {isEquipped(itemId) ? 'equipped' : ''}"
           onmouseenter={() => onHover(itemId)}
           onmouseleave={() => onHover(null)}
@@ -41,6 +40,7 @@ let {
             playSound("ui.inventory.click", { conditions: { itemType: meta?.category ?? "component" } });
           }}
           ondblclick={() => onDblClick?.(itemId)}
+          aria-label="{meta?.name ?? itemId}{qty > 1 ? `, quantity ${qty}` : ''}"
         >
           <div class="item-visual">
             <ItemIcon def={meta} {itemId} />
@@ -56,7 +56,7 @@ let {
               <div class="decay-fill" style="width: {decayProgress[itemId]}%"></div>
             </div>
           {/if}
-        </div>
+        </button>
       {/each}
     </div>
   {/if}
@@ -87,6 +87,8 @@ let {
     background: var(--inv-surface-soft);
     color: var(--inv-text);
     cursor: pointer;
+    padding: 0;
+    font: inherit;
   }
 
   .item-cell:hover,

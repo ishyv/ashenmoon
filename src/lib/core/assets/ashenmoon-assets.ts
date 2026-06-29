@@ -1,5 +1,7 @@
 import { AnimatedSprite, Assets, Sprite, Texture } from "pixi.js";
 import type { AnimState } from "$lib/core/types";
+import type { PlayerAnimationClipId } from "$lib/domain/animation/player-animation";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 
 const BASE = "/assets/ashenmoon";
 
@@ -252,6 +254,73 @@ export const ASHENMOON_ACTOR_PATHS = {
   boar: `${BASE}/actors/boar-standee.svg`,
   rabbit: `${BASE}/actors/rabbit-standee.svg`,
 } as const satisfies Record<AshenmoonActorKey, string>;
+
+export const ASHENMOON_PLAYER_ANIMATION_PATHS = {
+  idle: [`${BASE}/actors/player/player-idle.svg`],
+  walk: [
+    `${BASE}/actors/player/player-walk-1.svg`,
+    `${BASE}/actors/player/player-walk-2.svg`,
+    `${BASE}/actors/player/player-walk-3.svg`,
+  ],
+  run: [
+    `${BASE}/actors/player/player-run-1.svg`,
+    `${BASE}/actors/player/player-run-2.svg`,
+    `${BASE}/actors/player/player-run-3.svg`,
+  ],
+  exhausted_walk: [
+    `${BASE}/actors/player/player-exhausted-walk-1.svg`,
+    `${BASE}/actors/player/player-exhausted-walk-2.svg`,
+  ],
+  injured_walk: [
+    `${BASE}/actors/player/player-injured-walk-1.svg`,
+    `${BASE}/actors/player/player-injured-walk-2.svg`,
+  ],
+  encumbered_walk: [
+    `${BASE}/actors/player/player-encumbered-walk-1.svg`,
+    `${BASE}/actors/player/player-encumbered-walk-2.svg`,
+  ],
+  wet_walk: [
+    `${BASE}/actors/player/player-wet-walk-1.svg`,
+    `${BASE}/actors/player/player-wet-walk-2.svg`,
+  ],
+  strained_run: [
+    `${BASE}/actors/player/player-strained-run-1.svg`,
+    `${BASE}/actors/player/player-strained-run-2.svg`,
+  ],
+  encumbered_run: [
+    `${BASE}/actors/player/player-encumbered-walk-1.svg`,
+    `${BASE}/actors/player/player-strained-run-1.svg`,
+    `${BASE}/actors/player/player-encumbered-walk-2.svg`,
+  ],
+  gather_bush_hands: [
+    `${BASE}/actors/player/player-gather-bush-hands-1.svg`,
+    `${BASE}/actors/player/player-gather-bush-hands-2.svg`,
+  ],
+  gather_tree_hands: [
+    `${BASE}/actors/player/player-gather-tree-hands-1.svg`,
+    `${BASE}/actors/player/player-gather-tree-hands-2.svg`,
+  ],
+  gather_tree_axe: [
+    `${BASE}/actors/player/player-gather-axe-1.svg`,
+    `${BASE}/actors/player/player-gather-axe-2.svg`,
+  ],
+  gather_ore_bad_tool: [
+    `${BASE}/actors/player/player-gather-pickaxe-1.svg`,
+    `${BASE}/actors/player/player-gather-pickaxe-2.svg`,
+  ],
+  gather_ore_pick: [
+    `${BASE}/actors/player/player-gather-pickaxe-1.svg`,
+    `${BASE}/actors/player/player-gather-pickaxe-2.svg`,
+  ],
+  gather_clay_hands: [
+    `${BASE}/actors/player/player-gather-scavenge-1.svg`,
+    `${BASE}/actors/player/player-gather-scavenge-2.svg`,
+  ],
+  gather_water_container: [
+    `${BASE}/actors/player/player-gather-scavenge-1.svg`,
+    `${BASE}/actors/player/player-gather-scavenge-2.svg`,
+  ],
+} as const satisfies Partial<Record<PlayerAnimationClipId, readonly string[]>>;
 
 export const ASHENMOON_PROP_PATHS = {
   firepitCold: `${BASE}/camp/firepit-cold.svg`,
@@ -668,6 +737,7 @@ export function getAshenmoonItemIconKeyForItemId(itemId: string): AshenmoonItemI
 
 export const BUNDLE_ASHENMOON_FIRST_CAMP = Array.from(new Set([
   ...Object.values(ASHENMOON_ACTOR_PATHS),
+  ...Object.values(ASHENMOON_PLAYER_ANIMATION_PATHS).flat(),
   ...Object.values(ASHENMOON_PROP_PATHS),
   ...Object.values(ASHENMOON_GATHERABLE_PATHS),
   ...Object.values(ASHENMOON_ITEM_ICON_PATHS),
@@ -688,7 +758,21 @@ export function getAshenmoonActorTexture(key: AshenmoonActorKey): Texture {
   return requireLoadedTexture(ASHENMOON_ACTOR_PATHS[key]);
 }
 
-export function getAshenmoonActorFrames(key: AshenmoonActorKey, state: AnimState | "idle" = "idle"): Texture[] {
+export function getAshenmoonPlayerAnimationFramePaths(state: AnimState | PlayerAnimationClipId | "idle" = "idle"): readonly string[] | null {
+  const playerAnimationPaths: Partial<Record<PlayerAnimationClipId, readonly string[]>> = ASHENMOON_PLAYER_ANIMATION_PATHS;
+  const clipPaths = playerAnimationPaths[state as PlayerAnimationClipId];
+  if (clipPaths) return clipPaths;
+  if (state === "gather" || state === "gather_tired") return ASHENMOON_PLAYER_ANIMATION_PATHS.gather_bush_hands;
+  if (state === "attack") return ASHENMOON_PLAYER_ANIMATION_PATHS.idle;
+  return null;
+}
+
+export function getAshenmoonActorFrames(key: AshenmoonActorKey, state: AnimState | PlayerAnimationClipId | "idle" = "idle"): Texture[] {
+  if (key === "player") {
+    const paths = getAshenmoonPlayerAnimationFramePaths(state);
+    if (paths) return paths.map(requireLoadedTexture);
+  }
+
   const base = getAshenmoonActorTexture(key);
   // Action readability is handled through runtime transforms/overlays; never swap
   // the player to another character's standee just to fake an attack frame.
@@ -771,7 +855,12 @@ export function createStandeeShadow(scale = 1): Sprite {
 export function createActorStandee(key: AshenmoonActorKey, heightPx: number): AnimatedSprite {
   const sprite = new AnimatedSprite(getAshenmoonActorFrames(key));
   sprite.anchor.set(0.5, 1);
-  sprite.scale.set(heightPx / sprite.texture.height);
+  const scale = resolveWorldVisualScale({
+    spec: { heightTiles: heightPx / 64 },
+    texture: sprite.texture,
+    tilePx: 64,
+  });
+  sprite.scale.set(scale.x, scale.y);
   sprite.animationSpeed = 0.08;
   sprite.play();
   return sprite;

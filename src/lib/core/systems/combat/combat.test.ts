@@ -356,6 +356,32 @@ describe("Combat System - Kite Combo & Focus Stacks", () => {
     ]);
   });
 
+  it("reduces frontal player damage while weapon guard is active", () => {
+    const { combat, config, vfx, player, entityLayer } = setupTest();
+    combat.guard.active = true;
+    combat.guard.angleRad = 0;
+    setStamina(100);
+
+    applyDamage(player, 30, -64, 0, 0, config, vfx, entityLayer, combat);
+
+    expect(player.health?.current).toBe(88);
+    expect(stamina.current).toBe(85);
+  });
+
+  it("breaks guard when stamina cannot absorb the frontal hit", () => {
+    const { combat, config, vfx, player, entityLayer } = setupTest();
+    combat.guard.active = true;
+    combat.guard.angleRad = 0;
+    setStamina(5);
+
+    applyDamage(player, 30, -64, 0, 0, config, vfx, entityLayer, combat);
+
+    expect(player.health?.current).toBeGreaterThan(70);
+    expect(player.health?.current).toBeLessThan(100);
+    expect(stamina.current).toBe(0);
+    expect(combat.guard.active).toBe(false);
+  });
+
   it("should reward stamina and sacrifice HP when Kite Combo hits an enemy at high stacks", () => {
     const { world, inputs, combat, config, vfx, player, playerSprite, setPlayerAnim, entityLayer, onEnemyKilled, movement } = setupTest();
 

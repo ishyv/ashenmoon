@@ -82,6 +82,17 @@ export interface CampfireVisualInput {
   everBurned: boolean; // bridge-tracked — ash vs cold pit
 }
 
+/**
+ * Shared overlay applied to any entity exposed to rain (wetness > 0.4).
+ * Contributes rain_splash particles and a blue-grey tint. Reused by campfire
+ * and material visual defs — import this constant rather than inlining values.
+ */
+export const WET_SHEEN_OVERLAY: VisualStateDefinition = {
+  id: "wet_sheen",
+  tint: 0x8899bb,
+  particles: ["rain_splash"] as const,
+};
+
 export const CAMPFIRE_VISUAL_DEF: VisualDefinition<CampfireVisualInput> = {
   id: "campfire",
   fallbackState: "unlit_empty",
@@ -194,11 +205,7 @@ export const CAMPFIRE_VISUAL_DEF: VisualDefinition<CampfireVisualInput> = {
       id: "low_fuel",
       tint: 0xcc8830,
     },
-    wet_sheen: {
-      id: "wet_sheen",
-      tint: 0x8899bb,
-      particles: ["rain_splash"] as const,
-    },
+    wet_sheen: WET_SHEEN_OVERLAY,
   },
   rules: [
     // base rules — priority descending

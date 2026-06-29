@@ -10,16 +10,51 @@
  * Pure: reads item data, builds definitions. No world, no Pixi.
  */
 import { getItemDef, traitOf } from "$lib/domain/items";
-import type { WeaponDamageType, WeaponDefinition, WeaponFamily } from "./weapon-types";
+import type { WeaponDefinition } from "./weapon-types";
+import { resolveWeaponDamageType, resolveWeaponFamilyForKind } from "./weapon-families";
 
 /** Mirrors core `TILE` (map.ts) without importing the core layer into domain. */
 const TILE_PX = 64;
 
 const registry = new Map<string, WeaponDefinition>();
 
+export const UNARMED_WEAPON_DEF: WeaponDefinition = {
+  id: "weapon.unarmed",
+  name: "bare hands",
+  family: "unarmed",
+  baseDamage: 10,
+  handling: {
+    weightClass: "light",
+    baseReachPx: TILE_PX * 0.7,
+    baseRecoveryMs: 220,
+    baseStaminaCost: 4,
+    stanceMoveSpeedMultiplier: 0.8,
+    attackMoveSpeedMultiplier: 0.65,
+  },
+  attacks: {
+    quick: {
+      id: "unarmed.quick",
+      name: "jab",
+      inputKind: "tap",
+      damageType: "blunt",
+      damageMultiplier: 1,
+      staminaCostMultiplier: 1,
+      windupMs: 80,
+      activeMs: 80,
+      recoveryMs: 180,
+      hitShape: { kind: "arc", radiusPx: TILE_PX * 0.7, arcDegrees: 70 },
+      movement: { moveSpeedMultiplier: 0.65 },
+    },
+  },
+  animationProfile: "quick_stab",
+  soundProfile: "unarmed",
+};
+
 export function registerWeaponDefinition(def: WeaponDefinition): void {
   registry.set(def.id, def);
 }
+
+registerWeaponDefinition(UNARMED_WEAPON_DEF);
 
 export function getWeaponDefinition(id: string): WeaponDefinition | undefined {
   return registry.get(id);
@@ -27,26 +62,7 @@ export function getWeaponDefinition(id: string): WeaponDefinition | undefined {
 
 export function clearWeaponDefinitions(): void {
   registry.clear();
-}
-
-/** Item-trait damage flavour → weapon damage flavour. */
-function weaponDamageType(kind: "slash" | "pierce" | "blunt", family: WeaponFamily): WeaponDamageType {
-  if (kind === "slash") return family === "axe" || family === "hammer" ? "chop" : "slash";
-  return kind; // "pierce" | "blunt"
-}
-
-/** Best-effort map from the item's free-text `weaponKind` to a family. */
-function familyForWeaponKind(weaponKind: string): WeaponFamily {
-  const families: WeaponFamily[] = [
-    "knife",
-    "sword",
-    "curved_sword",
-    "axe",
-    "spear",
-    "club",
-    "hammer",
-  ];
-  return families.find((f) => weaponKind.includes(f)) ?? "sword";
+  registerWeaponDefinition(UNARMED_WEAPON_DEF);
 }
 
 /**
@@ -59,19 +75,19 @@ function deriveDefaultDefinition(itemId: string): WeaponDefinition | undefined {
   const weapon = traitOf(def, "weapon");
   if (!weapon) return undefined;
 
-  const family = familyForWeaponKind(weapon.weaponKind);
+  const family = resolveWeaponFamilyForKind(weapon.weaponKind);
   const reachTrait = traitOf(def, "reach_weapon");
   const baseReachPx = TILE_PX * 1.4 + (reachTrait ? reachTrait.reach * TILE_PX : 0);
-  const damageType = weaponDamageType(weapon.damageType, family);
+  const damageType = resolveWeaponDamageType(weapon.damageType, family);
   const bleed = weapon.bleedChancePct;
 
   return {
     id: `derived:${itemId}`,
     name: def?.name ?? itemId,
-    family,
+    family: family.id,
     baseDamage: weapon.damage,
     handling: {
-      weightClass: "medium",
+      weightClass: family.defaultWeightClass,
       baseReachPx,
       baseRecoveryMs: 320,
       baseStaminaCost: 8,
@@ -100,15 +116,15 @@ function deriveDefaultDefinition(itemId: string): WeaponDefinition | undefined {
           : {}),
       },
     },
-    animationProfile: "small_slash",
-    soundProfile: def?.category ?? "unarmed",
+    animationProfile: family.defaultAnimationProfile,
+    soundProfile: family.defaultSoundProfile,
   };
 }
 
 /**
  * The explicit `WeaponDefinition` an item opts into via `WeaponTrait.weaponDefId`,
- * or undefined. The weapon-driven combat path only handles weapons with an
- * explicit definition; everything else stays on the legacy attack system.
+ * or undefined. This is kept for diagnostics and tests; normal combat uses
+ * `weaponDefForItem` so every attack has a weapon-driven definition.
  */
 export function explicitWeaponDefForItem(itemId: string | null | undefined): WeaponDefinition | undefined {
   if (!itemId) return undefined;
@@ -119,9 +135,9 @@ export function explicitWeaponDefForItem(itemId: string | null | undefined): Wea
 /**
  * Resolve the `WeaponDefinition` for an equipped item id. Returns the explicit
  * definition the item links to (via its `WeaponTrait.weaponDefId`), else a
- * derived default, else undefined for non-weapons (unarmed handled by caller).
+ * derived default, else the explicit unarmed definition for non-weapons.
  */
-export function weaponDefForItem(itemId: string | null | undefined): WeaponDefinition | undefined {
-  if (!itemId) return undefined;
-  return explicitWeaponDefForItem(itemId) ?? deriveDefaultDefinition(itemId);
+export function weaponDefForItem(itemId: string | null | undefined): WeaponDefinition {
+  if (!itemId) return UNARMED_WEAPON_DEF;
+  return explicitWeaponDefForItem(itemId) ?? deriveDefaultDefinition(itemId) ?? UNARMED_WEAPON_DEF;
 }

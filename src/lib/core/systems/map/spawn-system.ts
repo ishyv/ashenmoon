@@ -20,6 +20,8 @@ import {
   getAshenmoonPropTexture,
 } from "$lib/core/assets/ashenmoon-assets";
 import { getItemDef } from "$lib/domain/items/item-definitions";
+import { resolveItemVisuals } from "$lib/domain/items/item-visuals";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 import { EntityId, GameEvent } from "$lib/domain/game-events";
 import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import { createLitCampfireState } from "$lib/core/systems/camp/campfire-runtime-system";
@@ -254,7 +256,12 @@ export function spawnCampSystem(
   campfire.animationSpeed = ENGINE_CONFIG.CAMPFIRE_VISUALS.FIRE_ANIM_SPEED;
   campfire.play();
   campfire.anchor.set(0.5, 0.72);
-  campfire.scale.set((TILE * 1.45) / campfire.texture.width);
+  const campfireScale = resolveWorldVisualScale({
+    spec: { widthTiles: 1.45 },
+    texture: campfire.texture,
+    tilePx: TILE,
+  });
+  campfire.scale.set(campfireScale.x, campfireScale.y);
   campfireContainer.addChild(campfire);
 
   entityLayer.addChild(campfireContainer);
@@ -338,7 +345,12 @@ export function spawnItemDrop(
   sprite.anchor.set(0.5, 1);
   sprite.x = px + TILE / 2;
   sprite.y = py + TILE;
-  sprite.scale.set((TILE * 0.4) / 32);
+  const scale = resolveWorldVisualScale({
+    spec: resolveItemVisuals(def).ground,
+    texture: sprite.texture,
+    tilePx: TILE,
+  });
+  sprite.scale.set(scale.x, scale.y);
   sprite.zIndex = computeRenderZ(sprite.y);
   entityLayer.addChild(sprite);
   entitySprites.set(id, sprite);
@@ -415,7 +427,12 @@ export function spawnLandmark(
     sprite.anchor.set(0.5, 1);
     sprite.x = ex + TILE / 2;
     sprite.y = ey + TILE;
-    sprite.scale.set((TILE * visual.heightTiles) / visual.texture.height);
+    const scale = resolveWorldVisualScale({
+      spec: { heightTiles: visual.heightTiles },
+      texture: visual.texture,
+      tilePx: TILE,
+    });
+    sprite.scale.set(scale.x, scale.y);
     sprite.zIndex = computeRenderZ(sprite.y);
     entityLayer.addChild(sprite);
     entitySprites.set(entityId, sprite);

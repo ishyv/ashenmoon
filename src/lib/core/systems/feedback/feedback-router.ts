@@ -36,17 +36,61 @@ export function routeGameEventsToFeedback(
       routeEntityDied(event, context);
     } else if (event.type === "feedback_requested") {
       routeFeedbackRequested(event);
+    } else if (event.type === "animation_event") {
+      routeAnimationEvent(event, context);
     } else if (event.type === "placed_item_reacted") {
       routePlacedItemReacted(event, context);
     } else if (event.type === "attack_started") {
       routeAttackStarted(event, context);
     } else if (event.type === "attack_missed") {
-      playSound(resolveCombatSound({ phase: "miss", weaponCategory: event.soundProfile }));
+      playSound(resolveCombatSound({ phase: "miss", sourceProfileId: event.soundProfile }));
+    } else if (event.type === "guard_blocked") {
+      routeGuardBlocked(context);
+    } else if (event.type === "guard_broken") {
+      routeGuardBroken();
     } else if (event.type === "interaction_completed") {
       playSound("craft");
     } else if (event.type === "world_action_completed") {
       playSound("node.deplete");
     }
+  }
+}
+
+function routeAnimationEvent(
+  event: Extract<QueuedGameEvent, { type: "animation_event" }>,
+  context: FeedbackRouterContext,
+): void {
+  if (event.event === "footstep") {
+    if (event.clipId === "run" || event.clipId === "strained_run" || event.clipId === "encumbered_run") return;
+    playSound("player.footstep", { position: event.position, conditions: { speed: "walk" } });
+    return;
+  }
+
+  if (event.event === "swing_release") {
+    playSound("combat.miss.air", { position: event.position });
+    return;
+  }
+
+  if (event.event === "tool_impact") {
+    const sound =
+      event.clipId === "gather_tree_axe"
+        ? "gather.chop"
+        : event.clipId === "gather_ore_pick" || event.clipId === "gather_ore_bad_tool"
+          ? "gather.strike"
+          : "gather.dig";
+    spawnEnvParticles(context.vfx, sound === "gather.chop" ? Colors.particle.woodDebris : Colors.particle.oreDebris, 4, "smoke", event.position, context.entityLayer);
+    playSound(sound, { position: event.position });
+    return;
+  }
+
+  if (event.event === "gather_pull") {
+    const sound =
+      event.clipId === "gather_water_container"
+        ? "gather.water.collect"
+        : event.clipId === "gather_clay_hands"
+          ? "gather.clay.pull"
+          : "gather.fiber.pull";
+    playSound(sound, { position: event.position });
   }
 }
 
@@ -58,19 +102,34 @@ function routeAttackStarted(
   event: Extract<QueuedGameEvent, { type: "attack_started" }>,
   context: FeedbackRouterContext,
 ): void {
+  const reachPx = event.trail === "heavy" ? event.reachPx * 1.08 : event.reachPx;
+  const halfAngle = event.trail === "thrust"
+    ? Math.max(0.08, (event.arcDegrees * Math.PI) / 720)
+    : (event.arcDegrees * Math.PI) / 360;
   spawnSlashArc(
     context.vfx,
     context.entityLayer,
     event.origin.x,
     event.origin.y,
     event.aimAngle,
-    event.reachPx,
-    (event.arcDegrees * Math.PI) / 360, // half-angle in radians
+    reachPx,
+    halfAngle,
     Colors.combat.slashArc,
   );
-  playSound(resolveCombatSound({ phase: "swing", weaponCategory: event.soundProfile }), {
-    conditions: { weaponCategory: event.soundProfile },
+  if (event.trail === "heavy") triggerCameraShake(context.vfx, 1.4, 0.08);
+  playSound(resolveCombatSound({ phase: "swing", sourceProfileId: event.soundProfile }), {
+    conditions: { sourceProfileId: event.soundProfile },
   });
+}
+
+function routeGuardBlocked(context: FeedbackRouterContext): void {
+  triggerCameraShake(context.vfx, 1.6, 0.08);
+  playSound("combat.hit.player");
+}
+
+function routeGuardBroken(): void {
+  emitPlayerFeedback("guard broken", "warning");
+  playSound("combat.hit.player");
 }
 
 /**

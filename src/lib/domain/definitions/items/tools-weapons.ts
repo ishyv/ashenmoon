@@ -41,6 +41,7 @@ export const toolWeaponItems = {
     rarity: Rarity.Uncommon,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
+    visual: { ground: { heightTiles: 0.82 }, equipped: { heightTiles: 1.05 } },
   }).with(
     Tool({ toolKind: "mining", power: 2 }),
     EquippableVisuals({
@@ -56,6 +57,7 @@ export const toolWeaponItems = {
     rarity: Rarity.Uncommon,
     category: Category.Tool,
     physical: { carryClass: "pack", weight: 1.8, stackLimit: 1 },
+    visual: { ground: { heightTiles: 0.85 }, equipped: { heightTiles: 1.02 } },
   }).with(
     Tool({ toolKind: "chopping", power: 2 }),
     Weapon({ weaponKind: "axe", damage: 12, damageType: "slash", bleedChancePct: 8, weaponDefId: "weapon.stone_axe" }),
@@ -162,6 +164,7 @@ export const toolWeaponItems = {
     rarity: Rarity.Common,
     category: Category.Tool,
     physical: { carryClass: "pocket", weight: 0.45, stackLimit: 1 },
+    visual: { ground: { heightTiles: 0.48 }, equipped: { heightTiles: 0.78 } },
   }).with(
     Tool({ toolKind: "cutting", power: 2 }),
     Weapon({ weaponKind: "knife", damage: 8, damageType: "slash", bleedChancePct: 12, weaponDefId: "weapon.crude_knife" }),
@@ -206,6 +209,7 @@ export const toolWeaponItems = {
     category: Category.Weapon,
     icon: "🪵",
     physical: { carryClass: "haul", weight: 2.0, stackLimit: 1 },
+    visual: { ground: { heightTiles: 1.05 }, equipped: { heightTiles: 1.45 } },
   }).with(
     Weapon({ weaponKind: "spear", damage: 10, damageType: "pierce", bleedChancePct: 10, weaponDefId: "weapon.wooden_spear" }),
     ReachWeapon(1),
@@ -223,8 +227,9 @@ export const toolWeaponItems = {
     category: Category.Weapon,
     icon: "🪵",
     physical: { carryClass: "haul", weight: 2.0, stackLimit: 1 },
+    visual: { ground: { heightTiles: 1.05 }, equipped: { heightTiles: 1.45 } },
   }).with(
-    Weapon({ weaponKind: "spear", damage: 12, damageType: "pierce", bleedChancePct: 12 }),
+    Weapon({ weaponKind: "spear", damage: 12, damageType: "pierce", bleedChancePct: 12, weaponDefId: "weapon.wooden_spear" }),
     ReachWeapon(1),
     EquippableVisuals({
       slots: ["weapon"],

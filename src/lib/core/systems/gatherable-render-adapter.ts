@@ -6,6 +6,7 @@ import {
 import { TILE } from "$lib/core/systems/map/map";
 import { computeRenderZ } from "$lib/domain/collision";
 import type { GatherableDefinition, GatherableRenderKind } from "$lib/domain/gathering/gatherables";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 
 interface GatherableRenderAdapter {
   texture: (gatherable?: Pick<GatherableDefinition, "id">) => Texture;
@@ -71,11 +72,19 @@ export function createGatherableRenderSprite(
 
   if (gatherable.interactionKind !== "repeated_action") {
     const sourceSize = Math.max(sprite.texture.width, sprite.texture.height);
-    sprite.scale.set((TILE * adapter.pickupScaleTiles) / sourceSize);
+    const scale = (TILE * adapter.pickupScaleTiles) / sourceSize;
+    sprite.scale.set(scale);
   } else if (gatherable.solidKind === "tree") {
-    sprite.scale.set((TILE * 2.2) / sprite.texture.height);
+    const scale = resolveWorldVisualScale({
+      spec: { heightTiles: 2.2 },
+      texture: sprite.texture,
+      tilePx: TILE,
+    });
+    sprite.scale.set(scale.x, scale.y);
   } else {
-    sprite.scale.set((TILE * 0.95) / Math.max(sprite.texture.width, sprite.texture.height));
+    const sourceSize = Math.max(sprite.texture.width, sprite.texture.height);
+    const scale = (TILE * 0.95) / sourceSize;
+    sprite.scale.set(scale);
   }
 
   return sprite;

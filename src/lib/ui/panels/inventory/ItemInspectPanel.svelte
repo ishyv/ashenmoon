@@ -1,6 +1,7 @@
 <script lang="ts">
 import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-actions";
 import { getItemDef, reactsInto, traitOf } from "$lib/domain/items";
+import { resolveInventoryItemActions } from "$lib/domain/inventory-item-action";
 import type { KnowledgeProperty } from "$lib/domain/knowledge/item-knowledge";
 import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 import { recipeKnown } from "$lib/state/rpg/crafting.svelte";
@@ -23,6 +24,7 @@ let {
   isEquipped,
   onClose,
   onEquip,
+  onUnequip,
   onPlace,
   onStudy,
 }: {
@@ -32,6 +34,7 @@ let {
   isEquipped: (itemId: string) => boolean;
   onClose: () => void;
   onEquip: (itemId: string) => void;
+  onUnequip: (itemId: string) => void;
   onPlace: (itemId: string) => void;
   onStudy?: (itemId: string) => void;
 } = $props();
@@ -43,6 +46,14 @@ const tempSensitive = $derived(meta ? traitOf(meta, "temperature_sensitive") : n
 const decayable = $derived(meta ? traitOf(meta, "decayable") : null);
 const blueprintTrait = $derived(meta ? traitOf(meta, "blueprint") : null);
 const blueprintAlreadyKnown = $derived(blueprintTrait ? recipeKnown(blueprintTrait.recipeId) : false);
+const actions = $derived(resolveInventoryItemActions({
+  def: meta ?? undefined,
+  itemId,
+  isEquipped: isEquipped(itemId),
+  consumeVerb: getConsumeVerb(itemId),
+  canConsume: canConsume(itemId),
+  blueprintKnown: blueprintAlreadyKnown,
+}));
 </script>
 
 {#if meta}
@@ -94,26 +105,23 @@ const blueprintAlreadyKnown = $derived(blueprintTrait ? recipeKnown(blueprintTra
     </section>
 
     <div class="inspect-actions">
-      {#if meta.category === "tool" || traitOf(meta, "wearable")}
-        <button class="action-btn" disabled={isEquipped(itemId)} onclick={() => onEquip(itemId)}>
-          {isEquipped(itemId) ? "equipped" : "equip"}
+      {#each actions as action (action.id)}
+        <button
+          class="action-btn"
+          disabled={!action.enabled}
+          title={action.reason ?? ""}
+          onclick={() => {
+            if (!action.enabled) return;
+            if (action.id === "equip") onEquip(itemId);
+            else if (action.id === "unequip") onUnequip(itemId);
+            else if (action.id === "place") onPlace(itemId);
+            else if (action.id === "consume") consumeItem(itemId);
+            else if (action.id === "study") onStudy?.(itemId);
+          }}
+        >
+          {action.label}
         </button>
-      {/if}
-      {#if getConsumeVerb(itemId)}
-        <button class="action-btn" disabled={!canConsume(itemId)} onclick={() => consumeItem(itemId)}>
-          {getConsumeVerb(itemId)}
-        </button>
-      {/if}
-      {#if blueprintTrait && onStudy}
-        <button class="action-btn" disabled={blueprintAlreadyKnown} onclick={() => onStudy?.(itemId)}>
-          {blueprintAlreadyKnown ? "already known" : "study"}
-        </button>
-      {/if}
-      {#if !isEquipped(itemId) && !blueprintTrait}
-        <button class="action-btn" onclick={() => onPlace(itemId)}>
-          place
-        </button>
-      {/if}
+      {/each}
     </div>
   </aside>
 {/if}

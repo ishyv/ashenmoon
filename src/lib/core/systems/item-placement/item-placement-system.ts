@@ -12,7 +12,8 @@ import { playSound } from "$lib/audio/audio-engine";
 import { Cell } from "$lib/core/types";
 import { Colors } from "$lib/utils/colors";
 import { coordKey } from "$lib/utils/coord-utils";
-import { getItemDef } from "$lib/domain/items";
+import { getItemDef, resolveItemVisuals } from "$lib/domain/items";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 import { computeRenderZ } from "$lib/domain/collision";
 import { getPlayerEntity } from "$lib/core/ecs/entity-queries";
 import { syncPlaceItem } from "$lib/state/persistence/remote-sync";
@@ -35,6 +36,15 @@ export class ItemPlacementResource {
 export function getItemTexture(itemId: string): Texture {
   const firstPartyKey = getAshenmoonItemIconKeyForItemId(itemId);
   return getAshenmoonItemIconTexture(firstPartyKey ?? "stick");
+}
+
+export function applyGroundItemVisualScale(sprite: Sprite, itemId: string): void {
+  const scale = resolveWorldVisualScale({
+    spec: resolveItemVisuals(getItemDef(itemId)).ground,
+    texture: sprite.texture,
+    tilePx: TILE,
+  });
+  sprite.scale.set(scale.x, scale.y);
 }
 
 function itemPlacementContext(map: MapResource, playerPos: { x: number; y: number }): ItemPlacementContext {
@@ -114,7 +124,7 @@ export function spawnPlacedItemSystem(
   sprite.anchor.set(0.5, 1);
   sprite.x = ex + TILE / 2;
   sprite.y = ey + TILE;
-  sprite.scale.set((TILE * 0.4) / 64);
+  applyGroundItemVisualScale(sprite, itemId);
   sprite.zIndex = computeRenderZ(sprite.y);
 
   entityLayer.addChild(sprite);

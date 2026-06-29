@@ -30,7 +30,8 @@
     "preview": "vite preview",
     "prepare": "svelte-kit sync || true",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "validate:visuals": "vitest run --reporter=verbose src/lib/core/systems/visual/visual-coverage.test.ts"
   },
   "dependencies": {
     "@hyvnt/hyvui": "^0.4.0",

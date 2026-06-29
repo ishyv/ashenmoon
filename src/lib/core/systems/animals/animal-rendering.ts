@@ -6,6 +6,7 @@ import {
   getAshenmoonActorFrames,
   type AshenmoonActorKey,
 } from "$lib/core/assets/ashenmoon-assets";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 import type { EntityAnimSpec } from "$lib/core/systems/animation/entity-animator";
 import type { AnimState } from "$lib/core/types";
 
@@ -34,7 +35,12 @@ export function createAnimalSprite(speciesId: AnimalSpeciesId, x: number, y: num
   sprite.animationSpeed = 0.1;
   sprite.play();
   sprite.anchor.set(0.5, 1);
-  sprite.scale.set((TILE * spec.heightTiles) / sprite.texture.height);
+  const scale = resolveWorldVisualScale({
+    spec: { heightTiles: spec.heightTiles },
+    texture: sprite.texture,
+    tilePx: TILE,
+  });
+  sprite.scale.set(scale.x, scale.y);
   positionAnimalSprite(sprite, x, y);
   return sprite;
 }

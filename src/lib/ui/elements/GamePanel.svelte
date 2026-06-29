@@ -28,16 +28,24 @@ let initialY = 0;
 
 onMount(() => {
   playSound("ui.panel.open", { conditions: { panelId: id } });
-  if (typeof window !== "undefined" && !panelPositions[id]) {
+  if (typeof window === "undefined") return;
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const estW = width.endsWith("rem") ? parseFloat(width) * 16 : width.endsWith("px") ? parseFloat(width) : 400;
+  const estH = height.endsWith("rem") ? parseFloat(height) * 16 : height.endsWith("px") ? parseFloat(height) : 300;
+
+  if (!panelPositions[id]) {
     const centerableIds = ["construction-panel", "station-panel", "carcass-panel", "medicine-panel", "object-action-panel", "inspect"];
     if (centerableIds.includes(id)) {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const panelWidth = width.endsWith("rem") ? parseFloat(width) * 16 : width.endsWith("px") ? parseFloat(width) : 380;
-      const panelHeight = height.endsWith("rem") ? parseFloat(height) * 16 : height.endsWith("px") ? parseFloat(height) : 300;
-      const defaultX = Math.round((w - panelWidth) / 2);
-      const defaultY = Math.round((h - panelHeight) / 2);
-      updatePanelPosition(id, defaultX, defaultY);
+      updatePanelPosition(id, Math.round((w - estW) / 2), Math.round((h - estH) / 2));
+    }
+  } else {
+    // Re-center if the saved position places the panel mostly off-screen
+    const saved = panelPositions[id];
+    const offScreen = saved.x > w - 60 || saved.x < -(estW - 60) || saved.y > h - 40 || saved.y < 0;
+    if (offScreen) {
+      updatePanelPosition(id, Math.round((w - estW) / 2), Math.round((h - estH) / 2));
     }
   }
 });

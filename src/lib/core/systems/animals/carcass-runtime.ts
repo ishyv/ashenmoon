@@ -5,6 +5,7 @@ import { computeRenderZ } from "$lib/domain/collision";
 import { M3_CARCASS_DEFINITIONS, type CarcassState } from "$lib/domain/animals/carcass-processing";
 import type { AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import { getAshenmoonCarcassTexture } from "$lib/core/assets/ashenmoon-assets";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 
 /**
  * Runtime bridge for carcasses.
@@ -25,6 +26,10 @@ function carcassVisualWidth(speciesId: AnimalSpeciesId): number {
   }
 }
 
+function carcassVisualWidthTiles(speciesId: AnimalSpeciesId): number {
+  return carcassVisualWidth(speciesId) / TILE;
+}
+
 type RenderedCarcassState = "fresh" | "processed" | "spoiling" | "rotten";
 
 function renderStateForCarcass(state: CarcassState): RenderedCarcassState {
@@ -41,8 +46,12 @@ export function buildCarcassSprite(speciesId: AnimalSpeciesId, state: CarcassSta
 
   const body = new Sprite(getAshenmoonCarcassTexture(speciesId, renderStateForCarcass(state)));
   body.anchor.set(0.5, 1);
-  body.width = carcassVisualWidth(speciesId);
-  body.scale.y = body.scale.x;
+  const bodyScale = resolveWorldVisualScale({
+    spec: { widthTiles: carcassVisualWidthTiles(speciesId) },
+    texture: body.texture,
+    tilePx: TILE,
+  });
+  body.scale.set(bodyScale.x, bodyScale.y);
   body.y = TILE * 0.22;
   container.addChild(body);
 

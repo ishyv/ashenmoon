@@ -1,5 +1,6 @@
 import type { ReactionKind } from "$lib/domain/systems/item-reactions";
 import type { PlacedReactionId } from "$lib/domain/exposure/placed-reactions";
+import type { AnimationFrameEventKind } from "$lib/domain/animation/player-animation";
 
 export type DamageEventType = "physical" | "magic" | "true" | string;
 
@@ -106,6 +107,15 @@ export type QueuedGameEvent =
       readonly actionId: string;
     }
   | {
+      readonly type: "animation_event";
+      readonly actorId: string;
+      readonly clipId: string;
+      readonly event: AnimationFrameEventKind;
+      readonly normalizedTime: number;
+      readonly position: { readonly x: number; readonly y: number };
+      readonly targetId?: string;
+    }
+  | {
       readonly type: "feedback_requested";
       readonly channel: "world_vfx" | "sound" | "ui" | "panel" | "floating_text" | "debug";
       readonly message: string;
@@ -169,6 +179,8 @@ export type QueuedGameEvent =
       readonly aimAngle: number;
       readonly reachPx: number;
       readonly arcDegrees: number;
+      readonly hitShapeKind: "arc" | "capsule" | "circle" | "point";
+      readonly trail: "arc" | "thrust" | "heavy";
       readonly windupMs: number;
       readonly activeMs: number;
       readonly recoveryMs: number;
@@ -202,6 +214,27 @@ export type QueuedGameEvent =
       readonly attackerId: string;
       readonly weaponDefId: string;
       readonly attackId: string;
+    }
+  | {
+      readonly type: "guard_started";
+      readonly actorId: string;
+      readonly weaponDefId: string;
+    }
+  | {
+      readonly type: "guard_released";
+      readonly actorId: string;
+      readonly weaponDefId: string;
+    }
+  | {
+      readonly type: "guard_blocked";
+      readonly actorId: string;
+      readonly absorbedDamage: number;
+      readonly staminaCost: number;
+    }
+  | {
+      readonly type: "guard_broken";
+      readonly actorId: string;
+      readonly staminaCost: number;
     };
 
 export interface GameEventQueue {

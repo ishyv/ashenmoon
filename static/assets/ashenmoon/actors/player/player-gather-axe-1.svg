@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
+  <!-- Axe swing frame 1: RAISED — right arm raised high, axe head visible above, left arm steady grip low -->
+  <ellipse cx="80" cy="207" rx="29" ry="7" fill="#080706" opacity="0.55"/>
+  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round" transform="rotate(6 80 120)">
+    <!-- Head -->
+    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
+    <!-- Hair -->
+    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <!-- Eyes -->
+    <path d="M72 50h3m14 0h3" stroke-width="4"/>
+    <!-- Neck -->
+    <path d="M72 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
+    <!-- Shoulder arch -->
+    <path d="M49 91c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
+    <!-- Torso -->
+    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
+    <!-- Vest -->
+    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
+    <!-- Center seam -->
+    <path d="M80 88v57" fill="none" stroke-width="4"/>
+    <!-- Right arm RAISED HIGH — holding axe handle at top -->
+    <path d="M106 96c6-4 12-6 14-2" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M120 94c4-4 6-8 5-14" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- AXE — handle extending up from raised right hand -->
+    <path d="M125 80l-2-42" fill="none" stroke="#5c3d20" stroke-width="6"/>
+    <!-- Axe head at top -->
+    <path d="M112 36h24m-8 0l-4-18 4 18-6 8" fill="none" stroke="#8c8c8c" stroke-width="7"/>
+    <!-- Left arm steady LOW GRIP on axe handle -->
+    <path d="M54 96c6-2 12-2 16 4" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M70 100c4 4 6 10 5 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- Belt -->
+    <path d="M55 145c15 6 34 7 50 0" fill="none" stroke-width="6"/>
+    <!-- Hips -->
+    <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
+    <!-- Feet — right foot forward braced -->
+    <path d="M66 154l-6 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M94 154l14 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M53 198h22" stroke-width="8"/>
+    <path d="M99 198h26" stroke-width="8"/>
+  </g>
+</svg>

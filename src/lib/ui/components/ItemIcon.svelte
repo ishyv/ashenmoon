@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { ItemDefinition } from "$lib/domain/items/item-types";
-import { ASHENMOON_ITEM_ICON_PATHS, getAshenmoonItemIconKeyForItemId } from "$lib/core/assets/ashenmoon-assets";
+import { getAshenmoonItemIconPath } from "$lib/core/assets/render-resource-cache";
 
 interface Props {
   def: ItemDefinition | undefined;
@@ -12,8 +12,7 @@ let { def, itemId, class: cls = "" }: Props = $props();
 const ashenmoonIconUrl = $derived(ashenmoonIconFor(itemId));
 
 function ashenmoonIconFor(id: string): string {
-  const key = getAshenmoonItemIconKeyForItemId(id) ?? "stick";
-  return ASHENMOON_ITEM_ICON_PATHS[key];
+  return getAshenmoonItemIconPath(id);
 }
 </script>
 

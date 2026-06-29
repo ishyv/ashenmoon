@@ -2,7 +2,8 @@ import { Graphics } from "pixi.js";
 import { Colors } from "$lib/utils/colors";
 
 const TICK_LEN = 8;
-const LOCK_START = 0.82;
+// Lock phase begins at 60% — gives a 0.72 s window on a 1.8 s channel (~43 frames)
+const LOCK_START = 0.60;
 const LOCK_RING_R = 18;
 
 /**
@@ -49,16 +50,18 @@ export function updatePlacementCompass(
     }
     g.stroke({ color, width: 1.5, alpha: 0.75 });
   } else {
-    // Lock phase: cardinal ticks snap still + lock ring
+    // Lock phase: cardinal ticks grow longer and brighter to signal "tap now"
     const dirs: [number, number][] = [[ 0,-1],[ 1, 0],[ 0, 1],[-1, 0]];
     for (const [dx, dy] of dirs) {
-      g.moveTo(dx * (TICK_LEN * 0.35), dy * (TICK_LEN * 0.35))
-        .lineTo(dx * TICK_LEN, dy * TICK_LEN);
+      g.moveTo(dx * (TICK_LEN * 0.3), dy * (TICK_LEN * 0.3))
+        .lineTo(dx * (TICK_LEN * 1.5), dy * (TICK_LEN * 1.5));
     }
-    g.stroke({ color, width: 1.5, alpha: 0.9 });
+    g.stroke({ color, width: 2, alpha: 1.0 });
 
+    // Pulsing lock ring — breathes twice during the lock window to say "tap now"
     const lockT = (progress - LOCK_START) / (1 - LOCK_START);
-    g.circle(0, 0, LOCK_RING_R).stroke({ color, width: 1.5, alpha: 0.35 - lockT * 0.15 });
+    const pulse = 0.5 + 0.5 * Math.sin(lockT * Math.PI * 4);
+    g.circle(0, 0, LOCK_RING_R).stroke({ color, width: 2, alpha: 0.25 + pulse * 0.45 });
   }
 
   return tapThisFrame && inLock;

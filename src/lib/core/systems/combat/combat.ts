@@ -91,9 +91,12 @@ import {
 } from "$lib/domain/combat/driving-thrust";
 import {
   createInitialWeaponAttackRuntime,
+  createInitialWeaponComboRuntime,
   type WeaponAttackRuntime,
+  type WeaponComboRuntime,
 } from "$lib/domain/combat/weapons/attack-runtime";
 import { explicitWeaponDefForItem } from "$lib/domain/combat/weapons/weapon-registry";
+import { resolveGuardedDamage } from "$lib/domain/combat/weapons/guard";
 
 export { trackMovementCombo } from "./kite-combo";
 export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
@@ -190,6 +193,18 @@ export class CombatResource {
   public rhythmConfig: RhythmConfig = { ...DEFAULT_RHYTHM_CONFIG };
   /** Live state of the weapon-driven attack path (see weapon-attack-system). */
   public weaponAttack: WeaponAttackRuntime = createInitialWeaponAttackRuntime();
+  /** Last recovered weapon attack that can feed a short authored follow-up. */
+  public weaponCombo: WeaponComboRuntime = createInitialWeaponComboRuntime();
+  /** Live state of held weapon guard. Guard mitigation is resolved in applyDamage. */
+  public guard = {
+    active: false,
+    weaponDefId: "",
+    angleRad: 0,
+    moveSpeedMultiplier: 1,
+    reductionPct: 0.6,
+    staminaCostMultiplier: 0.5,
+    frontalArcDegrees: 120,
+  };
 }
 
 /**
@@ -229,9 +244,48 @@ export function applyDamage(
     combat.kiteStacksDecayTimer = 0;
   }
 
+  let resolvedAmount = amount;
+  if (isPlayer && combat?.guard.active) {
+    const targetPos = target.position;
+    const targetCenter = targetPos
+      ? {
+          x: targetPos.x + TILE / 2,
+          y: targetPos.y + TILE / 2,
+        }
+      : { x: 0, y: 0 };
+    const guard = resolveGuardedDamage({
+      incomingDamage: amount,
+      currentStamina: stamina.current,
+      guardAngleRad: combat.guard.angleRad,
+      sourceVector: { x: targetCenter.x - sourceX, y: targetCenter.y - sourceY },
+      reductionPct: combat.guard.reductionPct,
+      staminaCostMultiplier: combat.guard.staminaCostMultiplier,
+      frontalArcDegrees: combat.guard.frontalArcDegrees,
+    });
+    if (guard.guarded) {
+      spendStamina(guard.staminaCost, "burst");
+      resolvedAmount = guard.damage;
+      events?.push({
+        type: "guard_blocked",
+        actorId: target.id,
+        absorbedDamage: Math.max(0, amount - guard.damage),
+        staminaCost: guard.staminaCost,
+      });
+      if (guard.broken) {
+        combat.guard.active = false;
+        combat.weaponCombo = createInitialWeaponComboRuntime();
+        events?.push({
+          type: "guard_broken",
+          actorId: target.id,
+          staminaCost: guard.staminaCost,
+        });
+      }
+    }
+  }
+
   const damage = resolveDamage({
     health: h,
-    amount,
+    amount: resolvedAmount,
     damageType: "physical",
     armor: armor ?? 0,
     damageMultiplier,
@@ -894,7 +948,7 @@ export function playerAttackSystem(
     const weaponId = currentEquippedWeaponId();
     const weaponDef = weaponId ? getItemDef(weaponId) : undefined;
     const category = weaponDef?.category ?? "unarmed";
-    playSound("player.swing", { conditions: { weaponCategory: category } });
+    playSound("player.swing", { conditions: { sourceProfileId: category } });
 
     const level = getCharacterLevel();
     const basicShake = 0.8 + (level - 1) * 0.1;

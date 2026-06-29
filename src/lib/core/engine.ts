@@ -301,7 +301,6 @@ export class GameEngine {
   private tileLayer = new Container();
   private entityLayer = new Container();
   private collisionOverlay = new Graphics();
-  private _crosshair: Graphics | null = null;
 
   // Entity Sprite registry
   private entitySprites = new Map<string, Container>();
@@ -456,14 +455,6 @@ export class GameEngine {
 
       // Debug environment inspector — top of stage so it's never occluded
       this.environmentInspector = new EnvironmentInspector(this.app.stage);
-
-      // Virtual cursor crosshair — shown only when pointer lock is active
-      this._crosshair = new Graphics();
-      this._crosshair.moveTo(-8, 0).lineTo(8, 0).stroke({ width: 1.5, color: 0xffffff });
-      this._crosshair.moveTo(0, -8).lineTo(0, 8).stroke({ width: 1.5, color: 0xffffff });
-      this._crosshair.circle(0, 0, 2).fill({ color: 0xffffff, alpha: 0.7 });
-      this._crosshair.visible = false;
-      this.app.stage.addChild(this._crosshair);
 
       // Draw map tiles
       drawTerrainSystem(this.mapResource, this.tileLayer);
@@ -635,15 +626,6 @@ export class GameEngine {
       // Recalculate mouse world position based on current screen coordinates and updated camera transform
       const localMouse = this.worldContainer.toLocal(this.inputResource.mouseScreen);
       this.inputResource.mouseWorld = { x: localMouse.x, y: localMouse.y };
-
-      // Sync virtual crosshair to cursor position (visible only during pointer lock)
-      if (this._crosshair) {
-        this._crosshair.visible = this.inputResource.isPointerLocked;
-        this._crosshair.position.set(
-          this.inputResource.mouseScreen.x,
-          this.inputResource.mouseScreen.y,
-        );
-      }
 
       // Update targeting selections based on mouse coordinates
       updateTargetSystem(
@@ -1226,7 +1208,10 @@ export class GameEngine {
             this.interactionResource.currentGatherInterval;
           const hit = updateStrikeRing(
             this.vfxResource.strikeRing,
-            { x: target.position.x + TILE / 2, y: target.position.y + TILE / 2 },
+            {
+              x: target.position.x + TILE / 2,
+              y: target.position.y + (solidKind === "tree" ? TILE * 0.82 : solidKind === "rock" ? TILE * 0.60 : TILE * 0.55),
+            },
             progress,
             solidKind,
             precisionTap,

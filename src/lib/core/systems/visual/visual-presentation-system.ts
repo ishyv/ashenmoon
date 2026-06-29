@@ -23,6 +23,7 @@ import { VISUAL_SOUND } from "./visual-sound-map.js";
 import { startLoop, stopLoop, playSound } from "$lib/audio/audio-engine.js";
 import { getAshenmoonPropTexture } from "$lib/core/assets/ashenmoon-assets.js";
 import { TILE } from "$lib/core/systems/map/map.js";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size.js";
 
 // Silence unused-import lints for class imports used only in interface positions.
 void (Sprite as unknown);
@@ -84,7 +85,12 @@ function applyResolvedToSprite(refs: CampfireVisualRefs, resolved: ResolvedVisua
   if (resolved.baseSprite) {
     const tex = getAshenmoonPropTexture(resolved.baseSprite);
     refs.sprite.textures = [tex];
-    refs.sprite.scale.set((TILE * 1.45) / tex.width);
+    const scale = resolveWorldVisualScale({
+      spec: { widthTiles: 1.45 },
+      texture: tex,
+      tilePx: TILE,
+    });
+    refs.sprite.scale.set(scale.x, scale.y);
     if (resolved.baseSprite === "firepitLit") {
       refs.sprite.gotoAndPlay(0);
     } else {
@@ -248,7 +254,12 @@ export function tickVisualPresentation(
         if (newResolved.baseSprite !== pres.resolved.baseSprite && newResolved.baseSprite) {
           const tex = getAshenmoonPropTexture(newResolved.baseSprite);
           refs.sprite.textures = [tex];
-          refs.sprite.scale.set((TILE * 1.45) / tex.width);
+          const scale = resolveWorldVisualScale({
+            spec: { widthTiles: 1.45 },
+            texture: tex,
+            tilePx: TILE,
+          });
+          refs.sprite.scale.set(scale.x, scale.y);
           if (newResolved.baseSprite === "firepitLit") {
             refs.sprite.gotoAndPlay(0);
           } else {

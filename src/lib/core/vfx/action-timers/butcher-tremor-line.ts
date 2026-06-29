@@ -1,11 +1,11 @@
 import { Graphics } from "pixi.js";
 import { Colors } from "$lib/utils/colors";
 
-const LINE_W = 56;
-const MARK_R = 4;
-const OSC_HZ = 2.5;
-const CLEAN_ZONE_MAX = 0.35;
-const CLEAN_ZONE_MIN = 0.12;
+const LINE_W = 72;           // wider line — more readable
+const MARK_R = 5;            // slightly bigger mark
+const OSC_HZ = 1.0;          // 1 full sweep/sec — half the original speed
+const CLEAN_ZONE_MAX = 0.45; // 45% of 72px = 32px, ~450 ms inside per sweep
+const CLEAN_ZONE_MIN = 0.28; // never narrows below 28% = 20px, ~280 ms inside per sweep
 
 /**
  * Draws a blade-tremor line on a carcass with an oscillating precision mark.
@@ -44,12 +44,15 @@ export function updateTremorLine(
   // Oscillating mark (diamond), slides left↔right
   const frac = (Math.sin(elapsedSec * OSC_HZ * Math.PI * 2) + 1) / 2;
   const markX = (frac - 0.5) * LINE_W;
+  const markInZone = Math.abs(markX) <= zoneHalf;
+  // Mark turns gold when inside the clean zone — instant read for the player
+  const markColor = markInZone ? Colors.actionTimer.tremorZone : Colors.actionTimer.tremorMark;
   g.moveTo(markX, -MARK_R)
     .lineTo(markX + MARK_R, 0)
     .lineTo(markX, MARK_R)
     .lineTo(markX - MARK_R, 0)
     .closePath()
-    .fill({ color: Colors.actionTimer.tremorMark, alpha: 0.9 });
+    .fill({ color: markColor, alpha: 0.9 });
 
-  return tapThisFrame && Math.abs(markX) <= zoneHalf;
+  return tapThisFrame && markInZone;
 }

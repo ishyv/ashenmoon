@@ -5,6 +5,7 @@ import {
   type ItemDefinition,
   type ItemId,
   type ItemPhysicalProperties,
+  type ItemVisualProperties,
 } from "./item-types";
 import type { ItemTrait } from "./item-traits";
 
@@ -18,6 +19,7 @@ interface ItemBaseInput {
   rarity: Rarity;
   category: Category;
   physical?: Partial<ItemPhysicalProperties>;
+  visual?: ItemVisualProperties;
   icon?: string;
 }
 
@@ -45,6 +47,7 @@ export function Item(base: ItemBaseInput): ItemDefinition & {
     category: base.category,
     physical,
     traits: [],
+    ...(base.visual !== undefined && { visual: base.visual }),
     ...(base.icon !== undefined && { icon: base.icon }),
   };
 

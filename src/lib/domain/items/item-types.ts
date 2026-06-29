@@ -1,4 +1,5 @@
 import type { ItemTrait } from "./item-traits";
+import type { WorldVisualSizeSpec } from "$lib/domain/visual/world-visual-size";
 
 /**
  * Rarity levels for items, influencing drop rates and visual presentation.
@@ -47,6 +48,13 @@ export interface ItemPhysicalProperties {
   stackLimit?: number;
 }
 
+export interface ItemVisualProperties {
+  /** World/ground sprite target size. Used for placed items and drops. */
+  ground?: WorldVisualSizeSpec;
+  /** Equipped attachment target size. Used by player loadout sprites. */
+  equipped?: WorldVisualSizeSpec;
+}
+
 /** Resolves an item's carry class, falling back to the default. */
 export function carryClassOf(def: Pick<ItemDefinition, "physical">): CarryClass {
   return def.physical.carryClass;
@@ -75,6 +83,7 @@ export interface ItemDefinition {
   rarity: Rarity;
   category: Category;
   physical: ItemPhysicalProperties;
+  visual?: ItemVisualProperties;
   traits: ItemTrait[];
   /** Emoji placeholder, shown when no iconUrl is set. Lets items read at a glance before art exists. */
   icon?: string;

@@ -27,6 +27,15 @@ export interface WeaponAttackRuntime {
   didHit: boolean;
   /** True for exactly the frame the attack first enters its active window. */
   justBecameActive: boolean;
+  /** Signed forward movement already applied by the attack movement curve. */
+  movementAppliedPx: number;
+}
+
+export interface WeaponComboRuntime {
+  weaponDefId: string;
+  lastAttackId: string;
+  expiresAtMs: number;
+  depth: number;
 }
 
 export function createInitialWeaponAttackRuntime(): WeaponAttackRuntime {
@@ -44,6 +53,16 @@ export function createInitialWeaponAttackRuntime(): WeaponAttackRuntime {
     hitEntityIds: new Set(),
     didHit: false,
     justBecameActive: false,
+    movementAppliedPx: 0,
+  };
+}
+
+export function createInitialWeaponComboRuntime(): WeaponComboRuntime {
+  return {
+    weaponDefId: "",
+    lastAttackId: "",
+    expiresAtMs: 0,
+    depth: 0,
   };
 }
 

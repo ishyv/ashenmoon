@@ -7,8 +7,10 @@ import { playSound } from "$lib/audio/audio-engine";
 import {
   flashEntity,
   spawnDamageNumber,
+  spawnSlashArc,
   triggerCameraShake,
 } from "$lib/core/vfx/vfx";
+import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { routeGameEventsToFeedback } from "./feedback-router";
 
 vi.mock("$lib/audio/audio-engine", () => ({
@@ -18,7 +20,12 @@ vi.mock("$lib/audio/audio-engine", () => ({
 vi.mock("$lib/core/vfx/vfx", () => ({
   flashEntity: vi.fn(),
   spawnDamageNumber: vi.fn(),
+  spawnSlashArc: vi.fn(),
   triggerCameraShake: vi.fn(),
+}));
+
+vi.mock("$lib/ui/player-feedback.svelte", () => ({
+  emitPlayerFeedback: vi.fn(),
 }));
 
 describe("FeedbackRouter", () => {
@@ -101,5 +108,63 @@ describe("FeedbackRouter", () => {
       position: { x: 10 + TILE / 2, y: 20 + TILE / 2 },
       conditions: { targetSpecies: "humanoid" },
     });
+  });
+
+  it("routes guard block and break events without block text spam", () => {
+    const world = new World<Entity>();
+    const entityLayer = {} as never;
+    const vfx = {} as never;
+
+    routeGameEventsToFeedback(
+      [
+        { type: "guard_blocked", actorId: "player", absorbedDamage: 18, staminaCost: 12 },
+        { type: "guard_broken", actorId: "player", staminaCost: 12 },
+      ],
+      { world, vfx, entityLayer },
+    );
+
+    expect(triggerCameraShake).toHaveBeenCalledWith(vfx, 1.6, 0.08);
+    expect(playSound).toHaveBeenCalledWith("combat.hit.player");
+    expect(emitPlayerFeedback).toHaveBeenCalledTimes(1);
+    expect(emitPlayerFeedback).toHaveBeenCalledWith("guard broken", "warning");
+  });
+
+  it("routes thrust attack starts as narrow weapon trails", () => {
+    const world = new World<Entity>();
+    const entityLayer = {} as never;
+    const vfx = {} as never;
+
+    routeGameEventsToFeedback(
+      [{
+        type: "attack_started",
+        attackerId: "player",
+        weaponDefId: "weapon.wooden_spear",
+        attackId: "spear.poke",
+        animationProfile: "straight_thrust",
+        soundProfile: "spear",
+        direction: { x: 1, y: 0 },
+        origin: { x: 10, y: 20 },
+        aimAngle: 0,
+        reachPx: 180,
+        arcDegrees: 26,
+        hitShapeKind: "capsule",
+        trail: "thrust",
+        windupMs: 100,
+        activeMs: 100,
+        recoveryMs: 100,
+      }],
+      { world, vfx, entityLayer },
+    );
+
+    expect(spawnSlashArc).toHaveBeenCalledWith(
+      vfx,
+      entityLayer,
+      10,
+      20,
+      0,
+      180,
+      expect.any(Number),
+      Colors.combat.slashArc,
+    );
   });
 });

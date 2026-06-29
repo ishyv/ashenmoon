@@ -13,10 +13,15 @@ export type PhysicalMaterial =
   | "fiber"
   | "bark";
 
-export type ImpactSource = "hand" | "knife" | "spear" | "axe" | "pickaxe" | "club" | "tool" | "unknown";
+export interface AudioSourceProfile {
+  id: string;
+  tags: readonly string[];
+  defaultIntensity?: number;
+}
 
 export interface ImpactSoundEvent {
-  source?: ImpactSource | string;
+  sourceProfileId?: string;
+  sourceTags?: readonly string[];
   targetMaterial: PhysicalMaterial;
   intensity?: number;
 }
@@ -33,10 +38,38 @@ export interface CraftSoundEvent {
 
 export interface CombatSoundEvent {
   phase: "swing" | "miss" | "hit" | "glance" | "death";
-  weaponCategory?: string;
+  sourceProfileId?: string;
+  sourceTags?: readonly string[];
   targetMaterial?: PhysicalMaterial;
   intensity?: number;
 }
+
+const SOURCE_PROFILES = new Map<string, AudioSourceProfile>();
+
+export function registerAudioSourceProfile(profile: AudioSourceProfile): void {
+  SOURCE_PROFILES.set(profile.id, profile);
+}
+
+export function getAudioSourceProfile(id: string): AudioSourceProfile | undefined {
+  return SOURCE_PROFILES.get(id);
+}
+
+function registerDefaultAudioSourceProfiles(): void {
+  for (const profile of [
+    { id: "hand", tags: ["unarmed"], defaultIntensity: 0.35 },
+    { id: "unarmed", tags: ["unarmed"], defaultIntensity: 0.35 },
+    { id: "knife", tags: ["sharp", "light"], defaultIntensity: 0.45 },
+    { id: "spear", tags: ["sharp", "wooden", "polearm"], defaultIntensity: 0.55 },
+    { id: "axe", tags: ["sharp", "heavy", "chop"], defaultIntensity: 0.8 },
+    { id: "pickaxe", tags: ["tool", "stone"], defaultIntensity: 0.7 },
+    { id: "club", tags: ["blunt", "wooden"], defaultIntensity: 0.65 },
+    { id: "tool", tags: ["tool"], defaultIntensity: 0.55 },
+  ] satisfies AudioSourceProfile[]) {
+    registerAudioSourceProfile(profile);
+  }
+}
+
+registerDefaultAudioSourceProfiles();
 
 const GATHER_BY_MATERIAL: Partial<Record<PhysicalMaterial, SoundId>> = {
   wood: "gather.branch.snap",
@@ -48,12 +81,22 @@ const GATHER_BY_MATERIAL: Partial<Record<PhysicalMaterial, SoundId>> = {
   bark: "gather.bark.peel",
 };
 
+function sourceTags(event: Pick<ImpactSoundEvent, "sourceProfileId" | "sourceTags">): Set<string> {
+  const profileTags = event.sourceProfileId ? getAudioSourceProfile(event.sourceProfileId)?.tags ?? [] : [];
+  return new Set([...profileTags, ...(event.sourceTags ?? [])]);
+}
+
+function eventIntensity(event: Pick<ImpactSoundEvent, "sourceProfileId" | "intensity">): number {
+  return event.intensity ?? (event.sourceProfileId ? getAudioSourceProfile(event.sourceProfileId)?.defaultIntensity : undefined) ?? 0.5;
+}
+
 export function resolveImpactSound(event: ImpactSoundEvent): SoundId {
-  const heavy = (event.intensity ?? 0.5) >= 0.75;
+  const tags = sourceTags(event);
+  const heavy = eventIntensity(event) >= 0.75 || tags.has("heavy") || tags.has("chop");
   switch (event.targetMaterial) {
     case "wood":
     case "bark":
-      return heavy || event.source === "axe" ? "impact.wood.heavy" : "impact.wood.light";
+      return heavy ? "impact.wood.heavy" : "impact.wood.light";
     case "stone":
       return "impact.stone";
     case "flesh":
@@ -99,14 +142,16 @@ export function resolveCombatSound(event: CombatSoundEvent): SoundId {
   if (event.phase === "death") return "enemy.death";
 
   if (event.phase === "swing") {
-    return event.weaponCategory === "axe" || (event.intensity ?? 0) >= 0.75
+    const tags = sourceTags(event);
+    return tags.has("heavy") || tags.has("chop") || eventIntensity(event) >= 0.75
       ? "player.swing.heavy"
       : "player.swing.light";
   }
 
   return resolveImpactSound({
     targetMaterial: event.targetMaterial ?? "flesh",
-    ...(event.weaponCategory ? { source: event.weaponCategory } : {}),
+    ...(event.sourceProfileId ? { sourceProfileId: event.sourceProfileId } : {}),
+    ...(event.sourceTags ? { sourceTags: event.sourceTags } : {}),
     ...(event.intensity !== undefined ? { intensity: event.intensity } : {}),
   });
 }

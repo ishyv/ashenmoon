@@ -26,9 +26,11 @@
     [2, 0], [3, 0], [4, 0], [2, 1], [3, 1], [-2, 0], [-3, 0], [0, 2], [0, -2],
   ];
 
-  // The player has a single weapon slot, so testing axe-gated vs pickaxe-gated
-  // gatherables means swapping the equipped tool here.
+  // The player has a single weapon slot, so combat and gatherable checks both
+  // ride this quick swap surface in scenario mode.
   const TOOLS: { label: string; itemId: string | null }[] = [
+    { label: "knife", itemId: "crude_knife" },
+    { label: "spear", itemId: "wooden_spear" },
     { label: "🪓 axe", itemId: "stone_axe" },
     { label: "⛏️ pickaxe", itemId: "stone_pickaxe" },
     { label: "✋ bare", itemId: null },

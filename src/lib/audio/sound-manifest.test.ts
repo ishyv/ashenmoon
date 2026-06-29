@@ -9,6 +9,7 @@ import {
   resolveCraftSound,
   resolveGatherSound,
   resolveImpactSound,
+  registerAudioSourceProfile,
 } from "./audio-feedback";
 
 describe("sound manifest", () => {
@@ -81,8 +82,8 @@ describe("sound manifest", () => {
   });
 
   it("maps physical audio events to material-specific sounds", () => {
-    expect(resolveImpactSound({ source: "axe", targetMaterial: "wood", intensity: 0.8 })).toBe("impact.wood.heavy");
-    expect(resolveImpactSound({ source: "pickaxe", targetMaterial: "stone" })).toBe("impact.stone");
+    expect(resolveImpactSound({ sourceProfileId: "axe", targetMaterial: "wood", intensity: 0.8 })).toBe("impact.wood.heavy");
+    expect(resolveImpactSound({ sourceProfileId: "pickaxe", targetMaterial: "stone" })).toBe("impact.stone");
     expect(resolveGatherSound({ material: "clay" })).toBe("gather.clay.pull");
     expect(resolveGatherSound({ legacyGatherSound: "chop" })).toBe("gather.chop");
     expect(resolveCraftSound({ outcome: "discovered" })).toBe("recipe.discovered");
@@ -90,6 +91,17 @@ describe("sound manifest", () => {
     expect(resolveCraftSound({ outcome: "success", feedbackTags: ["binding"] })).toBe("craft.bind");
     expect(resolveCombatSound({ phase: "miss" })).toBe("combat.miss.air");
     expect(resolveCombatSound({ phase: "hit", targetMaterial: "hide" })).toBe("impact.hide");
+  });
+
+  it("resolves combat sounds from registered source profiles instead of weapon-name unions", () => {
+    registerAudioSourceProfile({
+      id: "chain_whip",
+      tags: ["sharp", "heavy"],
+      defaultIntensity: 0.8,
+    });
+
+    expect(resolveCombatSound({ phase: "swing", sourceProfileId: "chain_whip" })).toBe("player.swing.heavy");
+    expect(resolveImpactSound({ sourceProfileId: "chain_whip", targetMaterial: "wood" })).toBe("impact.wood.heavy");
   });
 
   it("calculates effective engine volume with master, bus, request, distance, and clamping", () => {

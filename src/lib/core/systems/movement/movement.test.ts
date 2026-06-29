@@ -80,4 +80,51 @@ describe("playerMovementSystem Fell Sweep slow", () => {
 
     expect(chargedDistance).toBeCloseTo(normalDistance * 0.45);
   });
+
+  it("slows movement while weapon guard is active", () => {
+    const normalDistance = runMove(new CombatResource());
+    clearWorld();
+    const combat = new CombatResource();
+    combat.guard.active = true;
+    combat.guard.moveSpeedMultiplier = 0.5;
+
+    const guardedDistance = runMove(combat);
+
+    expect(guardedDistance).toBeCloseTo(normalDistance * 0.5);
+  });
+
+  it("slows movement during a committed weapon attack", () => {
+    const normalDistance = runMove(new CombatResource());
+    clearWorld();
+    const combat = new CombatResource();
+    combat.weaponAttack.active = true;
+    combat.weaponAttack.plan = {
+      weaponDefId: "test",
+      attack: {
+        id: "test.attack",
+        name: "test attack",
+        inputKind: "tap",
+        damageType: "slash",
+        damageMultiplier: 1,
+        staminaCostMultiplier: 1,
+        windupMs: 100,
+        activeMs: 100,
+        recoveryMs: 100,
+        hitShape: { kind: "arc", radiusPx: 64, arcDegrees: 70 },
+        movement: { moveSpeedMultiplier: 0.25 },
+      },
+      direction: { x: 1, y: 0 },
+      weaponDamage: 10,
+      staminaCost: 5,
+      windupMs: 100,
+      activeMs: 100,
+      recoveryMs: 100,
+      hitShape: { kind: "arc", radiusPx: 64, arcDegrees: 70 },
+      reachPx: 64,
+    };
+
+    const attackDistance = runMove(combat);
+
+    expect(attackDistance).toBeCloseTo(normalDistance * 0.25);
+  });
 });

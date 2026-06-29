@@ -35,6 +35,7 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.4, stackLimit: 12 },
+    visual: { ground: { heightTiles: 0.42 } },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(4), RestoreHunger(15), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 45))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) }),
@@ -47,6 +48,7 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.25, stackLimit: 16 },
+    visual: { ground: { heightTiles: 0.3 } },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(3), RestoreHunger(10), ChanceOfVitals(0.3, AddStatus(StatusId.Sickness, 35))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) }),
@@ -59,6 +61,7 @@ export const foodWaterItems = {
     rarity: Rarity.Common,
     category: Category.Herb,
     physical: { carryClass: "pack", weight: 0.65, stackLimit: 8 },
+    visual: { ground: { heightTiles: 0.52 } },
   }).with(
     Consumable({ verb: "eat", onConsume: [RestoreHp(5), RestoreHunger(25), ChanceOfVitals(0.35, AddStatus(StatusId.Sickness, 50))] }),
     Decayable({ lifespanSec: 180, effect: TransformInto(itemId("spoiled_meat")) }),

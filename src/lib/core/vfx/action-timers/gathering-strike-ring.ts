@@ -3,7 +3,8 @@ import { Colors } from "$lib/utils/colors";
 
 const OUTER_R = 38;
 const INNER_R = 14;
-const SWEET_SPOT = 0.88;
+// Sweet-spot starts at 55% of the cycle — gives a ~270 ms window at 0.6 s interval
+const SWEET_SPOT = 0.55;
 
 export function ringColorForSolidKind(solidKind: string): number {
   if (solidKind === "tree") return Colors.actionTimer.strikeRingWood;
@@ -35,18 +36,23 @@ export function updateStrikeRing(
 
   const color = ringColorForSolidKind(solidKind);
 
-  // Ghost track at the target hit radius
-  g.circle(0, 0, INNER_R).stroke({ color, width: 1.5, alpha: 0.18 });
+  // Ghost track at the target hit radius — more visible so player knows the destination
+  g.circle(0, 0, INNER_R).stroke({ color, width: 1.5, alpha: 0.30 });
 
   // Contracting ring: lerps from OUTER_R to INNER_R as progress → 1
   const r = OUTER_R - (OUTER_R - INNER_R) * progress;
-  g.circle(0, 0, r).stroke({ color, width: 2, alpha: 0.85 });
+  const inZone = progress >= SWEET_SPOT;
 
-  // Sweet-spot flare: brief outer pulse when ring reaches INNER_R
-  if (progress >= SWEET_SPOT) {
-    const t = (progress - SWEET_SPOT) / (1 - SWEET_SPOT);
-    g.circle(0, 0, INNER_R + t * 9).stroke({ color, width: 3, alpha: (1 - t) * 0.65 });
+  if (!inZone) {
+    g.circle(0, 0, r).stroke({ color, width: 2, alpha: 0.85 });
+  } else {
+    // Sweet-spot zone: ring brightens and stays bright
+    const t = (progress - SWEET_SPOT) / (1 - SWEET_SPOT); // 0→1 through the zone
+    g.circle(0, 0, r).stroke({ color, width: 3.5, alpha: 0.95 });
+    // Expanding pulse signals the open window
+    const pulseR = INNER_R + (1 - t) * 14;
+    g.circle(0, 0, pulseR).stroke({ color, width: 2, alpha: (1 - t) * 0.5 });
   }
 
-  return tapThisFrame && progress >= SWEET_SPOT;
+  return tapThisFrame && inZone;
 }

@@ -29,6 +29,7 @@ import {
   getAshenmoonStructureTexture,
   getAshenmoonPropTexture,
 } from "$lib/core/assets/ashenmoon-assets";
+import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
 import { generateCampfireGlowTexture } from "$lib/core/assets/assets";
 import {
   type VisualPresentationResource,
@@ -126,7 +127,12 @@ function setupCampfireInShell(
   const tex = getAshenmoonPropTexture("firepitCold"); // bridge sets correct texture on first step
   const fireSprite = new AnimatedSprite([tex]);
   fireSprite.anchor.set(0.5, 0.72);
-  fireSprite.scale.set((TILE * 1.45) / tex.width);
+  const fireScale = resolveWorldVisualScale({
+    spec: { widthTiles: 1.45 },
+    texture: tex,
+    tilePx: TILE,
+  });
+  fireSprite.scale.set(fireScale.x, fireScale.y);
   fireSprite.stop();
   shellContainer.addChild(fireSprite);
   return { sprite: fireSprite, glow };
@@ -310,8 +316,12 @@ export function drawBuildingVisuals(
     sprite.anchor.set(0.5, 1);
     sprite.x = 0;
     sprite.y = 0;
-    sprite.width = spec.sprite.w * TILE;
-    sprite.height = spec.sprite.h * TILE;
+    const scale = resolveWorldVisualScale({
+      spec: { widthTiles: spec.sprite.w, heightTiles: spec.sprite.h },
+      texture: tex,
+      tilePx: TILE,
+    });
+    sprite.scale.set(scale.x, scale.y);
 
     shellContainer.addChild(sprite);
   }
