@@ -320,6 +320,13 @@ export const ASHENMOON_PLAYER_ANIMATION_PATHS = {
     `${BASE}/actors/player/player-gather-scavenge-1.svg`,
     `${BASE}/actors/player/player-gather-scavenge-2.svg`,
   ],
+  combat_stance_spear: [
+    `${BASE}/actors/player/player-combat-spear-idle.svg`,
+  ],
+  combat_attack_spear: [
+    `${BASE}/actors/player/player-combat-spear-thrust-1.svg`,
+    `${BASE}/actors/player/player-combat-spear-thrust-2.svg`,
+  ],
 } as const satisfies Partial<Record<PlayerAnimationClipId, readonly string[]>>;
 
 export const ASHENMOON_PROP_PATHS = {

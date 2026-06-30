@@ -1,50 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
   <g id="grounded-shadow">
-    <ellipse cx="80" cy="207" rx="27" ry="7" fill="#080706" opacity="0.55"/>
+    <ellipse cx="80" cy="207" rx="30" ry="7" fill="#080706" opacity="0.55"/>
   </g>
 
   <g id="human-survivor" stroke="#080706" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Head leaning left (shifted -8px) at peak -->
+    <!-- Head leaning back slightly (shifted -8px) -->
     <path d="M72 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
     <path d="M56 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
     <path d="M59 57c7 8 20 9 28 1" fill="none" stroke="#34251a" stroke-width="3" opacity="0.7"/>
     <path d="M64 50h3m14 0h3" fill="none" stroke="#080706" stroke-width="4"/>
 
-    <!-- Neck and shoulders leaning left -->
+    <!-- Neck and shoulders leaning back -->
     <path d="M64 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
     <path d="M41 91c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
 
-    <!-- Torso -->
-    <path d="M50 90c7-8 37-8 44 0l16 53c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
+    <!-- Leaning back torso -->
+    <path d="M50 90c7-8 37-8 44 0l12 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
     <path d="M57 94c6-5 25-5 31 0l7 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
-    <path d="M72 88l10 57" fill="none" stroke="#080706" stroke-width="4" opacity="0.9"/>
+    <path d="M72 88l8 57" fill="none" stroke="#080706" stroke-width="4" opacity="0.9"/>
     <path d="M52 122c13 5 30 6 44 0" fill="none" stroke="#8a6a45" stroke-width="6"/>
     <path d="M55 120c11 4 25 5 38 1" fill="none" stroke="#d9c28e" stroke-width="2" opacity="0.45"/>
 
-    <!-- Left arm slightly extended for balance -->
-    <path d="M46 96c-12 10-18 22-16 38" fill="none" stroke="#34251a" stroke-width="13"/>
-    <path d="M30 134c-3 8-7 14-12 15" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- Both hands pulled back close to chest/hips -->
+    <path d="M46 96c4 10 10 16 14 26" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M60 122c1 8 0 14-2 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
 
-    <!-- Right arm clutching wound -->
-    <path d="M98 96c3 10 2 22-1 36" fill="none" stroke="#34251a" stroke-width="13"/>
-    <path d="M97 132c-1 8-2 14-2 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <path d="M98 96c4 8 6 18 2 28" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M100 124c-2 8-5 12-7 14" fill="none" stroke="#8a6a45" stroke-width="8"/>
 
-    <!-- Belt and holster stub -->
+    <!-- Belt and tool/holster stub -->
     <path d="M55 145c15 6 34 7 50 0" fill="none" stroke="#080706" stroke-width="6"/>
     <path d="M101 147l15 13" fill="none" stroke="#34322d" stroke-width="5"/>
     <path d="M116 160l8 7" fill="none" stroke="#d9c28e" stroke-width="4"/>
 
-    <!-- Hips and legs (good left leg standing, right crossing and bent) -->
+    <!-- Hips and braced legs -->
     <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
-    <path d="M66 154l0 45" fill="none" stroke="#16110d" stroke-width="14"/>
-    <path d="M94 154q-6 20-10 38" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M66 154l-14 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M94 154l10 43" fill="none" stroke="#16110d" stroke-width="14"/>
     
-    <!-- Left foot flat standing, right foot slightly raised/crossing -->
-    <path d="M55 199h22" stroke="#080706" stroke-width="8"/>
-    <path d="M76 192l14 -2" stroke="#080706" stroke-width="8"/>
-
-    <!-- Blood stain on right thigh -->
-    <ellipse cx="98" cy="171" rx="5" ry="8" fill="#3a1010" opacity="0.65"/>
+    <!-- Flat feet -->
+    <path d="M47 199h22" stroke="#080706" stroke-width="8"/>
+    <path d="M94 199h23" stroke="#080706" stroke-width="8"/>
 
     <!-- Highlights -->
     <path d="M57 99c-3 14-3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.6"/>

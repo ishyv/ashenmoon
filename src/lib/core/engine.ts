@@ -178,6 +178,8 @@ import {
   isValidItemPlacementGrid,
 } from "$lib/core/systems/item-placement/item-placement-system";
 import { StatusId } from "$lib/domain/systems/status-types";
+import { getPlayerJointAnchors } from "$lib/core/systems/player-animation/player-joint-anchors";
+import { ASHENMOON_PLAYER_ANIMATION_PATHS } from "$lib/core/assets/ashenmoon-assets";
 import { loadKnowledge } from "$lib/state/rpg/knowledge.svelte";
 import { loadRecipes } from "$lib/state/rpg/crafting.svelte";
 import { flushRpgFeedbackEvents } from "$lib/state/rpg/rpg-feedback-router";
@@ -1703,9 +1705,12 @@ export class GameEngine {
     const equippedItemId = getEquippedWeaponId();
     const equippedDef = equippedItemId ? ITEM_DEFINITIONS[equippedItemId] : undefined;
     const toolKind = equippedItemId ? toolKindOf(equippedItemId) : null;
+    const weaponTrait = equippedDef ? traitOf(equippedDef, "weapon") : undefined;
     const equippedToolKind =
       toolKind ??
-      (equippedItemId?.includes("knife") ? "knife" : equippedDef?.category === Category.Container ? "container" : null);
+      (equippedItemId?.includes("knife") ? "knife" :
+       weaponTrait?.weaponKind === "spear" ? "spear" :
+       equippedDef?.category === Category.Container ? "container" : null);
     const combatActive = this.combatResource.weaponAttack.active || (this.attackAnimLockTimer > 0 && this.playerAnimState === "attack");
     const gathering = this.playerAnimationResource.gathering;
     const action = combatActive
@@ -1744,9 +1749,27 @@ export class GameEngine {
     const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
     const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
     const weaponDef = currentWeaponId ? ITEM_DEFINITIONS[currentWeaponId] : undefined;
+    const weaponTrait = weaponDef ? traitOf(weaponDef, "weapon") : undefined;
     const weaponVisual = weaponDef ? traitOf(weaponDef, "equippable_visuals") : undefined;
 
+    let targetClip: string = state;
+    if (weaponTrait?.weaponKind === "spear") {
+      if (state === "attack") {
+        targetClip = "combat_attack_spear";
+      } else if (state === "idle") {
+        targetClip = "combat_stance_spear";
+      }
+    }
+
     let lockDuration = state === "gather_tired" ? 0.65 : (state === "gather" ? 0.35 : 0.28);
+    if (state === "attack") {
+      const activeAttack = this.combatResource.weaponAttack;
+      if (activeAttack.active && activeAttack.plan) {
+        const totalMs = activeAttack.plan.windupMs + activeAttack.plan.activeMs + activeAttack.plan.recoveryMs;
+        lockDuration = totalMs / 1000;
+      }
+    }
+
     const animOverride = weaponVisual?.animationOverrides?.[state as "attack" | "gather" | "gather_tired"];
     if (animOverride?.lockDuration !== undefined) {
       lockDuration = animOverride.lockDuration;
@@ -1767,12 +1790,16 @@ export class GameEngine {
     this.playerAnimState = state;
     this.lastEquippedWeapon = currentWeaponId;
 
-    const frames = this.renderResources.actorFrames("player", state) as Texture[];
+    const frames = this.renderResources.actorFrames("player", targetClip as any) as Texture[];
     this.playerSprite.textures = frames;
 
     if (state === "attack" || state === "gather" || state === "gather_tired") {
       this.playerSprite.loop = false;
-      this.playerSprite.animationSpeed = state === "gather_tired" ? 0.08 : 0.18;
+      if (state === "attack") {
+        this.playerSprite.animationSpeed = (frames.length / lockDuration) / 60;
+      } else {
+        this.playerSprite.animationSpeed = state === "gather_tired" ? 0.08 : 0.18;
+      }
       this.playerSprite.onComplete = () => {
         if (this.playerAnimState === "attack" || this.playerAnimState === "gather" || this.playerAnimState === "gather_tired") {
           this.setPlayerAnim("idle");
@@ -1906,9 +1933,77 @@ export class GameEngine {
       rotation = breath * 0.008;
     }
 
+    // --- Procedural Joint Anchor Positioning ---
+    const clipId = this.playerAnimationResource.currentClipId;
+    const paths = (ASHENMOON_PLAYER_ANIMATION_PATHS as Record<string, readonly string[] | undefined>)[clipId];
+    const activePath = paths ? paths[this.playerSprite.currentFrame % paths.length] : undefined;
+    const anchors = getPlayerJointAnchors(activePath);
+
+    const helmetSprite = this.attachmentSprites.get("helmet");
+    if (helmetSprite) {
+      const helmetDef = gameState.rpg.profile?.loadout?.helmet ? ITEM_DEFINITIONS[typeof gameState.rpg.profile.loadout.helmet === "string" ? gameState.rpg.profile.loadout.helmet : gameState.rpg.profile.loadout.helmet.itemId] : undefined;
+      const helmetVisual = helmetDef ? traitOf(helmetDef, "equippable_visuals") : undefined;
+      const helmetCustomX = helmetVisual?.visualAsset?.offsetX ?? 0;
+      const helmetCustomY = helmetVisual?.visualAsset?.offsetY ?? 0;
+      helmetSprite.x = anchors.head.x - 80 + helmetCustomX;
+      helmetSprite.y = anchors.head.y - 220 + helmetCustomY;
+    }
+
+    const chestSprite = this.attachmentSprites.get("chest");
+    if (chestSprite) {
+      const chestDef = gameState.rpg.profile?.loadout?.chest ? ITEM_DEFINITIONS[typeof gameState.rpg.profile.loadout.chest === "string" ? gameState.rpg.profile.loadout.chest : gameState.rpg.profile.loadout.chest.itemId] : undefined;
+      const chestVisual = chestDef ? traitOf(chestDef, "equippable_visuals") : undefined;
+      const chestCustomX = chestVisual?.visualAsset?.offsetX ?? 0;
+      const chestCustomY = chestVisual?.visualAsset?.offsetY ?? 0;
+      const shiftX = (anchors.head.x - 80) * 0.7;
+      const shiftY = anchors.head.y - 48;
+      chestSprite.x = chestCustomX + shiftX;
+      chestSprite.y = -90 + chestCustomY + shiftY;
+    }
+
+    const pantsSprite = this.attachmentSprites.get("pants");
+    if (pantsSprite) {
+      const pantsDef = gameState.rpg.profile?.loadout?.pants ? ITEM_DEFINITIONS[typeof gameState.rpg.profile.loadout.pants === "string" ? gameState.rpg.profile.loadout.pants : gameState.rpg.profile.loadout.pants.itemId] : undefined;
+      const pantsVisual = pantsDef ? traitOf(pantsDef, "equippable_visuals") : undefined;
+      const pantsCustomX = pantsVisual?.visualAsset?.offsetX ?? 0;
+      const pantsCustomY = pantsVisual?.visualAsset?.offsetY ?? 0;
+      const shiftX = (anchors.head.x - 80) * 0.25;
+      const shiftY = anchors.head.y - 48;
+      pantsSprite.x = pantsCustomX + shiftX;
+      pantsSprite.y = -45 + pantsCustomY + shiftY;
+    }
+
+    const bootsSprite = this.attachmentSprites.get("boots");
+    if (bootsSprite) {
+      const bootsDef = gameState.rpg.profile?.loadout?.boots ? ITEM_DEFINITIONS[typeof gameState.rpg.profile.loadout.boots === "string" ? gameState.rpg.profile.loadout.boots : gameState.rpg.profile.loadout.boots.itemId] : undefined;
+      const bootsVisual = bootsDef ? traitOf(bootsDef, "equippable_visuals") : undefined;
+      const bootsCustomX = bootsVisual?.visualAsset?.offsetX ?? 0;
+      const bootsCustomY = bootsVisual?.visualAsset?.offsetY ?? 0;
+      const shiftX = (anchors.head.x - 80) * 0.1;
+      const shiftY = anchors.head.y - 48;
+      bootsSprite.x = bootsCustomX + shiftX;
+      bootsSprite.y = -10 + bootsCustomY + shiftY;
+    }
+
+    const shieldSprite = this.attachmentSprites.get("shield");
+    if (shieldSprite) {
+      const shieldDef = gameState.rpg.profile?.loadout?.shield ? ITEM_DEFINITIONS[typeof gameState.rpg.profile.loadout.shield === "string" ? gameState.rpg.profile.loadout.shield : gameState.rpg.profile.loadout.shield.itemId] : undefined;
+      const shieldVisual = shieldDef ? traitOf(shieldDef, "equippable_visuals") : undefined;
+      const shieldCustomX = shieldVisual?.visualAsset?.offsetX ?? 0;
+      const shieldCustomY = shieldVisual?.visualAsset?.offsetY ?? 0;
+      shieldSprite.x = anchors.handLeft.x - 80 + shieldCustomX;
+      shieldSprite.y = anchors.handLeft.y - 220 + shieldCustomY;
+    }
+
     // --- Weapon rotation & lunge override animation ---
     const weaponSprite = this.attachmentSprites.get("weapon");
     if (weaponSprite) {
+      const weaponCustomX = visual?.visualAsset?.offsetX ?? 0;
+      const weaponCustomY = visual?.visualAsset?.offsetY ?? 0;
+      const weaponBaseX = anchors.handRight.x - 80 + weaponCustomX;
+      const weaponBaseY = anchors.handRight.y - 220 + weaponCustomY;
+      const weaponBaseRotation = visual?.visualAsset?.rotation ?? 0.2;
+
       if (this.playerAnimState === "attack" || this.playerAnimState === "gather" || this.playerAnimState === "gather_tired") {
         const override = visual?.animationOverrides?.[this.playerAnimState as "attack" | "gather" | "gather_tired"];
         const lockDuration = override?.lockDuration ?? (this.playerAnimState === "gather_tired" ? 0.65 : (this.playerAnimState === "gather" ? 0.35 : 0.28));
@@ -1922,14 +2017,14 @@ export class GameEngine {
         weaponSprite.rotation = startArc + swing * (endArc - startArc);
         xOffset *= lunge;
       } else {
-        weaponSprite.rotation = visual?.visualAsset?.rotation ?? 0.2; // resting angle
+        weaponSprite.rotation = weaponBaseRotation; // resting angle
       }
       applyPlayerWeaponPresentation({
         combat: this.combatResource,
         playerSprite: this.playerSprite,
         weaponSprite,
         facing: facing > 0 ? 1 : -1,
-        basePose: this.attachmentBasePoses.get("weapon") ?? { x: weaponSprite.x, y: weaponSprite.y, rotation: visual?.visualAsset?.rotation ?? 0.2 },
+        basePose: { x: weaponBaseX, y: weaponBaseY, rotation: weaponBaseRotation },
       });
     } else {
       applyPlayerWeaponPresentation({

@@ -1,39 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
-  <!-- Scavenge frame 2: INSPECT — still low/crouched, one arm holding item up, head tilted examining it -->
-  <ellipse cx="80" cy="212" rx="33" ry="8" fill="#080706" opacity="0.60"/>
-  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 10) scale(1 0.90) rotate(-3 80 110)">
-    <!-- Head — tilted, slightly raised to examine item -->
-    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
-    <!-- Hair -->
-    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
-    <!-- Eyes -->
-    <path d="M72 50h3m14 0h3" stroke-width="4"/>
-    <!-- Neck -->
-    <path d="M72 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
-    <!-- Shoulder arch -->
-    <path d="M49 91c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
-    <!-- Torso -->
-    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
-    <!-- Vest -->
-    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
-    <!-- Center seam -->
-    <path d="M80 88v57" fill="none" stroke-width="4"/>
-    <!-- Right arm raises item up for inspection -->
-    <path d="M106 96c8 4 12 6 12 10" fill="none" stroke="#34251a" stroke-width="13"/>
-    <path d="M118 106c4 2 6 4 4 10" fill="none" stroke="#8a6a45" stroke-width="8"/>
-    <!-- Item being inspected -->
-    <circle cx="122" cy="100" r="9" fill="#3a2010" stroke="#7b6040" stroke-width="3"/>
-    <!-- Left arm resting on knee still crouched -->
-    <path d="M54 96c-8 12-12 26-10 42" fill="none" stroke="#34251a" stroke-width="13"/>
-    <path d="M44 138c-2 8-2 16 0 22" fill="none" stroke="#8a6a45" stroke-width="8"/>
-    <!-- Belt -->
-    <path d="M55 145c15 6 34 7 50 0" fill="none" stroke-width="6"/>
-    <!-- Hips -->
-    <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
-    <!-- Legs still crouched, slightly less wide than frame 1 -->
-    <path d="M66 154l-14 30" fill="none" stroke="#16110d" stroke-width="14"/>
-    <path d="M94 154l14 30" fill="none" stroke="#16110d" stroke-width="14"/>
-    <path d="M45 184h24" stroke-width="8"/>
-    <path d="M94 184h24" stroke-width="8"/>
+  <g id="grounded-shadow">
+    <ellipse cx="80" cy="207" rx="33" ry="7" fill="#080706" opacity="0.60"/>
+  </g>
+
+  <g id="human-survivor" stroke="#080706" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Head crouched down, looking slightly right at item (Y=+15) -->
+    <path d="M80 40c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
+    <path d="M64 62c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <path d="M67 72c7 8 20 9 28 1" fill="none" stroke="#34251a" stroke-width="3" opacity="0.7"/>
+    <path d="M72 65h3m14 0h3" fill="none" stroke="#080706" stroke-width="4"/>
+
+    <!-- Neck and shoulders crouched down -->
+    <path d="M72 86v12h16V86" fill="#8a6a45" stroke-width="5"/>
+    <path d="M49 106c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
+
+    <!-- Torso outer jacket and vest -->
+    <path d="M58 105c7-8 37-8 44 0l6 43c-8 8-49 8-60 0z" fill="#34251a" stroke-width="7"/>
+    <path d="M65 109c6-5 25-5 31 0l2 35c-7 4-30 4-38 0z" fill="#263326" stroke-width="4"/>
+    <path d="M80 103v45" fill="none" stroke="#080706" stroke-width="4" opacity="0.9"/>
+    <path d="M60 133c13 3 30 4 44 0" fill="none" stroke="#8a6a45" stroke-width="6"/>
+    <path d="M63 131c11 3 25 4 38 1" fill="none" stroke="#d9c28e" stroke-width="2" opacity="0.45"/>
+
+    <!-- Right arm raised holding item to eye level -->
+    <path d="M106 111c8 4 12 6 12 10" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M118 121c4 2 6 4 4 10" fill="none" stroke="#8a6a45" stroke-width="8"/>
+    <!-- Small dark bone/root item -->
+    <circle cx="122" cy="115" r="7" fill="#3a2010" stroke="#080706" stroke-width="2"/>
+
+    <!-- Left arm resting on knee -->
+    <path d="M54 111c-8 12-12 26-10 42" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M44 153c-2 8-2 16 0 22" fill="none" stroke="#8a6a45" stroke-width="8"/>
+
+    <!-- Belt and tool/holster stub -->
+    <path d="M55 156c15 4 34 5 50 0" fill="none" stroke="#080706" stroke-width="6"/>
+    <path d="M101 158l15 13" fill="none" stroke="#34322d" stroke-width="5"/>
+    <path d="M116 171l8 7" fill="none" stroke="#d9c28e" stroke-width="4"/>
+
+    <!-- Hips and crouched legs -->
+    <path d="M59 162c10 5 31 6 42 0" fill="#1b1712" stroke-width="6"/>
+    <path d="M66 165l-14 30" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M94 165l14 30" fill="none" stroke="#16110d" stroke-width="14"/>
+    
+    <!-- Flat feet on ground -->
+    <path d="M45 199h24" stroke="#080706" stroke-width="8"/>
+    <path d="M94 199h24" stroke="#080706" stroke-width="8"/>
+
+    <!-- Highlights -->
+    <path d="M65 114c-3 10-3 22 0 32" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.6"/>
+    <path d="M96 114c3 10 3 22 0 32" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.5"/>
+    <path d="M70 190c7 3 16 3 23 0" fill="none" stroke="#d9c28e" stroke-width="3" opacity="0.35"/>
   </g>
 </svg>

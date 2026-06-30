@@ -22,7 +22,9 @@ export type PlayerAnimationClipId =
   | "gather_ore_pick"
   | "gather_clay_hands"
   | "gather_water_container"
-  | "combat_active";
+  | "combat_active"
+  | "combat_stance_spear"
+  | "combat_attack_spear";
 
 export type PlayerAnimationCategory = "movement" | "gathering" | "combat";
 
@@ -56,7 +58,7 @@ export interface PlayerAnimationContext {
   readonly encumbranceRatio: number;
   readonly wetness: WetnessLevel;
   readonly statuses: readonly StatusId[];
-  readonly equippedToolKind: ToolKind | "knife" | "container" | null;
+  readonly equippedToolKind: ToolKind | "knife" | "container" | "spear" | null;
   readonly gatherTargetKind: GatherAnimationTargetKind | null;
   readonly combatActive: boolean;
   readonly guardActive: boolean;
@@ -120,9 +122,13 @@ export const PLAYER_ANIMATION_CLIPS: readonly AnimationDefinition[] = [
   { id: "gather_clay_hands", category: "gathering", baseSpeed: 0.85, loop: false, priority: 82, events: [{ atNormalizedTime: 0.52, kind: "gather_pull" }] },
   { id: "gather_water_container", category: "gathering", baseSpeed: 0.78, loop: false, priority: 82, events: [{ atNormalizedTime: 0.54, kind: "gather_pull" }] },
   { id: "combat_active", category: "combat", baseSpeed: 1, loop: false, priority: 100 },
+  { id: "combat_stance_spear", category: "combat", baseSpeed: 0.65, loop: true, priority: 100 },
+  { id: "combat_attack_spear", category: "combat", baseSpeed: 1, loop: false, priority: 110, events: [{ atNormalizedTime: 0.35, kind: "swing_release" }] },
 ] as const;
 
 export const PLAYER_ANIMATION_VARIANTS: readonly AnimationVariantRule[] = [
+  { clipId: "combat_attack_spear", priority: 110, when: { combatActive: true, equippedToolKind: "spear", action: "combat" } },
+  { clipId: "combat_stance_spear", priority: 105, when: { combatActive: true, equippedToolKind: "spear" } },
   { clipId: "combat_active", priority: 100, when: { combatActive: true } },
   { clipId: "gather_tree_axe", priority: 88, when: { action: "gathering", gatherTargetKind: "tree", equippedToolKind: "axe" } },
   { clipId: "gather_ore_pick", priority: 88, when: { action: "gathering", gatherTargetKind: "ore", equippedToolKind: "pickaxe" } },

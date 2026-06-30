@@ -1,42 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
-  <!-- Exhausted frame 2: same hunch, weight shifted slightly, minimal stride difference -->
-  <ellipse cx="80" cy="210" rx="30" ry="7" fill="#080706" opacity="0.60"/>
-  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 4) rotate(-3 80 105)">
-    <!-- Head -->
-    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#7f6040" stroke-width="7"/>
-    <!-- Hair -->
-    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
-    <!-- Eyes -->
-    <path d="M72 50h3m14 0h3" stroke-width="4"/>
-    <!-- Neck -->
-    <path d="M72 71v12h16V71" fill="#7f6040" stroke-width="5"/>
-    <!-- Shoulder arch -->
-    <path d="M50 92c8-11 20-17 30-17s22 6 30 17" fill="#233025" stroke-width="8"/>
+  <g id="grounded-shadow">
+    <ellipse cx="80" cy="207" rx="27" ry="7" fill="#080706" opacity="0.60"/>
+  </g>
+
+  <g id="human-survivor" stroke="#080706" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Head hunched forward, desaturated skin #7f6040 -->
+    <path d="M86 30c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#7f6040" stroke-width="7"/>
+    <path d="M70 52c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <path d="M73 62c7 8 20 9 28 1" fill="none" stroke="#2e2218" stroke-width="3" opacity="0.7"/>
+    <path d="M78 55h3m14 0h3" fill="none" stroke="#080706" stroke-width="4"/>
+
+    <!-- Neck and shoulders hunched down -->
+    <path d="M78 76v12h16V76" fill="#7f6040" stroke-width="5"/>
+    <path d="M55 96c9-12 21-18 31-18s23 6 32 18" fill="#233025" stroke-width="8"/>
+
     <!-- Torso -->
-    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#2e2218" stroke-width="7"/>
-    <!-- Vest -->
-    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#233025" stroke-width="4"/>
-    <!-- Center seam -->
-    <path d="M80 88v57" fill="none" stroke-width="4"/>
-    <!-- Chest strap -->
-    <path d="M60 122c13 4 30 5 44 0" fill="none" stroke="#7f6040" stroke-width="5"/>
-    <!-- Left arm dangling — slight offset vs frame 1 -->
-    <path d="M54 96c-4 15-3 35-1 52" fill="none" stroke="#2e2218" stroke-width="13"/>
-    <path d="M53 148c0 9-1 17-2 23" fill="none" stroke="#7f6040" stroke-width="8"/>
+    <path d="M64 95c7-8 37-8 44 0l-6 53c-8 12-49 12-60 0z" fill="#2e2218" stroke-width="7"/>
+    <path d="M71 99c6-5 25-5 31 0l-15 45c-7 6-30 6-38 0z" fill="#233025" stroke-width="4"/>
+    <path d="M86 93l-10 57" fill="none" stroke="#080706" stroke-width="4" opacity="0.9"/>
+    <path d="M66 127c13 4 30 5 44 0" fill="none" stroke="#7f6040" stroke-width="5"/>
+    <path d="M69 125c11 4 25 5 38 1" fill="none" stroke="#d9c28e" stroke-width="2" opacity="0.25"/>
+
+    <!-- Left arm dangling -->
+    <path d="M60 101c-8 15-7 35-5 52" fill="none" stroke="#2e2218" stroke-width="13"/>
+    <path d="M55 153c0 9-1 17-3 23" fill="none" stroke="#7f6040" stroke-width="8"/>
+
     <!-- Right arm dangling -->
-    <path d="M106 96c4 15 3 35 1 52" fill="none" stroke="#2e2218" stroke-width="13"/>
-    <path d="M107 148c0 9 1 17 2 23" fill="none" stroke="#7f6040" stroke-width="8"/>
-    <!-- Belt -->
-    <path d="M55 145c15 5 34 6 50 0" fill="none" stroke="#1c1a16" stroke-width="6"/>
-    <!-- Hips -->
-    <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
-    <!-- Left leg — slightly less spread than frame 1 -->
-    <path d="M66 154l-7 42" fill="none" stroke="#16110d" stroke-width="14"/>
-    <!-- Right leg -->
-    <path d="M94 154l7 42" fill="none" stroke="#16110d" stroke-width="14"/>
-    <!-- Left foot -->
-    <path d="M51 197h21" stroke-width="8"/>
-    <!-- Right foot -->
-    <path d="M92 197h21" stroke-width="8"/>
+    <path d="M112 101c5 15 4 35 2 52" fill="none" stroke="#2e2218" stroke-width="13"/>
+    <path d="M114 153c0 9 1 17 3 23" fill="none" stroke="#7f6040" stroke-width="8"/>
+
+    <!-- Belt and holster (subdued) -->
+    <path d="M55 148c15 5 34 6 50 0" fill="none" stroke="#1c1a16" stroke-width="6"/>
+    <path d="M101 150l15 13" fill="none" stroke="#1c1a16" stroke-width="5"/>
+
+    <!-- Hips and legs (passing phase, weight on left, right crossing) -->
+    <path d="M59 154c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
+    <path d="M66 157l0 40" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M94 157q-6 16-10 33" fill="none" stroke="#16110d" stroke-width="14"/>
+    
+    <!-- Left foot flat, right foot slightly raised/crossing -->
+    <path d="M55 197h22" stroke="#080706" stroke-width="8"/>
+    <path d="M76 190l14 -2" stroke="#080706" stroke-width="8"/>
+
+    <!-- Highlights -->
+    <path d="M71 104c-3 14-3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.3"/>
+    <path d="M102 104c3 14 3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.2"/>
   </g>
 </svg>

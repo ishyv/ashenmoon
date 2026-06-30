@@ -1,43 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
-  <!-- Strained run 1: desperate run — steeper lean than normal run, arms pump LOWER (heavy/tired), darker jacket -->
-  <!-- Clearly heavier than normal run but faster stride than walk -->
-  <ellipse cx="74" cy="207" rx="36" ry="7" fill="#080706" opacity="0.48"/>
-  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-11 80 115)">
-    <!-- Head -->
-    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
-    <!-- Hair -->
-    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
-    <!-- Eyes -->
-    <path d="M72 50h3m14 0h3" stroke-width="4"/>
-    <!-- Neck -->
-    <path d="M72 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
-    <!-- Shoulder arch -->
-    <path d="M49 91c9-12 21-18 31-18s23 6 32 18" fill="#233025" stroke-width="8"/>
-    <!-- Torso — strained/darker jacket -->
-    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#2e2218" stroke-width="7"/>
-    <!-- Vest — darker -->
-    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#233025" stroke-width="4"/>
-    <!-- Center seam -->
-    <path d="M80 88v57" fill="none" stroke-width="4"/>
-    <!-- Chest strap -->
-    <path d="M60 122c13 5 30 6 44 0" fill="none" stroke="#7f6040" stroke-width="5"/>
-    <!-- Left arm pumping BACK — low pump, heavy -->
-    <path d="M54 96c-12 10-16 20-14 34" fill="none" stroke="#2e2218" stroke-width="13"/>
-    <path d="M40 130c-3 7-7 11-12 12" fill="none" stroke="#7f6040" stroke-width="8"/>
-    <!-- Right arm pumping FORWARD — low pump, not raised high -->
-    <path d="M106 96c4 10 4 20 2 34" fill="none" stroke="#2e2218" stroke-width="13"/>
-    <path d="M108 130c2-2 3-7 3-12" fill="none" stroke="#7f6040" stroke-width="8"/>
-    <!-- Belt -->
-    <path d="M55 145c15 5 34 6 50 0" fill="none" stroke-width="6"/>
-    <!-- Hips -->
-    <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
-    <!-- Left leg leading — wide but not as extreme as fresh run -->
-    <path d="M66 154l-22 42" fill="none" stroke="#16110d" stroke-width="14"/>
-    <!-- Right leg back — wide push -->
-    <path d="M94 154l22 41" fill="none" stroke="#16110d" stroke-width="14"/>
-    <!-- Left foot -->
-    <path d="M32 193h24" stroke-width="8"/>
-    <!-- Right foot -->
-    <path d="M107 191h24" stroke-width="8"/>
+  <g id="grounded-shadow">
+    <ellipse cx="80" cy="207" rx="35" ry="7" fill="#080706" opacity="0.48"/>
+  </g>
+
+  <g id="human-survivor" stroke="#080706" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Head leaning forward (shifted +14px), desaturated skin #7f6040 -->
+    <path d="M94 27c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#7f6040" stroke-width="7"/>
+    <path d="M78 49c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <path d="M81 59c7 8 20 9 28 1" fill="none" stroke="#2e2218" stroke-width="3" opacity="0.7"/>
+    <path d="M86 52h3m14 0h3" fill="none" stroke="#080706" stroke-width="4"/>
+
+    <!-- Neck and shoulders leaning forward -->
+    <path d="M86 73v12h16V73" fill="#7f6040" stroke-width="5"/>
+    <path d="M63 93c9-12 21-18 31-18s23 6 32 18" fill="#233025" stroke-width="8"/>
+
+    <!-- Torso outer jacket and vest (desaturated colors) -->
+    <path d="M72 92c7-8 37-8 44 0l-6 53c-8 12-49 12-60 0z" fill="#2e2218" stroke-width="7"/>
+    <path d="M79 96c6-5 25-5 31 0l-15 45c-7 6-30 6-38 0z" fill="#233025" stroke-width="4"/>
+    <path d="M94 90l-14 57" fill="none" stroke="#080706" stroke-width="4" opacity="0.9"/>
+    <path d="M74 126c13 5 30 6 44 0" fill="none" stroke="#7f6040" stroke-width="6"/>
+    <path d="M77 124c11 4 25 5 38 1" fill="none" stroke="#d9c28e" stroke-width="2" opacity="0.25"/>
+
+    <!-- Left arm pumping low, heavy -->
+    <path d="M68 98c-10 10-12 24-10 40" fill="none" stroke="#2e2218" stroke-width="13"/>
+    <path d="M58 138c-3 6-7 11-12 12" fill="none" stroke="#7f6040" stroke-width="8"/>
+
+    <!-- Right arm pumping low, heavy -->
+    <path d="M120 98c4 10 4 20 2 34" fill="none" stroke="#2e2218" stroke-width="13"/>
+    <path d="M122 132c2-2 3-7 3-12" fill="none" stroke="#7f6040" stroke-width="8"/>
+
+    <!-- Belt and tool/holster stub (subdued) -->
+    <path d="M55 147c15 5 34 6 50 0" fill="none" stroke="#1c1a16" stroke-width="6"/>
+    <path d="M101 149l15 13" fill="none" stroke="#1c1a16" stroke-width="5"/>
+
+    <!-- Hips and legs (Left knee high, right pushing back) -->
+    <path d="M59 153c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
+    <path d="M66 156q12 4 22 19" fill="none" stroke="#16110d" stroke-width="14"/>
+    <path d="M94 156l-29 43" fill="none" stroke="#16110d" stroke-width="14"/>
+    
+    <!-- Feet (Left in air, right toe touching ground) -->
+    <path d="M80 175l16 -4" stroke="#080706" stroke-width="8"/>
+    <path d="M55 199l20 -5" stroke="#080706" stroke-width="8"/>
+
+    <!-- Highlights -->
+    <path d="M79 101c-3 14-3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.3"/>
+    <path d="M110 101c3 14 3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.2"/>
   </g>
 </svg>

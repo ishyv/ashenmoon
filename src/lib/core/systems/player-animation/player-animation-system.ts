@@ -120,7 +120,8 @@ export function runPlayerAnimationSystem(input: PlayerAnimationSystemInput): Pla
 }
 
 export function legacyAnimStateForClip(clipId: PlayerAnimationClipId): AnimState {
-  if (clipId === "combat_active") return "attack";
+  if (clipId === "combat_active" || clipId === "combat_attack_spear") return "attack";
+  if (clipId === "combat_stance_spear") return "idle";
   if (clipId.startsWith("gather_")) return "gather";
   if (clipId === "run" || clipId === "strained_run" || clipId === "encumbered_run") return "run";
   if (clipId === "idle") return "idle";

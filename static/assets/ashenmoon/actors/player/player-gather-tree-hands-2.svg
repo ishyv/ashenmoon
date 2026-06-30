@@ -1,39 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="220" viewBox="0 0 160 220">
-  <!-- Gather tree hands frame 2: PULL — body pulling left away from tree, both arms pulling bark strip back -->
-  <ellipse cx="77" cy="207" rx="30" ry="7" fill="#080706" opacity="0.55"/>
-  <g stroke="#080706" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-6 80 120)">
-    <!-- Head -->
-    <path d="M80 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
-    <!-- Hair -->
-    <path d="M64 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
-    <!-- Eyes -->
-    <path d="M72 50h3m14 0h3" stroke-width="4"/>
-    <!-- Neck -->
-    <path d="M72 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
-    <!-- Shoulder arch -->
-    <path d="M49 91c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
-    <!-- Torso -->
-    <path d="M58 90c7-8 37-8 44 0l8 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
-    <!-- Vest -->
-    <path d="M65 94c6-5 25-5 31 0l3 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
-    <!-- Center seam -->
-    <path d="M80 88v57" fill="none" stroke-width="4"/>
-    <!-- Right arm pulling back LEFT (with bark strip) -->
-    <path d="M106 96c4 12 4 24 0 38" fill="none" stroke="#34251a" stroke-width="13"/>
-    <path d="M106 134c-2 8-6 14-12 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
-    <!-- Left arm also pulling back (both hands on bark) -->
-    <path d="M54 96c-12 10-16 22-14 36" fill="none" stroke="#34251a" stroke-width="13"/>
-    <path d="M40 132c-4 8-8 14-14 16" fill="none" stroke="#8a6a45" stroke-width="8"/>
-    <!-- Belt -->
-    <path d="M55 145c15 6 34 7 50 0" fill="none" stroke-width="6"/>
-    <!-- Hips -->
+  <g id="grounded-shadow">
+    <ellipse cx="80" cy="207" rx="30" ry="7" fill="#080706" opacity="0.55"/>
+  </g>
+
+  <g id="human-survivor" stroke="#080706" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Head leaning left (shifted -6px) -->
+    <path d="M74 25c-12 0-21 10-21 23 0 15 9 25 21 25s21-10 21-25c0-13-9-23-21-23z" fill="#8a6a45" stroke-width="7"/>
+    <path d="M58 47c5-11 21-18 34-4 1-15-8-26-21-26-12 0-23 10-23 24 0 5 1 10 4 14 1-3 3-6 6-8z" fill="#1a130f" stroke-width="5"/>
+    <path d="M61 57c7 8 20 9 28 1" fill="none" stroke="#34251a" stroke-width="3" opacity="0.7"/>
+    <path d="M66 50h3m14 0h3" fill="none" stroke="#080706" stroke-width="4"/>
+
+    <!-- Neck and shoulders shifted left -->
+    <path d="M66 71v12h16V71" fill="#8a6a45" stroke-width="5"/>
+    <path d="M43 91c9-12 21-18 31-18s23 6 32 18" fill="#263326" stroke-width="8"/>
+
+    <!-- Torso leaning left -->
+    <path d="M52 90c7-8 37-8 44 0l6 55c-8 12-49 12-60 0z" fill="#34251a" stroke-width="7"/>
+    <path d="M59 94c6-5 25-5 31 0l1 45c-7 6-30 6-38 0z" fill="#263326" stroke-width="4"/>
+    <path d="M74 88l-6 57" fill="none" stroke="#080706" stroke-width="4" opacity="0.9"/>
+    <path d="M54 122c13 5 30 6 44 0" fill="none" stroke="#8a6a45" stroke-width="6"/>
+    <path d="M57 120c11 4 25 5 38 1" fill="none" stroke="#d9c28e" stroke-width="2" opacity="0.45"/>
+
+    <!-- Left arm pulling back -->
+    <path d="M48 96c-12 10-16 22-14 36" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M34 132c-4 8-8 14-14 16" fill="none" stroke="#8a6a45" stroke-width="8"/>
+
+    <!-- Right arm pulling back (with bark strip visual) -->
+    <path d="M100 96c4 12 4 24 0 38" fill="none" stroke="#34251a" stroke-width="13"/>
+    <path d="M100 134c-2 8-6 14-12 18" fill="none" stroke="#8a6a45" stroke-width="8"/>
+
+    <!-- Bark strip visual -->
+    <path d="M88 136 c 10 10, 20 20, 30 15" fill="none" stroke="#5c3d20" stroke-width="4"/>
+
+    <!-- Belt and tool/holster stub -->
+    <path d="M55 145c15 6 34 7 50 0" fill="none" stroke="#080706" stroke-width="6"/>
+    <path d="M101 147l15 13" fill="none" stroke="#34322d" stroke-width="5"/>
+    <path d="M116 160l8 7" fill="none" stroke="#d9c28e" stroke-width="4"/>
+
+    <!-- Hips and legs -->
     <path d="M59 151c10 7 31 8 42 0" fill="#1b1712" stroke-width="6"/>
-    <!-- Feet planted -->
     <path d="M66 154l-6 43" fill="none" stroke="#16110d" stroke-width="14"/>
     <path d="M94 154l6 43" fill="none" stroke="#16110d" stroke-width="14"/>
-    <path d="M53 198h22" stroke-width="8"/>
-    <path d="M90 198h22" stroke-width="8"/>
+    
+    <!-- Flat feet -->
+    <path d="M53 198h22" stroke="#080706" stroke-width="8"/>
+    <path d="M90 198h22" stroke="#080706" stroke-width="8"/>
+
     <!-- Highlights -->
-    <path d="M65 99c-3 14-3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.6"/>
+    <path d="M59 99c-3 14-3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.6"/>
+    <path d="M90 99c3 14 3 29 0 43" fill="none" stroke="#7b8156" stroke-width="3" opacity="0.5"/>
+    <path d="M70 188c7 3 16 3 23 0" fill="none" stroke="#d9c28e" stroke-width="3" opacity="0.35"/>
   </g>
 </svg>
