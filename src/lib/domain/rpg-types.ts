@@ -64,6 +64,7 @@ export interface RpgPlayerState {
     }[];
     worldEntities?: RpgWorldEntity[];
     gatheredPickups?: string[];
+    hotbar?: (string | null)[]; // ItemId[] length 9, null = empty slot
   };
   inventory: {
     slots: Record<string, RpgInventorySlot>;

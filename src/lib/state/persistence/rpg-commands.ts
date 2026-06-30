@@ -1,6 +1,7 @@
 import { BUILDING_SPECS, getBuildingSpec } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { HOTBAR_SIZE } from "$lib/domain/hotbar-types";
 import { StorageKeys } from "$lib/domain/game-events";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
@@ -145,7 +146,19 @@ export function createDefaultProfile(): RpgPlayerState["profile"] {
     buildings: [],
     worldEntities: [],
     gatheredPickups: [],
+    hotbar: Array(HOTBAR_SIZE).fill(null),
   };
+}
+
+function normalizeHotbar(value: unknown): (string | null)[] {
+  if (!Array.isArray(value)) return Array(HOTBAR_SIZE).fill(null);
+  const normalized = value
+    .slice(0, HOTBAR_SIZE)
+    .map((slot) => (typeof slot === "string" || slot === null ? slot : null));
+  while (normalized.length < HOTBAR_SIZE) {
+    normalized.push(null);
+  }
+  return normalized;
 }
 
 function normalizeWorldEntities(value: unknown): RpgWorldEntity[] {
@@ -220,6 +233,7 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
     ...(buildings !== undefined ? { buildings } : {}),
     worldEntities,
     ...(gatheredPickups !== undefined ? { gatheredPickups } : {}),
+    hotbar: normalizeHotbar(value.hotbar),
     ...(typeof value.characterLevel === "number" && Number.isFinite(value.characterLevel)
       ? { characterLevel: value.characterLevel }
       : {}),
