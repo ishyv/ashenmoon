@@ -31,35 +31,19 @@ $effect(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Reactivity — sound on empty-slot activation
-// ---------------------------------------------------------------------------
-
-$effect(() => {
-  if (hotbarState.shakeSlot !== null) {
-    play('hotbar.activate.empty');
-  }
-});
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const allEmpty = $derived(hotbarState.slots.every((s) => s === null));
 
-/**
- * Returns the stackable quantity for a hotbar item, or null for durability
- * items. Show a qty badge only for stackable items with qty > 1.
- */
+// Returns stackable qty for hotbar item, or null for durability items.
 function getStackQty(itemId: string): number | null {
   const invSlot = gameState.rpg.inventory?.slots[itemId];
   if (!invSlot || !('qty' in invSlot)) return null;
   return invSlot.qty;
 }
 
-/**
- * True when the item has no count in inventory and is not equipped — the slot
- * shows the icon dimmed to signal the bind is stale.
- */
+// True when item has no count in inventory and is not equipped (stale bind).
 function isItemMissing(itemId: string): boolean {
   const invSlot = gameState.rpg.inventory?.slots[itemId];
   if (!invSlot) return true;
@@ -203,7 +187,7 @@ let dragOver = $state<number | null>(null);
     position: absolute;
     bottom: 0.2rem;
     right: 0.25rem;
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-family: monospace;
     color: var(--text-soft);
     line-height: 1;

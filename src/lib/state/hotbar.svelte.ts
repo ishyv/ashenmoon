@@ -8,6 +8,7 @@ import type { HotbarSlot } from '$lib/domain/hotbar-types';
 import { HOTBAR_SIZE } from '$lib/domain/hotbar-types';
 import { getItemDef, traitOf } from '$lib/domain/items';
 import { uiInputController } from '$lib/core/input/input-controller.svelte';
+import { play } from '$lib/audio/audio-engine';
 import {
   canEquipFromInventory,
   resolveInventoryItemActions,
@@ -159,20 +160,6 @@ export const hotbarState = {
     return _shakeSlot;
   },
 
-  /** Trigger a 200ms gold-border flash on the given slot. */
-  flash(index: number): void {
-    if (_flashTimer) clearTimeout(_flashTimer);
-    _flashSlot = index;
-    _flashTimer = setTimeout(() => { _flashSlot = null; }, 200);
-  },
-
-  /** Trigger a 300ms shake animation on the given slot (empty-bind feedback). */
-  signalShake(index: number): void {
-    if (_shakeTimer) clearTimeout(_shakeTimer);
-    _shakeSlot = index;
-    _shakeTimer = setTimeout(() => { _shakeSlot = null; }, 300);
-  },
-
   /** Bind an item to a slot index (0-based). Persists via gameState auto-save. */
   bind(index: number, itemId: ItemId): void {
     if (index < 0 || index >= HOTBAR_SIZE) return;
@@ -214,7 +201,13 @@ export const hotbarState = {
 
     const itemId = slot.itemId;
     const inventoryCount = getSlotCount(gameState.rpg.inventory?.slots[itemId]);
-    if (inventoryCount === 0 && !isItemEquipped(itemId)) return 'empty';
+    if (inventoryCount === 0 && !isItemEquipped(itemId)) {
+      if (_shakeTimer) clearTimeout(_shakeTimer);
+      _shakeSlot = index;
+      _shakeTimer = setTimeout(() => { _shakeSlot = null; }, 300);
+      play('hotbar.activate.empty');
+      return 'empty';
+    }
 
     const def = getItemDef(itemId);
     const actions = resolveInventoryItemActions({
@@ -228,6 +221,10 @@ export const hotbarState = {
     const prioritized = prioritizeActions(actions);
     const action = prioritized.find((a) => a.enabled);
     if (action) executeAction(action, itemId);
+
+    if (_flashTimer) clearTimeout(_flashTimer);
+    _flashSlot = index;
+    _flashTimer = setTimeout(() => { _flashSlot = null; }, 200);
     return 'ok';
   },
 };
@@ -242,9 +239,7 @@ for (let i = 0; i < HOTBAR_SIZE; i++) {
     keys: [`${i + 1}`],
     layer: 'hotbar',
     handler: (_e) => {
-      const result = hotbarState.activate(i);
-      hotbarState.flash(i);
-      if (result === 'empty') hotbarState.signalShake(i);
+      hotbarState.activate(i);
       return true;
     },
   });
