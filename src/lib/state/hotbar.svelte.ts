@@ -14,6 +14,7 @@ import {
   resolveInventoryItemActions,
   type InventoryItemActionView,
 } from '$lib/domain/inventory-item-action';
+import { prioritizeHotbarActions } from '$lib/domain/hotbar-action-priority';
 import type { UIAction } from '$lib/domain/game-events';
 import type { RpgInventorySlot } from '$lib/domain/rpg-types';
 import { gameState } from '$lib/state/game-state.svelte';
@@ -64,24 +65,6 @@ function isItemEquipped(itemId: string): boolean {
     }
   }
   return false;
-}
-
-/**
- * Hotbar activation priority:
- * 1. consume — pressing a number key on food/drink should consume it
- * 2. equip / unequip — tools and weapons
- * 3. study — blueprints
- * 4. place — last; requires engine, usually a no-op from hotbar
- */
-function prioritizeActions(actions: readonly InventoryItemActionView[]): InventoryItemActionView[] {
-  const order: InventoryItemActionView['id'][] = ['consume', 'equip', 'unequip', 'study', 'place'];
-  const result: InventoryItemActionView[] = [];
-  for (const id of order) {
-    for (const action of actions) {
-      if (action.id === id) result.push(action);
-    }
-  }
-  return result;
 }
 
 function executeAction(action: InventoryItemActionView, itemId: string): void {
@@ -220,7 +203,7 @@ export const hotbarState = {
       canConsume: canConsume(itemId),
     });
 
-    const prioritized = prioritizeActions(actions);
+    const prioritized = prioritizeHotbarActions(actions);
     const action = prioritized.find((a) => a.enabled);
     if (action) executeAction(action, itemId);
 
