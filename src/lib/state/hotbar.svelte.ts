@@ -134,6 +134,10 @@ function mutateHotbar(mutator: (hotbar: (string | null)[]) => (string | null)[])
 // ---------------------------------------------------------------------------
 
 let _slots = $derived(deriveSlots(gameState.rpg.profile?.hotbar));
+let _flashSlot = $state<number | null>(null);
+let _shakeSlot = $state<number | null>(null);
+let _flashTimer: ReturnType<typeof setTimeout> | null = null;
+let _shakeTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ---------------------------------------------------------------------------
 // Public singleton
@@ -143,6 +147,30 @@ export const hotbarState = {
   /** Reactive slot array, always length HOTBAR_SIZE (9). */
   get slots(): readonly (HotbarSlot | null)[] {
     return _slots;
+  },
+
+  /** Index of the slot currently flashing (keypress pulse), or null. Resets after 200ms. */
+  get flashSlot(): number | null {
+    return _flashSlot;
+  },
+
+  /** Index of the slot currently shaking (empty-slot activation), or null. Resets after 300ms. */
+  get shakeSlot(): number | null {
+    return _shakeSlot;
+  },
+
+  /** Trigger a 200ms gold-border flash on the given slot. */
+  flash(index: number): void {
+    if (_flashTimer) clearTimeout(_flashTimer);
+    _flashSlot = index;
+    _flashTimer = setTimeout(() => { _flashSlot = null; }, 200);
+  },
+
+  /** Trigger a 300ms shake animation on the given slot (empty-bind feedback). */
+  signalShake(index: number): void {
+    if (_shakeTimer) clearTimeout(_shakeTimer);
+    _shakeSlot = index;
+    _shakeTimer = setTimeout(() => { _shakeSlot = null; }, 300);
   },
 
   /** Bind an item to a slot index (0-based). Persists via gameState auto-save. */
@@ -214,7 +242,9 @@ for (let i = 0; i < HOTBAR_SIZE; i++) {
     keys: [`${i + 1}`],
     layer: 'hotbar',
     handler: (_e) => {
-      hotbarState.activate(i);
+      const result = hotbarState.activate(i);
+      hotbarState.flash(i);
+      if (result === 'empty') hotbarState.signalShake(i);
       return true;
     },
   });
