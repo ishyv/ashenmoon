@@ -65,7 +65,7 @@ $effect(() => {
     class="skill-slot"
     class:slot--ready={evadeReady}
     class:out-of-stamina={!hasEvadeStam}
-    style="filter: grayscale({evadeCooldown > 0 ? 1 : 0}); transition: filter {evadeCooldown > 0 ? '0s' : '0.5s ease'};"
+    style="filter: grayscale({evadeCooldown > 0 ? 1 : 0}); transition: filter {evadeCooldown > 0 ? '0s' : '0.5s ease'}, border-color 0.15s ease, box-shadow 0.15s ease;"
   >
     <div class="skill-icon evade-bg">ev</div>
     <div class="skill-key">SHIFT</div>
@@ -81,7 +81,7 @@ $effect(() => {
     class="skill-slot"
     class:slot--ready={fgReady}
     class:out-of-stamina={!hasFgStam}
-    style="filter: grayscale({fgCooldown > 0 ? 1 : 0}); transition: filter {fgCooldown > 0 ? '0s' : '0.5s ease'};"
+    style="filter: grayscale({fgCooldown > 0 ? 1 : 0}); transition: filter {fgCooldown > 0 ? '0s' : '0.5s ease'}, border-color 0.15s ease, box-shadow 0.15s ease;"
   >
     <div class="skill-icon fg-bg">fg</div>
     <div class="skill-key">F</div>
@@ -97,7 +97,7 @@ $effect(() => {
     class="skill-slot"
     class:slot--ready={dtReady}
     class:out-of-stamina={!hasDtStam}
-    style="filter: grayscale({dtCooldown > 0 ? 1 : 0}); transition: filter {dtCooldown > 0 ? '0s' : '0.5s ease'};"
+    style="filter: grayscale({dtCooldown > 0 ? 1 : 0}); transition: filter {dtCooldown > 0 ? '0s' : '0.5s ease'}, border-color 0.15s ease, box-shadow 0.15s ease;"
   >
     <div class="skill-icon dt-bg">dt</div>
     <div class="skill-key">SWIPE</div>
@@ -114,7 +114,7 @@ $effect(() => {
     class:slot--ready={fsReady}
     class:out-of-stamina={!hasFsStam}
     class:charging={fsCharge > 0}
-    style="filter: grayscale({fsCooldown > 0 ? 1 : 0}); transition: filter {fsCooldown > 0 ? '0s' : '0.5s ease'};"
+    style="filter: grayscale({fsCooldown > 0 ? 1 : 0}); transition: filter {fsCooldown > 0 ? '0s' : '0.5s ease'}, border-color 0.15s ease, box-shadow 0.15s ease;"
   >
     {#if fsCharge > 0}
       <svg class="charge-overlay" viewBox="0 0 36 36">
@@ -191,7 +191,7 @@ $effect(() => {
       box-shadow: 0 0 12px var(--accent), inset 0 0 4px rgba(0, 0, 0, 0.4);
     }
     100% {
-      border-color: rgba(255, 170, 0, 0.35);
+      border-color: color-mix(in srgb, var(--accent) 35%, transparent);
       box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
     }
   }
