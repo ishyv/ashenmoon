@@ -3,6 +3,8 @@ import { getItemDef, traitOf } from "$lib/domain/items";
 import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import type { InventoryItemView } from "./types";
+import { dragState } from "$lib/state/drag.svelte";
+import type { ItemId } from "$lib/domain/items";
 
 let {
   items,
@@ -33,6 +35,8 @@ let {
         <button
           type="button"
           class="item-cell {selectedItem === itemId ? 'selected' : ''} {isEquipped(itemId) ? 'equipped' : ''}"
+          style="opacity: {dragState.active?.source === 'inventory' && dragState.active?.itemId === itemId ? 0.4 : 1}"
+          draggable="true"
           onmouseenter={() => onHover(itemId)}
           onmouseleave={() => onHover(null)}
           onclick={() => {
@@ -40,6 +44,17 @@ let {
             playSound("ui.inventory.click", { conditions: { itemType: meta?.category ?? "component" } });
           }}
           ondblclick={() => onDblClick?.(itemId)}
+          ondragstart={(e) => {
+            dragState.set({ source: 'inventory', itemId: itemId as ItemId });
+            const ghost = document.createElement('div');
+            ghost.style.cssText = 'position:fixed;top:-9999px;width:1px;height:1px';
+            document.body.appendChild(ghost);
+            e.dataTransfer?.setDragImage(ghost, 0, 0);
+            requestAnimationFrame(() => document.body.removeChild(ghost));
+          }}
+          ondragend={() => {
+            dragState.clear();
+          }}
           aria-label="{meta?.name ?? itemId}{qty > 1 ? `, quantity ${qty}` : ''}"
         >
           <div class="item-visual">
