@@ -33,6 +33,16 @@
    * Heavier alpha on --surface-card / --surface-panel. Cards read as "material"
    * rather than vapor. Range 0.4 (ghostly) → 1.0 (fully opaque).                */
   --reg-surface-opacity: 0.95;
+
+  /* ── HUD shared fade system ────────────────────────────────────────────────
+   * Shared visual language for GameHud, SkillHotbar, ItemHotbar breathing
+   * together. CSS custom properties for components to apply animations.       */
+  --hud-slot-size: 2.5rem;
+  --hud-fade-opacity: 0.2;
+  --hud-active-opacity: 0.9;
+  --hud-reveal-ms: 200ms;
+  --hud-linger-ms: 2500ms;
+  --hud-fade-ms: 1800ms;
 }
 
 /* Override line opacities globally to remove border overload and blue line clutter. */
