@@ -50,6 +50,7 @@ function gearSlotForItem(itemId: string): GearSlot | null {
   if (wearable.slot === 'body') return 'chest';
   if (wearable.slot === 'feet') return 'boots';
   if (wearable.slot === 'hands') return 'shield';
+  if (wearable.slot === 'legs') return 'pants';
   return null;
 }
 

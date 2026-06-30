@@ -193,7 +193,7 @@ export interface InsulationMaterialTrait {
 
 export interface WearableTrait {
   kind: "wearable";
-  slot: "head" | "body" | "hands" | "feet" | "cloak";
+  slot: "head" | "body" | "hands" | "feet" | "legs" | "cloak";
 }
 
 export interface PlaceableTrait {

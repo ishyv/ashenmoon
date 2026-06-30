@@ -45,6 +45,12 @@ function getStackQty(itemId: string): number | null {
 
 // True when item has no count in inventory and is not equipped (stale bind).
 function isItemMissing(itemId: string): boolean {
+  // check equipped loadout first — gear items leave inventory when equipped
+  const loadout = gameState.rpg.profile?.loadout;
+  if (loadout) {
+    const equipped = Object.values(loadout).some((slotVal) => slotVal === itemId);
+    if (equipped) return false;
+  }
   const invSlot = gameState.rpg.inventory?.slots[itemId];
   if (!invSlot) return true;
   if ('qty' in invSlot) return invSlot.qty === 0;

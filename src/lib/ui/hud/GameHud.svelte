@@ -17,9 +17,18 @@ import { thirstEvent, thirstConfig, hungerEvent, hungerConfig } from "$lib/state
 import { statusState } from "$lib/state/rpg/status-effects.svelte";
 import { uiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
+import { hudActivity } from "$lib/state/hud-activity.svelte";
 
 let showHud = $state(true);
 let fadeTimeout: ReturnType<typeof setTimeout> | null = null;
+let hudOpacity = $state(hudActivity.restOpacity);
+
+$effect(() => {
+  const id = setInterval(() => {
+    hudOpacity = hudActivity.isActive ? hudActivity.activeOpacity : hudActivity.restOpacity;
+  }, 100);
+  return () => clearInterval(id);
+});
 
 const maxHp = $derived(getPlayerStats().combat.maxHealth);
 const hp = $derived(gameState.rpg.profile?.hpCurrent ?? maxHp);
@@ -83,7 +92,7 @@ $effect(() => {
 </svg>
 
 {#if showHud}
-  <div transition:fade={{ duration: 300 }} class="hud-stack">
+  <div transition:fade={{ duration: 300 }} class="hud-stack" style="opacity: {hudOpacity}; transition: opacity {hudActivity.fadeMs}ms ease">
     <StatusHud />
     <div class="hud-container" aria-label="Survival and status indicators">
       
