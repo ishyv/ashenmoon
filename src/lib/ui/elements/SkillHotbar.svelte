@@ -1,28 +1,22 @@
-﻿<script lang="ts">
+<script lang="ts">
 /**
  * SkillHotbar.svelte
- * Displays the active skill slots (Evade, Focused Gathering, Fell Sweep) with
- * glowing circular icons and radial cooldown clock overlays.
+ * Displays the active skill slots (Evade, Focused Gathering, Driving Thrust, Fell Sweep).
+ * Cooldown state is shown by desaturating the slot with CSS grayscale; color bleeding back
+ * signals recovery. The container participates in the shared HUD fade system.
  */
 import { gameState } from "$lib/state/game-state.svelte";
 import { cooldownsState } from "$lib/state/runtime-ui-state.svelte";
 import { stamina } from "$lib/state/rpg/stamina.svelte";
+import { hudActivity } from "$lib/state/hud-activity.svelte";
+import { play } from "$lib/audio/audio-engine";
 
 const evadeCooldown = $derived(cooldownsState.evade);
-const evadeMax = $derived(cooldownsState.evadeMax);
 const fgCooldown = $derived(cooldownsState.focusedGather);
-const fgMax = $derived(cooldownsState.focusedGatherMax);
 const fsCooldown = $derived(cooldownsState.fellSweep);
-const fsMax = $derived(cooldownsState.fellSweepMax);
 const fsCharge = $derived(cooldownsState.fellSweepCharge);
 const dtCooldown = $derived(cooldownsState.drivingThrust);
 const dtMax = $derived(cooldownsState.drivingThrustMax);
-
-// Compute percentages (100 is fully on cooldown, 0 is fully off cooldown)
-const evadePercent = $derived(evadeCooldown > 0 ? (evadeCooldown / evadeMax) * 100 : 0);
-const fgPercent = $derived(fgCooldown > 0 ? (fgCooldown / fgMax) * 100 : 0);
-const fsPercent = $derived(fsCooldown > 0 ? (fsCooldown / fsMax) * 100 : 0);
-const dtPercent = $derived(dtCooldown > 0 ? (dtCooldown / dtMax) * 100 : 0);
 
 // Stamina checks (focused gathering's cheapest tier costs 10).
 const hasEvadeStam = $derived(stamina.current >= 25);
@@ -33,25 +27,46 @@ const combatSkillLevel = $derived((gameState.rpg.skills as typeof gameState.rpg.
 const hasMeaningfulSkillContext = $derived(
   evadeCooldown > 0 || fgCooldown > 0 || fsCooldown > 0 || fsCharge > 0 || dtCooldown > 0 || combatSkillLevel > 1,
 );
+
+// HUD fade integration
+let hudOpacity = $state(hudActivity.restOpacity);
+$effect(() => {
+  const id = setInterval(() => {
+    hudOpacity = hudActivity.isActive ? hudActivity.activeOpacity : hudActivity.restOpacity;
+  }, 100);
+  return () => clearInterval(id);
+});
+
+// Brief gold-border pulse state; set true for 300ms when a cooldown expires.
+let evadeReady = $state(false);
+let fgReady = $state(false);
+let fsReady = $state(false);
+let dtReady = $state(false);
+
+// Detect transitions from active cooldown → 0 to trigger pulse and ready sound.
+let prevEvade = 0, prevFg = 0, prevFs = 0, prevDt = 0;
+$effect(() => {
+  const ce = evadeCooldown, cf = fgCooldown, cs = fsCooldown, cd = dtCooldown;
+  if (prevEvade > 0 && ce === 0) { evadeReady = true; play("skill.ready"); setTimeout(() => { evadeReady = false; }, 300); }
+  if (prevFg > 0 && cf === 0) { fgReady = true; play("skill.ready"); setTimeout(() => { fgReady = false; }, 300); }
+  if (prevFs > 0 && cs === 0) { fsReady = true; play("skill.ready"); setTimeout(() => { fsReady = false; }, 300); }
+  if (prevDt > 0 && cd === 0) { dtReady = true; play("skill.ready"); setTimeout(() => { dtReady = false; }, 300); }
+  prevEvade = ce; prevFg = cf; prevFs = cs; prevDt = cd;
+});
 </script>
 
 {#if hasMeaningfulSkillContext}
-<div class="hotbar-container">
+<div
+  class="hotbar-container"
+  style="opacity: {hudOpacity}; transition: opacity {hudActivity.isActive ? hudActivity.revealMs : hudActivity.fadeMs}ms ease;"
+>
   <!-- Evade Skill Icon -->
-  <div class="skill-slot" class:on-cooldown={evadeCooldown > 0} class:out-of-stamina={!hasEvadeStam}>
-    <!-- SVG Circular Radial Cooldown Overlay -->
-    {#if evadeCooldown > 0}
-      <svg class="cooldown-overlay" viewBox="0 0 36 36">
-        <path
-          class="cooldown-progress"
-          stroke-dasharray="100, 100"
-          stroke-dashoffset={100 - evadePercent}
-          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-        />
-      </svg>
-      <div class="cooldown-time">{evadeCooldown.toFixed(1)}s</div>
-    {/if}
-    
+  <div
+    class="skill-slot"
+    class:slot--ready={evadeReady}
+    class:out-of-stamina={!hasEvadeStam}
+    style="filter: grayscale({evadeCooldown > 0 ? 1 : 0}); transition: filter {evadeCooldown > 0 ? '0s' : '0.5s ease'};"
+  >
     <div class="skill-icon evade-bg">ev</div>
     <div class="skill-key">SHIFT</div>
     <div class="tooltip">
@@ -62,20 +77,12 @@ const hasMeaningfulSkillContext = $derived(
   </div>
 
   <!-- Focused Gathering Skill Icon -->
-  <div class="skill-slot" class:on-cooldown={fgCooldown > 0} class:out-of-stamina={!hasFgStam}>
-    <!-- SVG Circular Radial Cooldown Overlay -->
-    {#if fgCooldown > 0}
-      <svg class="cooldown-overlay" viewBox="0 0 36 36">
-        <path
-          class="cooldown-progress"
-          stroke-dasharray="100, 100"
-          stroke-dashoffset={100 - fgPercent}
-          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-        />
-      </svg>
-      <div class="cooldown-time">{fgCooldown.toFixed(1)}s</div>
-    {/if}
-
+  <div
+    class="skill-slot"
+    class:slot--ready={fgReady}
+    class:out-of-stamina={!hasFgStam}
+    style="filter: grayscale({fgCooldown > 0 ? 1 : 0}); transition: filter {fgCooldown > 0 ? '0s' : '0.5s ease'};"
+  >
     <div class="skill-icon fg-bg">fg</div>
     <div class="skill-key">F</div>
     <div class="tooltip">
@@ -85,19 +92,13 @@ const hasMeaningfulSkillContext = $derived(
     </div>
   </div>
 
-  <div class="skill-slot" class:on-cooldown={dtCooldown > 0} class:out-of-stamina={!hasDtStam}>
-    {#if dtCooldown > 0}
-      <svg class="cooldown-overlay" viewBox="0 0 36 36">
-        <path
-          class="cooldown-progress"
-          stroke-dasharray="100, 100"
-          stroke-dashoffset={100 - dtPercent}
-          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-        />
-      </svg>
-      <div class="cooldown-time">{dtCooldown.toFixed(1)}s</div>
-    {/if}
-
+  <!-- Driving Thrust Skill Icon -->
+  <div
+    class="skill-slot"
+    class:slot--ready={dtReady}
+    class:out-of-stamina={!hasDtStam}
+    style="filter: grayscale({dtCooldown > 0 ? 1 : 0}); transition: filter {dtCooldown > 0 ? '0s' : '0.5s ease'};"
+  >
     <div class="skill-icon dt-bg">dt</div>
     <div class="skill-key">SWIPE</div>
     <div class="tooltip">
@@ -107,20 +108,16 @@ const hasMeaningfulSkillContext = $derived(
     </div>
   </div>
 
-  <!-- Fell Sweep Skill Icon -->
-  <div class="skill-slot" class:on-cooldown={fsCooldown > 0} class:out-of-stamina={!hasFsStam} class:charging={fsCharge > 0}>
-    {#if fsCooldown > 0}
-      <svg class="cooldown-overlay" viewBox="0 0 36 36">
-        <path
-          class="cooldown-progress"
-          stroke-dasharray="100, 100"
-          stroke-dashoffset={100 - fsPercent}
-          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-        />
-      </svg>
-      <div class="cooldown-time">{fsCooldown.toFixed(1)}s</div>
-    {:else if fsCharge > 0}
-      <svg class="cooldown-overlay charge-overlay" viewBox="0 0 36 36">
+  <!-- Fell Sweep Skill Icon — charge ring SVG kept -->
+  <div
+    class="skill-slot"
+    class:slot--ready={fsReady}
+    class:out-of-stamina={!hasFsStam}
+    class:charging={fsCharge > 0}
+    style="filter: grayscale({fsCooldown > 0 ? 1 : 0}); transition: filter {fsCooldown > 0 ? '0s' : '0.5s ease'};"
+  >
+    {#if fsCharge > 0}
+      <svg class="charge-overlay" viewBox="0 0 36 36">
         <path
           class="charge-progress"
           stroke-dasharray="100, 100"
@@ -181,6 +178,22 @@ const hasMeaningfulSkillContext = $derived(
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(0);
+  }
+
+  /* Brief gold border pulse when a cooldown expires */
+  .slot--ready {
+    animation: slot-ready-pulse 0.3s ease-out;
+  }
+
+  @keyframes slot-ready-pulse {
+    0% {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent), inset 0 0 4px rgba(0, 0, 0, 0.4);
+    }
+    100% {
+      border-color: rgba(255, 170, 0, 0.35);
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+    }
   }
 
   .skill-icon {
@@ -261,35 +274,6 @@ const hasMeaningfulSkillContext = $derived(
     box-shadow: 0 2px 4px rgba(0,0,0,0.5);
   }
 
-  /* SVG Cooldown Swipe Overlay */
-  .cooldown-overlay {
-    position: absolute;
-    inset: -1.5px;
-    width: calc(100% + 3px);
-    height: calc(100% + 3px);
-    transform: rotate(-90deg);
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .cooldown-progress {
-    fill: rgba(0, 0, 0, 0.65);
-    stroke: rgba(255, 170, 0, 0.8);
-    stroke-width: 1.5px;
-    stroke-linecap: round;
-  }
-
-  .cooldown-time {
-    position: absolute;
-    z-index: 3;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.72rem;
-    font-weight: bold;
-    color: var(--color-text, white);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 1), 0 0 6px rgba(255, 170, 0, 0.8);
-    pointer-events: none;
-  }
-
   /* Out of stamina warning */
   .out-of-stamina .skill-icon {
     opacity: 0.4;
@@ -357,4 +341,3 @@ const hasMeaningfulSkillContext = $derived(
     font-weight: bold;
   }
 </style>
-

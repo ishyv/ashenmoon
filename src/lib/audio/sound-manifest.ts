@@ -155,7 +155,8 @@ export type SoundId =
   | "boar.snort"
   | "boar.charge"
   | "rabbit.flee"
-  | "deer.alert";
+  | "deer.alert"
+  | "skill.ready";
 
 export const SOUNDS: Record<SoundId, SoundDef> = {
   "gather.chop": {
@@ -452,6 +453,8 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "boar.charge": { bus: "entities", recipe: "boarCharge", spatial: true, throttleMs: 1600, pitchJitter: 75, gainJitter: 0.1, gain: 1.0, tags: ["entity", "boar", "danger"] },
   "rabbit.flee": { bus: "entities", recipe: "animalFlee", spatial: true, throttleMs: 1200, pitchJitter: 140, gainJitter: 0.1, gain: 0.65, tags: ["entity", "rabbit"] },
   "deer.alert": { bus: "entities", recipe: "animalFlee", spatial: true, throttleMs: 1800, pitchJitter: 80, gainJitter: 0.08, gain: 0.75, tags: ["entity", "deer"] },
+  // Played when a skill cooldown expires; recipe is closest available to a quiet settle.
+  "skill.ready": { bus: "ui", recipe: "discovery", gain: 0.35, pitchJitter: 80, gainJitter: 0.1, throttleMs: 500, tags: ["hotbar", "skill"] },
 };
 
 const GATHER_SOUND_IDS: Record<GatherSoundKey, SoundId> = {
