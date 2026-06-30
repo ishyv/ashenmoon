@@ -19,6 +19,7 @@ import type { RpgInventorySlot } from '$lib/domain/rpg-types';
 import { gameState } from '$lib/state/game-state.svelte';
 import { dispatchRpgCommand } from '$lib/state/rpg-controller.svelte';
 import { canConsume, consumeItem, getConsumeVerb } from '$lib/state/rpg/consume-actions';
+import { hudActivity } from '$lib/state/hud-activity.svelte';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -196,6 +197,7 @@ export const hotbarState = {
    * inventory or loadout, 'ok' otherwise (action may or may not have fired).
    */
   activate(index: number): 'ok' | 'empty' | 'unbound' {
+    hudActivity.signal();
     const slot = _slots[index];
     if (!slot) return 'unbound';
 

@@ -1,12 +1,14 @@
 import type { RpgPlayerState } from "$lib/domain/rpg-types";
 import { createDefaultProfile, createDefaultSkills } from "$lib/domain/rpg-defaults";
 import { gameState } from "$lib/state/game-state.svelte";
+import { hudActivity } from "$lib/state/hud-activity.svelte";
 
 export function applyRpgState(state: RpgPlayerState | null): void {
   if (!state) return;
   gameState.rpg.profile = state.profile;
   gameState.rpg.inventory = state.inventory;
   gameState.rpg.skills = state.skills ?? createDefaultSkills();
+  hudActivity.signal();
 }
 
 export function setRpgInventory(inventory: RpgPlayerState["inventory"] | null): void {
@@ -75,4 +77,5 @@ export function setLocalHp(hp: number): void {
   } else {
     gameState.rpg.profile = createDefaultProfile({ hpCurrent: hp });
   }
+  hudActivity.signal();
 }

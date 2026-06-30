@@ -15,6 +15,7 @@ import EnvironmentGauge from "$lib/ui/hud/EnvironmentGauge.svelte";
 import ConditionPanel from "$lib/ui/hud/ConditionPanel.svelte";
 import ToastLog from "$lib/ui/hud/ToastLog.svelte";
 import SkillHotbar from "$lib/ui/elements/SkillHotbar.svelte";
+import ItemHotbar from "$lib/ui/hud/ItemHotbar.svelte";
 import SkillTreePanel from "$lib/ui/panels/SkillTreePanel.svelte";
 import DialogueBox from "$lib/ui/elements/DialogueBox.svelte";
 import QuestTracker from "$lib/ui/panels/QuestTracker.svelte";
@@ -538,6 +539,7 @@ onDestroy(() => {
       <div class="notify" role="status">{notify}</div>
     {/if}
     <SkillHotbar />
+    <ItemHotbar />
     <GameHud />
   </div>
 
