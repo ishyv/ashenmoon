@@ -13,6 +13,11 @@ export type AnimalBehaviorState =
   | "recover"
   | "reset"
   | "hunt"
+  | "prowl"
+  | "stalk"
+  | "circle"
+  | "lunge_windup"
+  | "lunge"
   | "eat"
   | "rest";
 

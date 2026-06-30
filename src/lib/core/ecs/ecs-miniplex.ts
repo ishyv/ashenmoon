@@ -5,6 +5,7 @@ import type { AiState, AnimState, Faction } from "$lib/core/types";
 import type { AnimalBehaviorState, AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
 import type { CarcassProcessAction, CarcassState } from "$lib/domain/animals/carcass-processing";
 import type { BoarCombatRuntime } from "$lib/domain/combat/enemies/boar-combat";
+import type { WolfCombatRuntime } from "$lib/domain/combat/enemies/wolf-combat";
 import type { CampfireState, CampStructureType } from "$lib/domain/camp/camp-state";
 import type { LandmarkKind } from "$lib/domain/worldgen/landmark-definitions";
 import type { EnvironmentEmitter } from "$lib/domain/environment/signals";
@@ -98,6 +99,8 @@ export interface Entity {
     damage?: number;
     /** Boar-specific charge/readability runtime. Domain owns transitions; core owns movement and presentation. */
     boarCombat?: BoarCombatRuntime;
+    /** Wolf-specific pressure loop runtime. Domain owns commitment; core owns locomotion and hit application. */
+    wolfCombat?: WolfCombatRuntime;
   };
 
   /**
