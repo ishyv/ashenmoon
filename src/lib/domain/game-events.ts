@@ -45,6 +45,23 @@ export enum SkillKey {
   KiteCombo = "kiteCombo",
 }
 
+/** UI-layer keyboard actions dispatched through `UIInputController`. */
+export type UIAction =
+  | 'toggle_inventory'
+  | 'toggle_crafting'
+  | 'toggle_skills'
+  | 'toggle_equipment'
+  | 'toggle_quests'
+  | 'close_panel'
+  | 'menu_up'
+  | 'menu_down'
+  | 'menu_select'
+  | 'menu_back'
+  | 'menu_danger'
+  | 'toggle_env_inspector'
+  | 'hotbar_1' | 'hotbar_2' | 'hotbar_3' | 'hotbar_4' | 'hotbar_5'
+  | 'hotbar_6' | 'hotbar_7' | 'hotbar_8' | 'hotbar_9';
+
 /** Logical input actions resolved through `InputResource.bindings`. */
 export enum InputAction {
   MoveUp = "MOVE_UP",

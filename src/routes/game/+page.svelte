@@ -33,6 +33,7 @@ import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 import TreatmentPanel from "$lib/ui/panels/TreatmentPanel.svelte";
 import ConstructionOverlay from "$lib/ui/elements/ConstructionOverlay.svelte";
 import { StorageKeys } from "$lib/domain/game-events";
+import { uiInputController } from "$lib/core/input/input-controller.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 import TopHudActions from "$lib/ui/hud/TopHudActions.svelte";
 
@@ -60,6 +61,7 @@ let carcassPanelTargetId = $state<string | null>(null);
 let contextMenu   = $state<WorldContextMenuTarget | null>(null);
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 let envInterval: ReturnType<typeof setInterval> | null = null;
+let uiUnsubs: (() => void)[] = [];
 
 function onHudUpdate(s: HudState) {
   coords = { gx: s.gx, gy: s.gy };
@@ -146,72 +148,6 @@ function toggleScenario() {
   showScenario ? overlayStack.close(OverlayId.Scenario) : overlayStack.push(OverlayId.Scenario);
 }
 
-let lastEscapeTime = 0;
-
-function handleGlobalKeyDown(e: KeyboardEvent) {
-  if (devConsole.open) return;
-  const tag = (e.target as HTMLElement)?.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-  // Menu context controller: route navigation keys into the open menu first.
-  if (menuController.active) {
-    if (e.key === "ArrowUp")                                    { menuController.moveUp();              e.preventDefault(); return; }
-    if (e.key === "ArrowDown")                                  { menuController.moveDown();            e.preventDefault(); return; }
-    if (e.key === "ArrowRight" || e.key === "Enter")            { menuController.activateFocused();     e.preventDefault(); return; }
-    if (e.key === "ArrowLeft"  || e.key === "Backspace")        { closeContextMenu();                   e.preventDefault(); return; }
-    if (e.code === "ShiftRight" || e.key === "Delete")          { menuController.activateByRole("danger"); e.preventDefault(); return; }
-  }
-
-  if (e.key === "Escape") {
-    if (engine?.isInPlacementMode()) return;
-    if (contextMenu) {
-      closeContextMenu();
-      e.preventDefault();
-      return;
-    }
-    const now = performance.now();
-    if (now - lastEscapeTime < 300) {
-      // Double press: close all menus
-      overlayStack.clear();
-      e.preventDefault();
-    } else {
-      // Single press: close topmost menu
-      if (!overlayStack.isEmpty) {
-        overlayStack.popTop();
-        e.preventDefault();
-      }
-    }
-    lastEscapeTime = now;
-    return;
-  }
-
-  if (e.key === "Tab") {
-    e.preventDefault();
-    toggleInventory();
-    return;
-  }
-  if (e.key === "g" || e.key === "G") {
-    toggleCrafting();
-    return;
-  }
-  if (e.key === "c" || e.key === "C") {
-    toggleSkills();
-    return;
-  }
-  if (e.key === "i" || e.key === "I") {
-    toggleEquipment();
-    return;
-  }
-  if (e.key === "q" || e.key === "Q") {
-    toggleQuests();
-    return;
-  }
-  if (e.key === "F8") {
-    engine?.toggleEnvironmentInspector();
-    e.preventDefault();
-    return;
-  }
-}
 
 // --- Dialogue â†” stack sync -----------------------------------------------
 // DialogueBox owns its open state in dialogueState.activeNpc (domain module).
@@ -342,6 +278,84 @@ onMount(async () => {
   }
   registerDevCommands(engine);
 
+  // Register all UI keyboard bindings through the controller. Unsubscribed in onDestroy.
+  let lastEscapeTime = 0;
+  uiUnsubs = [
+    uiInputController.register({
+      action: 'menu_up', keys: ['arrowup'], layer: 'menu',
+      handler: (e) => { if (!menuController.active) return false; menuController.moveUp(); e.preventDefault(); return true; },
+    }),
+    uiInputController.register({
+      action: 'menu_down', keys: ['arrowdown'], layer: 'menu',
+      handler: (e) => { if (!menuController.active) return false; menuController.moveDown(); e.preventDefault(); return true; },
+    }),
+    uiInputController.register({
+      action: 'menu_select', keys: ['arrowright', 'enter'], layer: 'menu',
+      handler: (e) => { if (!menuController.active) return false; menuController.activateFocused(); e.preventDefault(); return true; },
+    }),
+    uiInputController.register({
+      action: 'menu_back', keys: ['arrowleft', 'backspace'], layer: 'menu',
+      handler: (e) => { if (!menuController.active) return false; closeContextMenu(); e.preventDefault(); return true; },
+    }),
+    uiInputController.register({
+      action: 'menu_danger', keys: ['shift', 'delete'], layer: 'menu',
+      handler: (e) => {
+        if (!menuController.active) return false;
+        // WHY: original code used e.code === "ShiftRight" to block LeftShift from triggering danger
+        if (e.code !== 'ShiftRight' && e.key !== 'Delete') return false;
+        menuController.activateByRole('danger');
+        e.preventDefault();
+        return true;
+      },
+    }),
+    uiInputController.register({
+      action: 'close_panel', keys: ['escape'], layer: 'overlay',
+      handler: (e) => {
+        // Let InputResource handle escape during building/item placement
+        if (engine?.isInPlacementMode()) return false;
+        if (contextMenu) { closeContextMenu(); e.preventDefault(); return true; }
+        if (overlayStack.isEmpty) return false;
+        const now = performance.now();
+        if (now - lastEscapeTime < 300) {
+          overlayStack.clear();
+        } else {
+          overlayStack.popTop();
+        }
+        e.preventDefault();
+        lastEscapeTime = now;
+        return true;
+      },
+    }),
+    uiInputController.register({
+      action: 'toggle_inventory', keys: ['tab'], layer: 'game',
+      handler: (e) => { e.preventDefault(); toggleInventory(); return true; },
+    }),
+    uiInputController.register({
+      action: 'toggle_crafting', keys: ['g'], layer: 'game',
+      handler: () => { toggleCrafting(); return true; },
+    }),
+    uiInputController.register({
+      action: 'toggle_skills', keys: ['c'], layer: 'game',
+      handler: () => { toggleSkills(); return true; },
+    }),
+    uiInputController.register({
+      action: 'toggle_equipment', keys: ['i'], layer: 'game',
+      handler: () => { toggleEquipment(); return true; },
+    }),
+    uiInputController.register({
+      action: 'toggle_quests', keys: ['q'], layer: 'game',
+      handler: () => { toggleQuests(); return true; },
+    }),
+    uiInputController.register({
+      action: 'toggle_env_inspector', keys: ['f8'], layer: 'game',
+      handler: (e) => { engine?.toggleEnvironmentInspector(); e.preventDefault(); return true; },
+    }),
+  ];
+
+  // Cross-validate UI keys against game InputResource bindings now that all
+  // registrations are live. Logs (does not throw) on overlap.
+  uiInputController.validateAgainst(engine.inputResource.bindings);
+
   // Start 5-second backend env tick loop
   envInterval = setInterval(async () => {
     if (!coords) return;
@@ -400,6 +414,7 @@ onMount(async () => {
 onDestroy(() => {
   if (envInterval) clearInterval(envInterval);
   engine?.destroy();
+  for (const unsub of uiUnsubs) unsub();
 });
 </script>
 
@@ -412,7 +427,7 @@ onDestroy(() => {
 
 <svelte:window
   onmousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
-  onkeydown={handleGlobalKeyDown}
+  onkeydown={uiInputController.dispatch}
   onclick={(e) => { if (e.shiftKey) e.preventDefault(); }}
 />
 
