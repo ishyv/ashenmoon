@@ -14,6 +14,7 @@ export type QueuedGameEvent =
       readonly lethal: boolean;
       readonly targetFaction?: string;
       readonly targetPosition?: { readonly x: number; readonly y: number };
+      readonly isCrit?: boolean;
     }
   | {
       readonly type: "health_changed";

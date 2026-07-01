@@ -145,6 +145,7 @@ import { setRpgProfile, equipLocalWeapon, applyRpgState } from "$lib/state/rpg-a
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { cooldownsState, debugConfig } from "$lib/state/runtime-ui-state.svelte";
 import { tickStamina, stamina, staminaConfig } from "$lib/state/rpg/stamina.svelte";
+import { tickCritSetupDecay } from "$lib/state/rpg/crit-setup.svelte";
 import { tickThirst, tickHunger, loadSurvival } from "$lib/state/rpg/survival.svelte";
 import {
   tickStatusEffects,
@@ -1010,6 +1011,7 @@ export class GameEngine {
       if (staminaConfig.max !== combatStats.maxStamina) {
         staminaConfig.max = combatStats.maxStamina;
       }
+      tickCritSetupDecay(dt);
       if (!wasSprinting) {
         // Status mult is already folded into the stat layer; the ratio against
         // the level-1 base scales the pool's own regen rates by level growth.

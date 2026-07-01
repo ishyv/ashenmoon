@@ -24,6 +24,8 @@ import { playSound } from "$lib/audio/audio-engine";
 import { learnAbout } from "$lib/state/rpg/knowledge.svelte";
 import { propertiesFromConsume } from "$lib/domain/knowledge/knowledge-unlock";
 import { getActionFeedback } from "$lib/domain/feedback/action-feedback";
+import { addCritSetupStack } from "$lib/state/rpg/crit-setup.svelte";
+import { CRIT_SETUP_STACK_ON_CONSUME } from "$lib/domain/combat/crit";
 
 
 /** Whether one unit of this item can be consumed right now. */
@@ -100,6 +102,7 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
   learnAbout(itemId, ...propertiesFromConsume({ harmed, restoredThirst }));
 
   triggerQuestEvent(GameEvent.Consume, itemId);
+  addCritSetupStack(CRIT_SETUP_STACK_ON_CONSUME);
   return true;
 }
 

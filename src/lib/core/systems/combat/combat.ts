@@ -97,6 +97,8 @@ import {
 } from "$lib/domain/combat/weapons/attack-runtime";
 import { explicitWeaponDefForItem } from "$lib/domain/combat/weapons/weapon-registry";
 import { resolveGuardedDamage } from "$lib/domain/combat/weapons/guard";
+import { addCritSetupStack, resetCritSetup } from "$lib/state/rpg/crit-setup.svelte";
+import { CRIT_SETUP_STACK_ON_DODGE } from "$lib/domain/combat/crit";
 
 export { trackMovementCombo } from "./kite-combo";
 export { fellSweepSystem, renderFellSweepChargeFeedback, updateFellSweepChargeSystem } from "./fell-sweep";
@@ -225,11 +227,19 @@ export function applyDamage(
   combat?: CombatResource,
   events?: GameEventQueue,
   armor?: number,
+  isCrit?: boolean,
 ): boolean {
   const h = target.health;
-  if (!h || h.invulnTimer > 0 || h.current <= 0) return false;
+  if (!h) return false;
+  if (h.invulnTimer > 0) {
+    // A real attack that would have landed but was dodged via i-frames.
+    if (h.faction === "player") addCritSetupStack(CRIT_SETUP_STACK_ON_DODGE);
+    return false;
+  }
+  if (h.current <= 0) return false;
 
   const isPlayer = h.faction === "player";
+  if (isPlayer) resetCritSetup();
   let damageMultiplier = 1;
   if (isPlayer && combat && combat.kiteStacks > 0) {
     damageMultiplier += 0.15 * combat.kiteStacks;
@@ -303,6 +313,7 @@ export function applyDamage(
     lethal: damage.lethal,
     targetFaction: h.faction,
     ...(target.position ? { targetPosition: { x: target.position.x, y: target.position.y } } : {}),
+    ...(isCrit ? { isCrit: true } : {}),
   });
   events?.push({
     type: "health_changed",

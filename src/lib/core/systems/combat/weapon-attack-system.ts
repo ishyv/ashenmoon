@@ -24,6 +24,8 @@ import type { InputResource } from "$lib/core/input/input";
 import type { GameEventQueue } from "$lib/domain/game-event-queue";
 import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
+import { rollCrit, CRIT_SETUP_STACK_ON_HIT } from "$lib/domain/combat/crit";
+import { addCritSetupStack, consumeCritSetupForMultiplier } from "$lib/state/rpg/crit-setup.svelte";
 import { spendStamina, stamina } from "$lib/state/rpg/stamina.svelte";
 import { getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
 import { weaponDefForItem } from "$lib/domain/combat/weapons/weapon-registry";
@@ -444,6 +446,10 @@ function runHitDetection(args: WeaponAttackSystemArgs, plan: AttackPlan): void {
       : { kind: "none" as const, damageMultiplier: 1, feedback: null };
     damage *= boarCounter.damageMultiplier;
 
+    addCritSetupStack(CRIT_SETUP_STACK_ON_HIT);
+    const isCrit = rollCrit(getPlayerStats().combat.critChance);
+    if (isCrit) damage *= consumeCritSetupForMultiplier();
+
     const finalDamage = Math.max(1, Math.round(damage));
     const knockback = knockbackForWeight(weightClass, config.knockback);
     const lethal = applyDamage(
@@ -458,6 +464,7 @@ function runHitDetection(args: WeaponAttackSystemArgs, plan: AttackPlan): void {
       combat,
       events,
       0,
+      isCrit,
     );
 
     runtime.hitEntityIds.add(target.id);
