@@ -178,6 +178,13 @@ function routeEntityDied(
   playSound("enemy.death", position ? { position: { x: position.x + TILE / 2, y: position.y + TILE / 2 } } : {});
 }
 
+const DEFAULT_DAMAGE_NUMBER_FONT_SIZE = 16;
+const CRIT_DAMAGE_NUMBER_FONT_SIZE = 24;
+const CRIT_CAMERA_SHAKE_MAGNITUDE = 4.5;
+/** Detune in cents — a lower pitch reads as a heavier impact. */
+const CRIT_SOUND_PITCH_CENTS = -250;
+const CRIT_SOUND_GAIN_MULT = 1.3;
+
 function routeDamageApplied(
   event: Extract<QueuedGameEvent, { type: "damage_applied" }>,
   context: FeedbackRouterContext,
@@ -185,6 +192,7 @@ function routeDamageApplied(
   const target = context.world.entities.find((entity) => entity.id === event.targetId);
   const faction = event.targetFaction ?? target?.health?.faction;
   const isPlayer = faction === "player";
+  const isCrit = !!event.isCrit;
   const position = event.targetPosition ?? target?.position;
   if (!position) return;
 
@@ -199,7 +207,7 @@ function routeDamageApplied(
     event.targetId,
     flashX,
     flashY,
-    isPlayer ? Colors.combat.playerHit : Colors.combat.enemyHit,
+    isCrit ? Colors.combat.critFlash : isPlayer ? Colors.combat.playerHit : Colors.combat.enemyHit,
   );
   spawnDamageNumber(
     context.vfx,
@@ -207,13 +215,18 @@ function routeDamageApplied(
     flashX,
     numberY,
     event.amount,
-    isPlayer ? Colors.combat.playerDmgNum : Colors.combat.enemyDmgNum,
+    isCrit ? Colors.combat.critDmgNum : isPlayer ? Colors.combat.playerDmgNum : Colors.combat.enemyDmgNum,
+    isCrit ? CRIT_DAMAGE_NUMBER_FONT_SIZE : DEFAULT_DAMAGE_NUMBER_FONT_SIZE,
   );
-  triggerCameraShake(context.vfx, isPlayer ? 4 : 2.5, 0.12);
+  triggerCameraShake(context.vfx, isCrit ? CRIT_CAMERA_SHAKE_MAGNITUDE : isPlayer ? 4 : 2.5, 0.12);
 
   const species = target?.animal?.speciesId ?? "humanoid";
-  playSound(isPlayer ? "combat.hit.player" : resolveCombatSound({ phase: "hit", targetMaterial: "flesh" }), {
-    position: hitPos,
-    conditions: { targetSpecies: species }
-  });
+  playSound(
+    isPlayer ? "combat.hit.player" : resolveCombatSound({ phase: "hit", targetMaterial: "flesh" }),
+    {
+      position: hitPos,
+      conditions: { targetSpecies: species },
+      ...(isCrit ? { pitch: CRIT_SOUND_PITCH_CENTS, gain: CRIT_SOUND_GAIN_MULT } : {}),
+    },
+  );
 }

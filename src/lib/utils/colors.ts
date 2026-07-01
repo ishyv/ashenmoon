@@ -33,6 +33,8 @@ export const Colors = {
     enemyHit: 0xffffff,
     playerDmgNum: 0xff6666,
     enemyDmgNum: 0xffe066,
+    critDmgNum: 0xffaa00,
+    critFlash: 0xfff2b0,
     slashArc: 0xfff1c0,
     kiteArc: 0x33e0a6,
     fellSweepArc: 0xff8833,

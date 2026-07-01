@@ -1270,11 +1270,12 @@ export function spawnDamageNumber(
   worldX: number,
   worldY: number,
   amount: number,
-  color: number
+  color: number,
+  fontSize = 16
 ): void {
   const textStyle = new TextStyle({
     fontFamily: ["monospace", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "sans-serif"],
-    fontSize: 16,
+    fontSize,
     fontWeight: "bold",
     fill: color,
     stroke: { color: Colors.ui.stroke, width: 3 },

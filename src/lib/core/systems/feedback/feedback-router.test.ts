@@ -64,11 +64,59 @@ describe("FeedbackRouter", () => {
       96 + TILE * 0.4,
       7,
       Colors.combat.enemyDmgNum,
+      16,
     );
     expect(triggerCameraShake).toHaveBeenCalledWith(vfx, 2.5, 0.12);
     expect(playSound).toHaveBeenCalledWith("impact.flesh", {
       position: { x: 64 + TILE / 2, y: 96 + TILE / 2 },
       conditions: { targetSpecies: "humanoid" },
+    });
+  });
+
+  it("gives crits distinct feedback: bigger number, crit colors, stronger shake, altered sound — never floating text", () => {
+    const world = new World<Entity>();
+    const entityLayer = {} as never;
+    const vfx = {} as never;
+
+    routeGameEventsToFeedback(
+      [
+        {
+          type: "damage_applied",
+          targetId: "wolf_1",
+          amount: 21,
+          damageType: "physical",
+          lethal: false,
+          targetFaction: "hostile",
+          targetPosition: { x: 64, y: 96 },
+          isCrit: true,
+        },
+      ],
+      { world, vfx, entityLayer },
+    );
+
+    expect(flashEntity).toHaveBeenCalledWith(
+      vfx,
+      entityLayer,
+      "wolf_1",
+      64 + TILE / 2,
+      96 + TILE,
+      Colors.combat.critFlash,
+    );
+    expect(spawnDamageNumber).toHaveBeenCalledWith(
+      vfx,
+      entityLayer,
+      64 + TILE / 2,
+      96 + TILE * 0.4,
+      21,
+      Colors.combat.critDmgNum,
+      24,
+    );
+    expect(triggerCameraShake).toHaveBeenCalledWith(vfx, 4.5, 0.12);
+    expect(playSound).toHaveBeenCalledWith("impact.flesh", {
+      position: { x: 64 + TILE / 2, y: 96 + TILE / 2 },
+      conditions: { targetSpecies: "humanoid" },
+      pitch: -250,
+      gain: 1.3,
     });
   });
 
