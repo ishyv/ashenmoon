@@ -77,6 +77,8 @@ export const BASE_UTILITY_STATS: UtilityStats = {
   carryCapacity: 100,
   gatheringPower: 1,
   gatheringSpeed: 1,
+  miningPower: 1,
+  miningSpeed: 1,
   craftingSpeed: 1,
   discoveryChance: 0,
   stealth: 0,

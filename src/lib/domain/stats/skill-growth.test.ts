@@ -26,16 +26,15 @@ describe("SKILL_MAX_LEVEL", () => {
   });
 });
 
-describe("gathering skill modifiers (lumberjacking, mining)", () => {
-  it("are zero at level 1", () => {
+describe("lumberjackingModifiers", () => {
+  it("feeds gatheringPower/gatheringSpeed, zero at level 1", () => {
     expect(lumberjackingModifiers(1)).toEqual([
       { stat: "gatheringPower", op: "percentAdd", value: 0, source: "skill" },
       { stat: "gatheringSpeed", op: "percentAdd", value: 0, source: "skill" },
     ]);
-    expect(miningModifiers(1)).toEqual(lumberjackingModifiers(1));
   });
 
-  it("scale linearly with level and cap at level 20", () => {
+  it("scales linearly with level and caps at level 20", () => {
     const atTen = lumberjackingModifiers(10);
     expect(atTen[0]!.value).toBeCloseTo(0.36); // 0.04 * 9 steps
     expect(atTen[1]!.value).toBeCloseTo(0.45); // 0.05 * 9 steps
@@ -45,6 +44,27 @@ describe("gathering skill modifiers (lumberjacking, mining)", () => {
     expect(atCap).toEqual(beyondCap);
     expect(atCap[0]!.value).toBeCloseTo(0.76); // 0.04 * 19 steps
     expect(atCap[1]!.value).toBeCloseTo(0.95); // 0.05 * 19 steps
+  });
+});
+
+describe("miningModifiers", () => {
+  it("feeds miningPower/miningSpeed, zero at level 1", () => {
+    expect(miningModifiers(1)).toEqual([
+      { stat: "miningPower", op: "percentAdd", value: 0, source: "skill" },
+      { stat: "miningSpeed", op: "percentAdd", value: 0, source: "skill" },
+    ]);
+  });
+
+  it("scales identically to lumberjacking but on its own stat keys", () => {
+    const atCap = miningModifiers(SKILL_MAX_LEVEL);
+    expect(atCap[0]!.value).toBeCloseTo(0.76);
+    expect(atCap[1]!.value).toBeCloseTo(0.95);
+    expect(atCap[0]!.stat).toBe("miningPower");
+    expect(atCap[1]!.stat).toBe("miningSpeed");
+  });
+
+  it("no longer equals lumberjackingModifiers (independent stats)", () => {
+    expect(miningModifiers(SKILL_MAX_LEVEL)).not.toEqual(lumberjackingModifiers(SKILL_MAX_LEVEL));
   });
 });
 

@@ -54,6 +54,8 @@ export interface UtilityStats {
   carryCapacity: number;
   gatheringPower: number;
   gatheringSpeed: number;
+  miningPower: number;
+  miningSpeed: number;
   craftingSpeed: number;
   discoveryChance: number;
   stealth: number;
@@ -89,8 +91,8 @@ const RESISTANCE_KEYS: readonly (keyof ResistanceStats)[] = [
   "sicknessResist", "bleedResist",
 ];
 const UTILITY_KEYS: readonly (keyof UtilityStats)[] = [
-  "carryCapacity", "gatheringPower", "gatheringSpeed", "craftingSpeed",
-  "discoveryChance", "stealth", "noise",
+  "carryCapacity", "gatheringPower", "gatheringSpeed", "miningPower", "miningSpeed",
+  "craftingSpeed", "discoveryChance", "stealth", "noise",
 ];
 
 const LAYER_OF: Record<StatKey, StatLayer> = Object.fromEntries([
@@ -138,6 +140,8 @@ export const STAT_DISPLAY_NAMES: Record<StatKey, string> = {
   carryCapacity: "carry capacity",
   gatheringPower: "gathering power",
   gatheringSpeed: "gathering speed",
+  miningPower: "mining power",
+  miningSpeed: "mining speed",
   craftingSpeed: "crafting speed",
   discoveryChance: "discovery chance",
   stealth: "stealth",

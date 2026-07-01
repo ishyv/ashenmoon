@@ -24,20 +24,24 @@ function steps(level: number): number {
   return Math.max(0, Math.min(SKILL_MAX_LEVEL, Math.floor(level)) - 1);
 }
 
-function gatherModifiers(level: number): StatModifier[] {
+function activityModifiers(
+  level: number,
+  powerStat: "gatheringPower" | "miningPower",
+  speedStat: "gatheringSpeed" | "miningSpeed",
+): StatModifier[] {
   const s = steps(level);
   return [
-    { stat: "gatheringPower", op: "percentAdd", value: 0.04 * s, source: "skill" },
-    { stat: "gatheringSpeed", op: "percentAdd", value: 0.05 * s, source: "skill" },
+    { stat: powerStat, op: "percentAdd", value: 0.04 * s, source: "skill" },
+    { stat: speedStat, op: "percentAdd", value: 0.05 * s, source: "skill" },
   ];
 }
 
 export function lumberjackingModifiers(level: number): StatModifier[] {
-  return gatherModifiers(level);
+  return activityModifiers(level, "gatheringPower", "gatheringSpeed");
 }
 
 export function miningModifiers(level: number): StatModifier[] {
-  return gatherModifiers(level);
+  return activityModifiers(level, "miningPower", "miningSpeed");
 }
 
 /** Only combat stat character level leaves permanently at 0 — Combat skill's home. */
