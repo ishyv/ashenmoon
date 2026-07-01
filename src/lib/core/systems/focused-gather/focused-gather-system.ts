@@ -20,8 +20,9 @@ import { stamina, spendStamina } from "$lib/state/rpg/stamina.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { getEquippedWeaponId } from "$lib/state/rpg/inventory-api";
-import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
-import { SkillKey } from "$lib/domain/game-events";
+import { getGatherableDefinition, resolveGatherSkillKey } from "$lib/domain/gathering/gatherables";
+import { gatherActivityStats } from "$lib/domain/stats/skill-growth";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { awardSkillXp } from "$lib/state/rpg/skill-xp";
 import { applyWound } from "$lib/state/rpg/wounds.svelte";
 import { syncPickup } from "$lib/state/persistence/remote-sync";
@@ -305,9 +306,12 @@ function finalizeAndReward(
   const player = getPlayerEntity();
 
   if (def) {
+    const skillKey = resolveGatherSkillKey(def);
+    const { power } = gatherActivityStats(skillKey, getPlayerStats());
+
     // Yield: persisted via the pickup path (empty pickupId avoids polluting the
     // one-shot dedupe list). Client-side grant per the milestone's decision.
-    const items = resolveYieldItems(def, result, session.profile.baseYield);
+    const items = resolveYieldItems(def, result, session.profile.baseYield * power);
     for (const item of items) {
       void syncPickup(item.itemId, "", item.quantity).then((r) => {
         if (r.ok) applyRpgState(r.data.playerState);
@@ -315,9 +319,8 @@ function finalizeAndReward(
     }
 
     // XP into the node's gathering skill, scaled by grade.
-    const skill = def.skillKey ?? (def.solidKind === "tree" ? SkillKey.Lumberjacking : SkillKey.Mining);
     const xp = Math.round(session.profile.baseYield * 3 * result.xpMultiplier);
-    awardSkillXp(skill, xp, vfx, player.position!, entityLayer);
+    if (skillKey) awardSkillXp(skillKey, xp, vfx, player.position!, entityLayer);
 
     // Botched runs wound the gatherer (the reliably-persisted penalty;
     // tool-durability loss is deferred until a profile-save path exists).
