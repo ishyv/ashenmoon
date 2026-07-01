@@ -23,12 +23,18 @@ import {
 import { StorageKeys } from "$lib/domain/game-events";
 import { playerRpgEntityId, rpgEventQueue } from "$lib/state/rpg/rpg-feedback-router";
 import { loadSlice, saveSlice } from "$lib/state/persistence/save-load";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 
 export const statusState = $state<{ active: ActiveStatus[] }>({ active: [] });
 
 export function applyStatusEffect(id: StatusId, durationSec: number, source?: string, nonLethal?: boolean): void {
   const had = statusState.active.some((s) => s.id === id);
-  const list = applyStatus(statusState.active, id, durationSec, source);
+  const resistances = {
+    bleedResist: getPlayerStats().resistances.bleedResist,
+    sicknessResist: getPlayerStats().resistances.sicknessResist,
+    toxinResist: getPlayerStats().resistances.toxinResist,
+  };
+  const list = applyStatus(statusState.active, id, durationSec, source, resistances);
   statusState.active = nonLethal
     ? list.map((s) => (s.id === id ? { ...s, nonLethal: true } : s))
     : list;

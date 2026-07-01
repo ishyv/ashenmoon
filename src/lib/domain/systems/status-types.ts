@@ -58,6 +58,34 @@ export interface StatusModifiers {
   moveSpeedMult?: number;
 }
 
+/** The three resist stats that can shorten a status's applied duration. */
+export interface StatusResistances {
+  bleedResist: number;
+  sicknessResist: number;
+  toxinResist: number;
+}
+
+/**
+ * Which resist stat, if any, shortens this status's applied duration on
+ * `applyStatus`. Confirmed mapping (2026-07-01): bleed-flavored wounds all
+ * fall under bleedResist; Sickness/Infected under sicknessResist; Poison
+ * under toxinResist. Everything else (Hypothermia, Exhaustion, Damp, Wet,
+ * Soaked, Starving) is unaffected — these aren't wound/illness/toxin harm in
+ * the same sense, or (Hypothermia) are already mitigated upstream via
+ * coldResist reducing cold buildup itself.
+ */
+export const STATUS_RESIST_CATEGORY: Partial<Record<StatusId, keyof StatusResistances>> = {
+  [StatusId.Bleeding]: "bleedResist",
+  [StatusId.Cut]: "bleedResist",
+  [StatusId.DeepCut]: "bleedResist",
+  [StatusId.Scratch]: "bleedResist",
+  [StatusId.BiteWound]: "bleedResist",
+  [StatusId.Injured]: "bleedResist",
+  [StatusId.Sickness]: "sicknessResist",
+  [StatusId.Infected]: "sicknessResist",
+  [StatusId.Poison]: "toxinResist",
+};
+
 export interface StatusDefinition {
   id: StatusId;
   label: string;

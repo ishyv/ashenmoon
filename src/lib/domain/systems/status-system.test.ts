@@ -25,6 +25,85 @@ describe("applyStatus", () => {
   });
 });
 
+describe("applyStatus with resistances", () => {
+  it("scales a mapped status's duration down by the matching resist stat", () => {
+    const withResist = applyStatus(
+      [],
+      StatusId.Bleeding,
+      20,
+      undefined,
+      { bleedResist: 50, sicknessResist: 0, toxinResist: 0 },
+    );
+    expect(withResist[0]!.remainingSec).toBe(10);
+
+    const withoutResist = applyStatus([], StatusId.Bleeding, 20);
+    expect(withoutResist[0]!.remainingSec).toBe(20);
+  });
+
+  it("does not scale an unmapped status even with full resistances", () => {
+    const list = applyStatus(
+      [],
+      StatusId.Hypothermia,
+      60,
+      undefined,
+      { bleedResist: 100, sicknessResist: 100, toxinResist: 100 },
+    );
+    expect(list[0]!.remainingSec).toBe(60);
+  });
+
+  it("scales before comparing durations on refresh, instead of comparing raw values", () => {
+    // First apply: 40s at 75% bleedResist -> scales to 10.
+    const first = applyStatus(
+      [],
+      StatusId.Bleeding,
+      40,
+      undefined,
+      { bleedResist: 75, sicknessResist: 0, toxinResist: 0 },
+    );
+    expect(first[0]!.remainingSec).toBe(10);
+
+    // Second apply: 20s with no resistances -> scales to 20 (no-op).
+    // The correct result is Math.max(10, 20) = 20. A bug that scaled after
+    // the max (or used the raw 40 instead of the scaled 10) would wrongly
+    // yield 40.
+    const second = applyStatus(first, StatusId.Bleeding, 20);
+    expect(second[0]!.remainingSec).toBe(20);
+  });
+
+  it("scales to exactly 0 at 100 bleedResist", () => {
+    const list = applyStatus(
+      [],
+      StatusId.Bleeding,
+      20,
+      undefined,
+      { bleedResist: 100, sicknessResist: 0, toxinResist: 0 },
+    );
+    expect(list[0]!.remainingSec).toBe(0);
+  });
+
+  it("clamps bleedResist above 100 down to 100 (duration 0)", () => {
+    const list = applyStatus(
+      [],
+      StatusId.Bleeding,
+      20,
+      undefined,
+      { bleedResist: 150, sicknessResist: 0, toxinResist: 0 },
+    );
+    expect(list[0]!.remainingSec).toBe(0);
+  });
+
+  it("clamps negative bleedResist up to 0 (duration unchanged)", () => {
+    const list = applyStatus(
+      [],
+      StatusId.Bleeding,
+      20,
+      undefined,
+      { bleedResist: -20, sicknessResist: 0, toxinResist: 0 },
+    );
+    expect(list[0]!.remainingSec).toBe(20);
+  });
+});
+
 describe("clearStatus", () => {
   it("removes the status and returns the same reference when absent", () => {
     const list = applyStatus([], StatusId.Cut, 20);

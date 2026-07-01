@@ -9,8 +9,10 @@
 
 import {
   STATUS_DEFINITIONS,
+  STATUS_RESIST_CATEGORY,
   StatusId,
   type ActiveStatus,
+  type StatusResistances,
 } from "./status-types";
 
 /** Result of advancing statuses by a time slice. */
@@ -31,16 +33,35 @@ export function applyStatus(
   id: StatusId,
   durationSec: number,
   source?: string,
+  resistances?: StatusResistances,
 ): ActiveStatus[] {
+  const scaledDuration = scaleDurationByResist(id, durationSec, resistances);
   const existing = list.find((s) => s.id === id);
   if (existing) {
     return list.map((s) =>
       s.id === id
-        ? { ...s, remainingSec: Math.max(s.remainingSec, durationSec), ...(source !== undefined ? { source } : {}) }
+        ? { ...s, remainingSec: Math.max(s.remainingSec, scaledDuration), ...(source !== undefined ? { source } : {}) }
         : s,
     );
   }
-  return [...list, { id, remainingSec: durationSec, ...(source !== undefined ? { source } : {}) }];
+  return [...list, { id, remainingSec: scaledDuration, ...(source !== undefined ? { source } : {}) }];
+}
+
+/**
+ * Shrinks a status's applied duration by the matching resist stat, treated as
+ * a 0-100 percent (same idiom as domain/combat/crit.ts's rollCrit). No-ops
+ * when resistances weren't supplied, or the status has no mapped category.
+ */
+function scaleDurationByResist(
+  id: StatusId,
+  durationSec: number,
+  resistances?: StatusResistances,
+): number {
+  if (!resistances) return durationSec;
+  const category = STATUS_RESIST_CATEGORY[id];
+  if (!category) return durationSec;
+  const resist = Math.max(0, Math.min(100, resistances[category]));
+  return durationSec * (1 - resist / 100);
 }
 
 export function clearStatus(list: ActiveStatus[], id: StatusId): ActiveStatus[] {
