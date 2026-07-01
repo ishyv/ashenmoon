@@ -92,6 +92,9 @@ export const Colors = {
     evade: 0x55aaff,
     combat: 0xff8855,
     fellSweep: 0xff6622,
+    vigilance: 0x8899aa,
+    woodcraft: 0x668855,
+    craftsmanship: 0xddaa44,
   },
   fourfold: {
     wheelSlash: 0xffd700,      // Gold

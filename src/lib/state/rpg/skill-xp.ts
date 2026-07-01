@@ -30,6 +30,9 @@ const SKILL_DISPLAY: Record<SkillKey, SkillDisplay> = {
   [SkillKey.Combat]: { label: "Combat", levelColor: Colors.skillLevel.combat },
   [SkillKey.FellSweep]: { label: "Fell Sweep", levelColor: Colors.skillLevel.fellSweep },
   [SkillKey.KiteCombo]: { label: "Kite Specialization", levelColor: Colors.skillLevel.combat },
+  [SkillKey.Vigilance]: { label: "Vigilance", levelColor: Colors.skillLevel.vigilance },
+  [SkillKey.Woodcraft]: { label: "Woodcraft", levelColor: Colors.skillLevel.woodcraft },
+  [SkillKey.Craftsmanship]: { label: "Craftsmanship", levelColor: Colors.skillLevel.craftsmanship },
 };
 
 /**

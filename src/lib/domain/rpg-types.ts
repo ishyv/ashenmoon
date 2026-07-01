@@ -74,8 +74,12 @@ export interface RpgPlayerState {
     lumberjacking: RpgSkillState;
     mining: RpgSkillState;
     evade: RpgSkillState;
+    combat?: RpgSkillState;
     fellSweep?: RpgSkillState;
     kiteCombo?: RpgSkillState;
+    vigilance?: RpgSkillState;
+    woodcraft?: RpgSkillState;
+    craftsmanship?: RpgSkillState;
   };
   runSettings?: {
     deathMode: string;

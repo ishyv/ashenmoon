@@ -32,9 +32,9 @@ export enum EntityId {
 }
 
 /**
- * Keys into `gameState.rpg.skills`. `Combat` is optional — the backend may not define
- * it yet, so writers must treat its absence as a safe no-op (see the engine's
- * `awardCombatXp`).
+ * Keys into `gameState.rpg.skills`. All keys past the base three (lumberjacking/
+ * mining/evade) are optional on `RpgPlayerState["skills"]` for old-save
+ * compatibility; `awardSkillXp` treats a missing key as a safe no-op.
  */
 export enum SkillKey {
   Lumberjacking = "lumberjacking",
@@ -43,6 +43,9 @@ export enum SkillKey {
   Combat = "combat",
   FellSweep = "fellSweep",
   KiteCombo = "kiteCombo",
+  Vigilance = "vigilance",
+  Woodcraft = "woodcraft",
+  Craftsmanship = "craftsmanship",
 }
 
 /** UI-layer keyboard actions dispatched through `UIInputController`. */

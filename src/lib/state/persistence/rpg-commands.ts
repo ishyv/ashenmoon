@@ -86,8 +86,12 @@ export function createDefaultSkills(): RpgPlayerState["skills"] {
     lumberjacking: { level: 1, xp: 0, nextXp: 100 },
     mining: { level: 1, xp: 0, nextXp: 100 },
     evade: { level: 1, xp: 0, nextXp: 100 },
+    combat: { level: 1, xp: 0, nextXp: 100 },
     fellSweep: { level: 1, xp: 0, nextXp: 100 },
     kiteCombo: { level: 1, xp: 0, nextXp: 100 },
+    vigilance: { level: 1, xp: 0, nextXp: 100 },
+    woodcraft: { level: 1, xp: 0, nextXp: 100 },
+    craftsmanship: { level: 1, xp: 0, nextXp: 100 },
   };
 }
 

@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { StorageKeys } from "$lib/domain/game-events";
 import { SAVE_VERSION } from "$lib/state/persistence/migrations";
 import {
+  createDefaultSkills as createDefaultRpgCommandsSkills,
   getLocalRpgState,
   localRpgCommands,
   normalizePlayerState,
   saveLocalRpgState,
 } from "$lib/state/persistence/rpg-commands";
-import { createDefaultPlayerState } from "$lib/domain/rpg-defaults";
+import {
+  createDefaultPlayerState,
+  createDefaultSkills as createDefaultDomainSkills,
+} from "$lib/domain/rpg-defaults";
 
 describe("local RPG commands", () => {
   beforeEach(() => {
@@ -189,5 +193,34 @@ describe("local RPG commands", () => {
     const unequipped = localRpgCommands.equipGear(null, "chest");
     expect(unequipped.profile.loadout.chest).toBeNull();
     expect(unequipped.inventory.slots.hide_cloak).toEqual({ qty: 1 });
+  });
+});
+
+describe("skill defaults", () => {
+  it("rpg-commands and rpg-defaults createDefaultSkills stay in sync", () => {
+    expect(Object.keys(createDefaultRpgCommandsSkills()).sort()).toEqual(
+      Object.keys(createDefaultDomainSkills()).sort(),
+    );
+  });
+
+  it("includes combat, vigilance, woodcraft, and craftsmanship at level 1", () => {
+    const skills = createDefaultRpgCommandsSkills();
+    expect(skills.combat).toEqual({ level: 1, xp: 0, nextXp: 100 });
+    expect(skills.vigilance).toEqual({ level: 1, xp: 0, nextXp: 100 });
+    expect(skills.woodcraft).toEqual({ level: 1, xp: 0, nextXp: 100 });
+    expect(skills.craftsmanship).toEqual({ level: 1, xp: 0, nextXp: 100 });
+  });
+
+  it("normalizePlayerState fills the new skills for an old-shaped save missing them", () => {
+    const normalized = normalizePlayerState({
+      rpg: {
+        inventory: { slots: {} },
+        skills: { lumberjacking: { level: 3, xp: 10, nextXp: 400 } },
+      },
+      survival: { thirst: 100 },
+    });
+    expect(normalized.skills.lumberjacking).toEqual({ level: 3, xp: 10, nextXp: 400 });
+    expect(normalized.skills.combat).toEqual({ level: 1, xp: 0, nextXp: 100 });
+    expect(normalized.skills.vigilance).toEqual({ level: 1, xp: 0, nextXp: 100 });
   });
 });
