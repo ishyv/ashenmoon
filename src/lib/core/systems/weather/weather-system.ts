@@ -2,6 +2,7 @@ import type { Graphics, Container } from "pixi.js";
 import type { World } from "miniplex";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import { calculatePlayerWarmth } from "$lib/domain/exposure/player-warmth";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
 import { TIME_WEATHER_CONFIG } from "$lib/domain/weather/time-config";
 import {
@@ -310,7 +311,8 @@ export function weatherOverlaySystem(
     const { temperatureDelta } = nightMods;
     if (temperatureDelta < 0) {
       const warmth = gameState.rpg ? calculatePlayerWarmth(gameState.rpg) : 0;
-      const effectiveCold = Math.max(0, -temperatureDelta - warmth);
+      const coldResist = getPlayerStats().resistances.coldResist;
+      const effectiveCold = Math.max(0, -temperatureDelta - warmth - coldResist);
       weather.coldAccumulator = Math.min(100, weather.coldAccumulator + (effectiveCold * 0.08 * dt * coldBuildRateMult));
     } else {
       weather.coldAccumulator = Math.max(0, weather.coldAccumulator - (temperatureDelta * 0.2 * dt));

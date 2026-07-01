@@ -60,6 +60,7 @@ describe("collectWolfCampThreatFactors", () => {
 
 import { weatherOverlaySystem, WeatherResource } from "$lib/core/systems/weather/weather-system";
 import { gameState } from "$lib/state/game-state.svelte";
+import { createDefaultSkills } from "$lib/domain/rpg-defaults";
 
 describe("weatherOverlaySystem warmth integration", () => {
   it("reduces cold accumulation based on player warmth/insulation", () => {
@@ -139,6 +140,45 @@ describe("weatherOverlaySystem warmth integration", () => {
 
     const coldAccumWithWarmth = weather.coldAccumulator;
     expect(coldAccumWithWarmth).toBeLessThan(coldAccumWithNoWarmth);
+
+    // 3. coldResist from a leveled Vigilance skill (warmth back to 0)
+    weather.coldAccumulator = 0;
+    if (gameState.rpg) {
+      gameState.rpg.profile = {
+        characterLevel: 1,
+        loadout: {
+          helmet: null,
+          chest: null,
+          shield: null,
+          pants: null,
+          boots: null,
+          ring: null,
+          necklace: null,
+        },
+      } as any;
+      gameState.rpg.skills = createDefaultSkills();
+      gameState.rpg.skills.vigilance = { level: 20, xp: 0, nextXp: 2000 };
+    }
+
+    weatherOverlaySystem(
+      world,
+      weather,
+      player,
+      dummyOverlay,
+      dummyContainer,
+      shelterColdMult,
+      1.0 // dt
+    );
+
+    const coldAccumWithResist = weather.coldAccumulator;
+    expect(coldAccumWithResist).toBeLessThan(coldAccumWithNoWarmth);
+
+    // Reset skills back to a clean state so test-order in this file
+    // (or any future test appended below) doesn't inherit the leveled
+    // Vigilance skill mutated above.
+    if (gameState.rpg) {
+      gameState.rpg.skills = createDefaultSkills();
+    }
   });
 });
 
