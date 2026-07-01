@@ -34,9 +34,13 @@ describe("checkGatherTool", () => {
 });
 
 describe("scaling", () => {
-  it("speeds up gathering with skill, floored at 0.15s", () => {
+  it("speeds up gathering with a speed multiplier, floored at 0.15s", () => {
     expect(gatherInterval(0.6, 1)).toBeCloseTo(0.6);
-    expect(gatherInterval(0.6, 5)).toBeCloseTo(0.6 * 0.95 ** 4);
+    expect(gatherInterval(0.6, 1.95)).toBeCloseTo(0.6 / 1.95);
     expect(gatherInterval(0.6, 100)).toBe(0.15);
+  });
+
+  it("does not divide by zero for a degenerate multiplier", () => {
+    expect(gatherInterval(0.6, 0)).toBe(0.6 / 0.01);
   });
 });

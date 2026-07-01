@@ -8,7 +8,6 @@
 export type ToolKind = "axe" | "pickaxe";
 
 const MIN_GATHER_INTERVAL = 0.15;
-const GATHER_SKILL_FACTOR = 0.95;
 
 /** Tool kind a gather action demands. Mining needs a pickaxe; chopping an axe. */
 export function requiredToolKind(rpgAction: string): ToolKind {
@@ -47,8 +46,7 @@ export function checkGatherTool(
   return { ok: true };
 }
 
-/** Swing interval after skill speedup, floored so high levels stay playable. */
-export function gatherInterval(baseInterval: number, skillLevel: number): number {
-  const levels = Math.max(0, skillLevel - 1);
-  return Math.max(MIN_GATHER_INTERVAL, baseInterval * Math.pow(GATHER_SKILL_FACTOR, levels));
+/** Swing interval scaled by the activity's speed stat, floored so high bonuses stay playable. */
+export function gatherInterval(baseInterval: number, speedMult: number): number {
+  return Math.max(MIN_GATHER_INTERVAL, baseInterval / Math.max(0.01, speedMult));
 }

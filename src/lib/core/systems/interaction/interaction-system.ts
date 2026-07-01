@@ -29,7 +29,9 @@ import { transformStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
-import { getGatherableDefinition, rollGatherRisk } from "$lib/domain/gathering/gatherables";
+import { getGatherableDefinition, resolveGatherSkillKey, rollGatherRisk } from "$lib/domain/gathering/gatherables";
+import { gatherActivityStats } from "$lib/domain/stats/skill-growth";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { applyStatusEffect, statusState } from "$lib/state/rpg/status-effects.svelte";
 import { applyWound } from "$lib/state/rpg/wounds.svelte";
 import { StatusId } from "$lib/domain/systems/status-types";
@@ -635,10 +637,10 @@ export function runInteractionSystem(
           }
 
           interaction.gatheringTarget = target;
-          const skillKey = gatherable?.skillKey ?? SkillKey.Mining;
-          const skillLevel = gameState.rpg.skills?.[skillKey]?.level ?? 1;
+          const skillKey = resolveGatherSkillKey(gatherable);
+          const { speed } = gatherActivityStats(skillKey, getPlayerStats());
           const baseDuration = gatherable?.baseDurationSec ?? interaction.gatherInterval;
-          interaction.currentGatherInterval = gatherInterval(baseDuration, skillLevel);
+          interaction.currentGatherInterval = gatherInterval(baseDuration, speed);
           interaction.gatherCooldownTimer = 0;
         } else {
           triggerImmediateInteraction(
@@ -706,10 +708,10 @@ export function runInteractionSystem(
       }
 
       const isTree = gatherable?.solidKind === "tree";
-      const skillKey = gatherable?.skillKey ?? SkillKey.Mining;
-      const skillLevel = gameState.rpg.skills?.[skillKey]?.level ?? 1;
+      const skillKey = resolveGatherSkillKey(gatherable);
+      const { speed } = gatherActivityStats(skillKey, getPlayerStats());
       const baseDuration = gatherable?.baseDurationSec ?? interaction.gatherInterval;
-      const scaledInterval = gatherInterval(baseDuration, skillLevel);
+      const scaledInterval = gatherInterval(baseDuration, speed);
       interaction.currentGatherInterval = scaledInterval;
       interaction.gatherCooldownTimer = scaledInterval;
 
