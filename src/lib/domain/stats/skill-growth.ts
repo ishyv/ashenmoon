@@ -11,8 +11,15 @@
 
 import type { RpgPlayerState } from "../rpg-types";
 import type { StatModifier } from "./stat-calculation";
+import { SkillKey } from "../game-events";
+import type { PlayerStats, UtilityStats } from "./stat-types";
 
 export const SKILL_MAX_LEVEL = 20;
+
+const GATHER_ACTIVITY_STATS: Partial<Record<SkillKey, { power: keyof UtilityStats; speed: keyof UtilityStats }>> = {
+  [SkillKey.Lumberjacking]: { power: "gatheringPower", speed: "gatheringSpeed" },
+  [SkillKey.Mining]: { power: "miningPower", speed: "miningSpeed" },
+};
 
 /** XP needed to go from `level` to `level + 1`. Single tuning knob for all skills. */
 export function skillXpForLevel(level: number): number {
@@ -71,6 +78,16 @@ export function woodcraftModifiers(level: number): StatModifier[] {
 export function craftsmanshipModifiers(level: number): StatModifier[] {
   const s = steps(level);
   return [{ stat: "craftingSpeed", op: "percentAdd", value: 0.03 * s, source: "skill" }];
+}
+
+/** Power/speed multipliers for a gathering skill; neutral (1/1) if the skill isn't a registered gather activity. */
+export function gatherActivityStats(
+  skillKey: SkillKey | null,
+  stats: PlayerStats,
+): { power: number; speed: number } {
+  const entry = skillKey ? GATHER_ACTIVITY_STATS[skillKey] : undefined;
+  if (!entry) return { power: 1, speed: 1 };
+  return { power: stats.utility[entry.power], speed: stats.utility[entry.speed] };
 }
 
 /** Aggregates every skill's bonus into one modifier list for the stat pipeline. */

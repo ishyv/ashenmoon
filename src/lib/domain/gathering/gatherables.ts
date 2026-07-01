@@ -483,6 +483,12 @@ export function getGatherableDefinition(id: string): GatherableDefinition | unde
   return GATHERABLE_DEFINITIONS[id];
 }
 
+/** Which skill governs a gatherable, or null if it can't be resolved at all. */
+export function resolveGatherSkillKey(gatherable: GatherableDefinition | undefined | null): SkillKey | null {
+  if (!gatherable) return null;
+  return gatherable.skillKey ?? (gatherable.solidKind === "tree" ? SkillKey.Lumberjacking : SkillKey.Mining);
+}
+
 export function getGatherableBySyncLocation(id: string): GatherableDefinition | undefined {
   return GATHERABLE_DEFINITIONS[id] ?? Object.values(GATHERABLE_DEFINITIONS).find((def) => def.syncLocationId === id);
 }

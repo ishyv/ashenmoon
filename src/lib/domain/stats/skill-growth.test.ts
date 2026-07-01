@@ -9,8 +9,11 @@ import {
   woodcraftModifiers,
   craftsmanshipModifiers,
   skillStatModifiers,
+  gatherActivityStats,
 } from "./skill-growth";
 import { createDefaultSkills } from "$lib/domain/rpg-defaults";
+import { computeBaseStatsAtLevel } from "./stat-calculation";
+import { SkillKey } from "$lib/domain/game-events";
 
 describe("skillXpForLevel", () => {
   it("matches the existing level*100 curve", () => {
@@ -123,5 +126,28 @@ describe("skillStatModifiers", () => {
     delete (skills as { vigilance?: unknown }).vigilance;
     const mods = skillStatModifiers(skills);
     expect(mods.find((m) => m.stat === "coldResist")?.value).toBe(0);
+  });
+});
+
+describe("gatherActivityStats", () => {
+  const baseStats = computeBaseStatsAtLevel(1); // utility.gatheringPower/miningPower etc all at base 1.0
+
+  it("looks up Lumberjacking's gathering stats", () => {
+    expect(gatherActivityStats(SkillKey.Lumberjacking, baseStats)).toEqual({ power: 1, speed: 1 });
+  });
+
+  it("looks up Mining's mining stats independently", () => {
+    const boosted = { ...baseStats, utility: { ...baseStats.utility, miningPower: 1.5, miningSpeed: 1.3 } };
+    expect(gatherActivityStats(SkillKey.Mining, boosted)).toEqual({ power: 1.5, speed: 1.3 });
+    // Lumberjacking's stats are untouched by mining's boost:
+    expect(gatherActivityStats(SkillKey.Lumberjacking, boosted)).toEqual({ power: 1, speed: 1 });
+  });
+
+  it("returns neutral 1/1 for a non-gathering skill", () => {
+    expect(gatherActivityStats(SkillKey.Combat, baseStats)).toEqual({ power: 1, speed: 1 });
+  });
+
+  it("returns neutral 1/1 for a null skillKey", () => {
+    expect(gatherActivityStats(null, baseStats)).toEqual({ power: 1, speed: 1 });
   });
 });

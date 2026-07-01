@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   GATHERABLE_DEFINITIONS,
   getGatherableDefinition,
+  resolveGatherSkillKey,
   resolveGatherYield,
   rollGatherRisk,
 } from "./gatherables";
 import { StatusId } from "$lib/domain/systems/status-types";
+import { SkillKey } from "$lib/domain/game-events";
 
 describe("gatherable definitions", () => {
   it("defines the milestone 1 resource set", () => {
@@ -90,5 +92,26 @@ describe("gatherable definitions", () => {
         expect(entry.itemId, def.id).toBeTruthy();
       }
     }
+  });
+});
+
+describe("resolveGatherSkillKey", () => {
+  it("uses the gatherable's explicit skillKey when present", () => {
+    expect(resolveGatherSkillKey(getGatherableDefinition("oak_tree"))).toBe(SkillKey.Lumberjacking);
+  });
+
+  it("falls back to solidKind when skillKey is absent: tree -> Lumberjacking", () => {
+    const def = { solidKind: "tree" } as unknown as Parameters<typeof resolveGatherSkillKey>[0];
+    expect(resolveGatherSkillKey(def)).toBe(SkillKey.Lumberjacking);
+  });
+
+  it("falls back to solidKind when skillKey is absent: anything else -> Mining", () => {
+    const def = { solidKind: "rock" } as unknown as Parameters<typeof resolveGatherSkillKey>[0];
+    expect(resolveGatherSkillKey(def)).toBe(SkillKey.Mining);
+  });
+
+  it("returns null for a missing gatherable", () => {
+    expect(resolveGatherSkillKey(undefined)).toBeNull();
+    expect(resolveGatherSkillKey(null)).toBeNull();
   });
 });
