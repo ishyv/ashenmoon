@@ -1,15 +1,17 @@
 import { getBuildingSpec, BUILDING_SPECS } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
-import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
+import { getGatherableBySyncLocation, resolveGatherSkillKey } from "$lib/domain/gathering/gatherables";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import { resolveStudyBlueprint } from "$lib/domain/systems/study-system";
+import { gatherActivityStats } from "$lib/domain/stats/skill-growth";
 import type {
   RpgEnvironmentTickResult,
   RpgInventorySlot,
   RpgPlayerState,
   RpgReactionTriggered,
 } from "$lib/domain/rpg-types";
+import type { PlayerStats } from "$lib/domain/stats/stat-types";
 
 const GATHER_DURABILITY_LOSS = 5;
 const STORAGE_PILE_STASH_BONUS = 20;
@@ -58,6 +60,8 @@ export type RpgReducerResult =
 export interface RpgReducerOptions {
   freeBuilding?: boolean;
   now?: () => number;
+  /** Live player stats, injected so pure command handlers can scale outcomes without reading reactive state directly. */
+  playerStats?: PlayerStats;
 }
 
 function clonePlayerState(state: RpgPlayerState): RpgPlayerState {
@@ -147,12 +151,21 @@ function refuel(state: RpgPlayerState): GatherSync {
   return { materialsGained: [{ id: "fuel", quantity: 1 }], toolBroken: false, playerState };
 }
 
-function gather(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "gather" }>): GatherSync {
+function gather(
+  state: RpgPlayerState,
+  command: Extract<RpgReducerCommand, { type: "gather" }>,
+  options: RpgReducerOptions,
+): GatherSync {
   const playerState = clonePlayerState(state);
   const gatherable = getGatherableBySyncLocation(command.locationId);
   const drop = gatherable?.yieldTable[0]?.itemId ?? (command.action === "forest" ? "wood" : "stone");
+
+  const skillKey = resolveGatherSkillKey(gatherable);
+  const power = options.playerStats ? gatherActivityStats(skillKey, options.playerStats).power : 1;
+  const qty = Math.max(1, Math.round(power));
+
   const slots = { ...playerState.inventory.slots };
-  addQty(slots, drop, 1);
+  addQty(slots, drop, qty);
   playerState.inventory = { slots };
 
   let toolBroken = false;
@@ -167,7 +180,7 @@ function gather(state: RpgPlayerState, command: Extract<RpgReducerCommand, { typ
       }
     }
 
-  return { materialsGained: [{ id: drop, quantity: 1 }], toolBroken, playerState };
+  return { materialsGained: [{ id: drop, quantity: qty }], toolBroken, playerState };
 }
 
 function equipTool(
@@ -520,7 +533,7 @@ export function reduceRpgCommand(
     case "pickup":
       return pickup(state, command);
     case "gather":
-      return gather(state, command);
+      return gather(state, command, options);
     case "refuel":
       return refuel(state);
     case "craft":

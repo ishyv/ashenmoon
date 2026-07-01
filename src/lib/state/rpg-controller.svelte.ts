@@ -18,6 +18,7 @@ import {
   saveLocalRpgState,
 } from "$lib/state/persistence/rpg-commands";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { playerRpgEntityId, rpgEventQueue } from "$lib/state/rpg/rpg-feedback-router";
 
 export type RpgCommand =
@@ -77,6 +78,7 @@ function currentPlayerState(): RpgPlayerState {
 function runCommand<C extends RpgCommand>(command: C): CommandData[C["type"]] {
   return reduceRpgCommand(currentPlayerState(), command, {
     freeBuilding: devFlags.freeBuildingEnabled,
+    playerStats: getPlayerStats(),
   }) as CommandData[C["type"]];
 }
 

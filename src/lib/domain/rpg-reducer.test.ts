@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createDefaultPlayerState } from "$lib/domain/rpg-defaults";
 import type { RpgEnvironmentTickResult } from "$lib/domain/rpg-types";
 import { ITEM_DEFINITIONS, Item, Wearable, Tool, EquippableVisuals, Rarity, Category } from "$lib/domain/items";
+import { computeBaseStatsAtLevel } from "$lib/domain/stats/stat-calculation";
 import {
   reduceRpgCommand,
   type RpgReducerCommand,
@@ -27,6 +28,26 @@ describe("RPG reducer", () => {
     const weapon = gathered.playerState.profile.loadout.weapon;
     expect(weapon && typeof weapon === "object" ? weapon.itemId : null).toBe("stone_pickaxe");
     expect(weapon && typeof weapon === "object" ? weapon.durability : null).toBe(95);
+    expect(gathered.playerState.inventory.slots.stone).toEqual({ qty: 1 });
+  });
+
+  it("scales gather yield by the injected playerStats' gatheringPower/miningPower", () => {
+    const state = createDefaultPlayerState();
+    const boostedStats = computeBaseStatsAtLevel(1);
+    boostedStats.utility.miningPower = 2;
+
+    const gathered = reduceRpgCommand(
+      state,
+      { type: "gather", action: "mine", locationId: "stone_mine" },
+      { playerStats: boostedStats },
+    );
+
+    expect(gathered.playerState.inventory.slots.stone).toEqual({ qty: 2 });
+  });
+
+  it("stays at qty 1 when playerStats is omitted", () => {
+    const state = createDefaultPlayerState();
+    const gathered = reduceRpgCommand(state, { type: "gather", action: "mine", locationId: "stone_mine" });
     expect(gathered.playerState.inventory.slots.stone).toEqual({ qty: 1 });
   });
 
