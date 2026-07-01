@@ -32,7 +32,9 @@ export type RpgReducerCommand =
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "upgradeBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number; x?: number; y?: number }
-  | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
+  | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } }
+  | { type: "depleteNode"; nodeId: string }
+  | { type: "regenerateNodes"; nodeIds: string[] };
 
 export type MaterialGain = { id: string; quantity: number };
 
@@ -91,12 +93,48 @@ function pickup(state: RpgPlayerState, command: Extract<RpgReducerCommand, { typ
   playerState.inventory = { slots };
   if (command.pickupId && !playerState.profile.gatheredPickups?.includes(command.pickupId)) {
     playerState.profile.gatheredPickups = [...(playerState.profile.gatheredPickups ?? []), command.pickupId];
+    if (!playerState.profile.depletedNodes) {
+      playerState.profile.depletedNodes = {};
+    }
+    playerState.profile.depletedNodes[command.pickupId] = Date.now();
   }
   return {
     materialsGained: [{ id: command.itemId, quantity: pickupQuantity }],
     toolBroken: false,
     playerState,
   };
+}
+
+function depleteNode(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "depleteNode" }>): { playerState: RpgPlayerState } {
+  const playerState = clonePlayerState(state);
+  if (!playerState.profile.gatheredPickups) {
+    playerState.profile.gatheredPickups = [];
+  }
+  if (!playerState.profile.gatheredPickups.includes(command.nodeId)) {
+    playerState.profile.gatheredPickups = [...playerState.profile.gatheredPickups, command.nodeId];
+  }
+  if (!playerState.profile.depletedNodes) {
+    playerState.profile.depletedNodes = {};
+  }
+  playerState.profile.depletedNodes[command.nodeId] = Date.now();
+  return { playerState };
+}
+
+function regenerateNodes(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "regenerateNodes" }>): { playerState: RpgPlayerState } {
+  const playerState = clonePlayerState(state);
+  if (playerState.profile.gatheredPickups) {
+    playerState.profile.gatheredPickups = playerState.profile.gatheredPickups.filter(
+      (id) => !command.nodeIds.includes(id)
+    );
+  }
+  if (playerState.profile.depletedNodes) {
+    const depleted = { ...playerState.profile.depletedNodes };
+    for (const id of command.nodeIds) {
+      delete depleted[id];
+    }
+    playerState.profile.depletedNodes = depleted;
+  }
+  return { playerState };
 }
 
 function refuel(state: RpgPlayerState): GatherSync {
@@ -499,5 +537,9 @@ export function reduceRpgCommand(
       return placeItem(state, command, options);
     case "environmentTick":
       return environmentTick(state, command);
+    case "depleteNode":
+      return depleteNode(state, command);
+    case "regenerateNodes":
+      return regenerateNodes(state, command);
   }
 }

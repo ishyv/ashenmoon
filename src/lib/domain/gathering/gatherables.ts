@@ -76,6 +76,7 @@ export interface GatherableDefinition {
   focusedGatherDifficulty?: FocusedGatherDifficulty;
   syncAction?: GatherableSyncAction;
   syncLocationId?: string;
+  regenCooldownSec?: number;
   feedback: {
     start: string;
     success: string;

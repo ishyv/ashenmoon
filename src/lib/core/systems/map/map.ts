@@ -29,6 +29,7 @@ import { coordKey } from "$lib/utils/coord-utils";
 import { EntityId } from "$lib/domain/game-events";
 import { ENGINE_CONFIG } from "$lib/core/engine-config";
 import type { VFXResource } from "$lib/core/vfx/vfx";
+import { WORLDGEN_CONFIG } from "$lib/domain/worldgen/worldgen-config";
 
 export const TILE = 64;
 
@@ -247,6 +248,7 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
 
   const carveCamp = options?.carveCamp ?? true;
 
+  // Step 1: Terrain Cell Generation (Height/Temp/Moisture)
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const inCamp = carveCamp && isFirstCampFloorOffset(x - spawnX, y - spawnY);
@@ -278,17 +280,18 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
       }
 
       let cellType = Cell.Meadows;
-      if (height < 0.22) {
+      const noiseCfg = WORLDGEN_CONFIG.noise;
+      if (height < noiseCfg.heightThreshold) {
         cellType = Cell.Water;
-      } else if (temp < 0.25) {
+      } else if (temp < noiseCfg.tempThresholdCold) {
         cellType = Cell.Frostbane;
-      } else if (temp > 0.7) {
-        if (moisture < 0.4) {
+      } else if (temp > noiseCfg.tempThresholdHot) {
+        if (moisture < noiseCfg.moistureThresholdDry) {
           cellType = Cell.ScorchedWastes;
         } else {
           cellType = Cell.FungalMire;
         }
-      } else if (moisture > 0.65) {
+      } else if (moisture > noiseCfg.moistureThresholdWet) {
         cellType = Cell.CrimsonGrove;
       } else {
         cellType = Cell.Meadows;
@@ -299,36 +302,45 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
       if (cellType === Cell.Water) {
         map.solidCoords.add(coordKey(x, y));
       }
+    }
+  }
 
-      if (cellType !== Cell.Water) {
-        const cellHash = noiseGen.noise(x * 12.3 + 4.5, y * 5.6 + 7.8);
-        if (cellHash < 0.055) {
-          let resourceKind: "tree" | "ore" | null = null;
-          if (cellType === Cell.ScorchedWastes) {
-            resourceKind = "ore";
-          } else {
-            resourceKind = (cellHash / 0.055) < 0.6 ? "tree" : "ore";
-          }
+  // Step 2: Apply Structures & Camp Layout first so they set occupiedSpawns
+  applyRandomStructuresPass(map, addSpawn, spawnX, spawnY, noiseGen);
+  applyFirstCampForestPass(map, addSpawn, spawnX, spawnY);
 
-          if (resourceKind) {
-            const gatherableId =
-              cellType === Cell.ScorchedWastes
-                ? "copper_ore_vein"
-                : cellType === Cell.CrimsonGrove
-                  ? resourceKind === "tree"
-                    ? "crimson_ash_tree"
-                    : "iron_ore_vein"
-                  : cellType === Cell.FungalMire
-                    ? resourceKind === "tree"
-                      ? "spore_mangrove_tree"
-                      : "toxic_copper_node"
-                    : cellType === Cell.Frostbane
-                      ? resourceKind === "tree"
-                        ? "frost_pine_tree"
-                        : "glacial_silver_vein"
-                      : resourceKind === "tree"
-                        ? "oak_tree"
-                        : "stone_node";
+  // Step 3: Procedural Resource Nodes generation (respecting occupied landmarks & structures)
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const cellType = map.cells[y * W + x];
+      if (cellType === undefined || cellType === Cell.Water || cellType === Cell.Camp) continue;
+
+      const key = coordKey(x, y);
+      if (occupiedSpawns.has(key)) continue;
+
+      // Preservation check: don't spawn procedural resources too close to landmarks
+      let isNearLandmark = false;
+      for (const lm of map.forestMetadata.landmarks) {
+        if (Math.hypot(x - lm.x, y - lm.y) < WORLDGEN_CONFIG.preservation.proceduralStructureRadius) {
+          isNearLandmark = true;
+          break;
+        }
+      }
+      if (isNearLandmark) continue;
+
+      const cellHash = noiseGen.noise(x * 12.3 + 4.5, y * 5.6 + 7.8);
+      if (cellHash < 0.055) {
+        let resourceKind: "tree" | "ore" | null = null;
+        if (cellType === Cell.ScorchedWastes) {
+          resourceKind = "ore";
+        } else {
+          resourceKind = (cellHash / 0.055) < 0.6 ? "tree" : "ore";
+        }
+
+        if (resourceKind) {
+          const rules = WORLDGEN_CONFIG.biomeResources[cellType];
+          const gatherableId = resourceKind === "tree" ? rules.tree : rules.ore;
+          if (gatherableId) {
             addSpawn(gatherableId, x, y);
           }
         }
@@ -336,42 +348,12 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
     }
   }
 
-  applyRandomStructuresPass(map, addSpawn, spawnX, spawnY, noiseGen);
-  applyFirstCampForestPass(map, addSpawn, spawnX, spawnY);
-
-  // Scattered bare-hand materials around spawn.
-  const pickupCounts: Record<string, number> = {
-    stick_pickup: 0,
-    loose_stone_pickup: 0,
-    flint_shard_pickup: 0,
-    leaf_litter: 0,
-    bark_strip: 0,
-    grass_patch: 0,
-    moss_patch: 0,
-    berry_bush: 0,
-    mushroom_patch: 0,
-    wild_root_node: 0,
-    acorn_pickup: 0,
-    wild_herb_patch: 0,
-    clay_deposit: 0,
-    water_source: 0,
-  };
-  const pickupTargets: Record<string, number> = {
-    stick_pickup: 10,
-    loose_stone_pickup: 8,
-    flint_shard_pickup: 5,
-    leaf_litter: 8,
-    bark_strip: 6,
-    grass_patch: 8,
-    moss_patch: 5,
-    berry_bush: 7,
-    mushroom_patch: 6,
-    wild_root_node: 4,
-    acorn_pickup: 4,
-    wild_herb_patch: 3,
-    clay_deposit: 0,
-    water_source: 0,
-  };
+  // Step 4: Scattered starting area pickups around spawn.
+  const pickupCounts: Record<string, number> = {};
+  const pickupTargets = WORLDGEN_CONFIG.startingAreaPickups;
+  for (const k of Object.keys(pickupTargets)) {
+    pickupCounts[k] = 0;
+  }
   const pickupKinds = Object.keys(pickupTargets);
   const hasNeededPickups = () => pickupKinds.some((kind) => (pickupCounts[kind] ?? 0) < (pickupTargets[kind] ?? 0));
 
@@ -384,8 +366,18 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
 
       const cellIdx = y * W + x;
       if (map.cells[cellIdx] === Cell.Meadows) {
-        const alreadySpawned = spawnsList.some((s) => s.x === x && s.y === y);
-        if (alreadySpawned) continue;
+        const key = coordKey(x, y);
+        if (occupiedSpawns.has(key)) continue;
+
+        // Proximity check to landmarks
+        let isNearLandmark = false;
+        for (const lm of map.forestMetadata.landmarks) {
+          if (Math.hypot(x - lm.x, y - lm.y) < WORLDGEN_CONFIG.preservation.proceduralStructureRadius) {
+            isNearLandmark = true;
+            break;
+          }
+        }
+        if (isNearLandmark) continue;
 
         const hash = noiseGen.noise(x * 17.1 + 8.3, y * 9.2 + 2.7);
         const normalizedHash = Math.abs(hash % 1);
@@ -398,10 +390,10 @@ export function buildMapSystem(map: MapResource, seed = 12345, options?: { carve
     }
   }
 
-  // Clustered local debris near trees and ores
+  // Step 5: Clustered local debris near trees and ores
   applyLocalResourceDebrisPass(map, addSpawn, occupiedSpawns, spawnsList, noiseGen);
 
-  // Global wilderness pickups
+  // Step 6: Global wilderness pickups
   applyGlobalWildernessPickupsPass(map, addSpawn, occupiedSpawns, noiseGen);
 
   map.mapData = { spawns: spawnsList };

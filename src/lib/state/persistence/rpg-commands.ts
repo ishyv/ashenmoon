@@ -146,6 +146,7 @@ export function createDefaultProfile(): RpgPlayerState["profile"] {
     buildings: [],
     worldEntities: [],
     gatheredPickups: [],
+    depletedNodes: {},
     hotbar: Array(HOTBAR_SIZE).fill(null),
   };
 }
@@ -213,6 +214,14 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
   const gatheredPickups = Array.isArray(value.gatheredPickups)
     ? value.gatheredPickups.filter((id): id is string => typeof id === "string")
     : defaults.gatheredPickups;
+  const depletedNodes: Record<string, number> = {};
+  if (isRecord(value.depletedNodes)) {
+    for (const [key, val] of Object.entries(value.depletedNodes)) {
+      if (typeof val === "number" && Number.isFinite(val)) {
+        depletedNodes[key] = val;
+      }
+    }
+  }
   const worldEntities = normalizeWorldEntities(value.worldEntities);
 
   const worldSeedVal = typeof value.worldSeed === "number" && Number.isFinite(value.worldSeed) ? value.worldSeed : defaults.worldSeed;
@@ -233,6 +242,7 @@ function normalizeProfile(value: unknown): RpgPlayerState["profile"] {
     ...(buildings !== undefined ? { buildings } : {}),
     worldEntities,
     ...(gatheredPickups !== undefined ? { gatheredPickups } : {}),
+    depletedNodes,
     hotbar: normalizeHotbar(value.hotbar),
     ...(typeof value.characterLevel === "number" && Number.isFinite(value.characterLevel)
       ? { characterLevel: value.characterLevel }
@@ -296,6 +306,10 @@ function pickup(itemId: string, pickupId: string, quantity = 1): GatherSync {
     state.inventory = { slots };
     if (pickupId && !state.profile.gatheredPickups?.includes(pickupId)) {
       state.profile.gatheredPickups = [...(state.profile.gatheredPickups ?? []), pickupId];
+      if (!state.profile.depletedNodes) {
+        state.profile.depletedNodes = {};
+      }
+      state.profile.depletedNodes[pickupId] = Date.now();
     }
   });
 

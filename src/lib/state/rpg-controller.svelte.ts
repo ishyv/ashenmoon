@@ -36,7 +36,9 @@ export type RpgCommand =
   | { type: "destroyBuilding"; buildingId: string }
   | { type: "upgradeBuilding"; buildingId: string }
   | { type: "placeItem"; itemId: string; quantity?: number; x?: number; y?: number }
-  | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } };
+  | { type: "environmentTick"; environment: { temperature: number; humidity: number; toxins: number } }
+  | { type: "depleteNode"; nodeId: string }
+  | { type: "regenerateNodes"; nodeIds: string[] };
 
 type CommandData = {
   equipTool: { playerState: RpgPlayerState };
@@ -51,6 +53,8 @@ type CommandData = {
   upgradeBuilding: { playerState: RpgPlayerState };
   placeItem: { playerState: RpgPlayerState };
   environmentTick: RpgEnvironmentTickResult;
+  depleteNode: { playerState: RpgPlayerState };
+  regenerateNodes: { playerState: RpgPlayerState };
 };
 
 export type RpgCommandResult<C extends RpgCommand = RpgCommand> =

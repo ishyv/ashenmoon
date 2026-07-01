@@ -17,6 +17,8 @@ import {
 } from "$lib/domain/hazards/tree-fall-hazard";
 import { emitPlayerHpDelta } from "$lib/ui/player-feedback.svelte";
 import { applyWound } from "$lib/state/rpg/wounds.svelte";
+import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
+import { applyRpgState } from "$lib/state/rpg-actions.svelte";
 
 export function depleteNodeSystem(
   world: World<Entity>,
@@ -28,6 +30,11 @@ export function depleteNodeSystem(
   triggerQuestEvent: (evt: string, val?: string) => void,
   map?: MapResource,
 ): void {
+  void dispatchRpgCommand({ type: "depleteNode", nodeId: entity.id }).then((r) => {
+    if (r.ok) {
+      applyRpgState(r.data.playerState);
+    }
+  });
   const pos = entity.position!;
   const gx = Math.round(pos.x / TILE);
   const gy = Math.round(pos.y / TILE);

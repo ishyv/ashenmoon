@@ -1,4 +1,5 @@
 import type { RpgPlayerState } from "./rpg-types";
+import { HOTBAR_SIZE } from "./hotbar-types";
 
 /**
  * Initial baseline for character skills.
@@ -37,6 +38,8 @@ export function createDefaultProfile(opts?: {
     buildings: [],
     worldEntities: [],
     gatheredPickups: [],
+    depletedNodes: {},
+    hotbar: Array(HOTBAR_SIZE).fill(null),
   };
 }
 
