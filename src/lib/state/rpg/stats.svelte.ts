@@ -18,6 +18,7 @@ import {
   type StatModifier,
 } from "$lib/domain/stats/stat-calculation";
 import { characterXpForLevel, MAX_LEVEL, MIN_LEVEL } from "$lib/domain/stats/player-stat-growth";
+import { skillStatModifiers } from "$lib/domain/stats/skill-growth";
 import type { PlayerStats, StatKey } from "$lib/domain/stats/stat-types";
 import { weaponDefForItem } from "$lib/domain/combat/weapons/weapon-registry";
 // Side-effect import: ensures prototype weapon definitions are registered before
@@ -51,11 +52,18 @@ function equipmentModifiers(): StatModifier[] {
   }));
 }
 
+/** Stat modifiers contributed by skill levels (lumberjacking, vigilance, etc). */
+function skillModifiers(): StatModifier[] {
+  const skills = gameState.rpg.skills;
+  return skills ? skillStatModifiers(skills) : [];
+}
+
 const derived = $derived.by<PlayerStats>(() => {
   const base = computeBaseStatsAtLevel(getCharacterLevel());
   const mods = [
     ...statusModifiersToStatModifiers(getStatusModifiers()),
     ...equipmentModifiers(),
+    ...skillModifiers(),
   ];
   return applyModifiers(base, mods);
 });
