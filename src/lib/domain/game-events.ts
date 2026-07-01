@@ -59,6 +59,7 @@ export type UIAction =
   | 'menu_back'
   | 'menu_danger'
   | 'toggle_env_inspector'
+  | 'toggle_fullscreen'
   | 'hotbar_1' | 'hotbar_2' | 'hotbar_3' | 'hotbar_4' | 'hotbar_5'
   | 'hotbar_6' | 'hotbar_7' | 'hotbar_8' | 'hotbar_9';
 

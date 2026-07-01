@@ -38,8 +38,10 @@ import { uiInputController } from "$lib/core/input/input-controller.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 import TopHudActions from "$lib/ui/hud/TopHudActions.svelte";
 
+let shellEl    = $state<HTMLDivElement | null>(null);
 let containerEl = $state<HTMLDivElement | null>(null);
 let engine     = $state<GameEngine | null>(null);
+let isFullscreen = $state(false);
 let notify     = $state<string | null>(null);
 let coords     = $state<{ gx: number; gy: number } | null>(null);
 let lookAt     = $state<string | null>(null);
@@ -242,6 +244,23 @@ function handleBindingsUpdate(newBindings: Bindings) {
   engine?.updateBindings(newBindings);
 }
 
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    shellEl?.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+function onFullscreenChange() {
+  isFullscreen = !!document.fullscreenElement;
+}
+
+function enterFullscreenOnce() {
+  shellEl?.requestFullscreen().catch(() => {});
+  shellEl?.removeEventListener('pointerdown', enterFullscreenOnce);
+}
+
 onMount(async () => {
   loadUiPreferences();
   loadGameState();
@@ -351,11 +370,18 @@ onMount(async () => {
       action: 'toggle_env_inspector', keys: ['f8'], layer: 'game',
       handler: (e) => { engine?.toggleEnvironmentInspector(); e.preventDefault(); return true; },
     }),
+    uiInputController.register({
+      action: 'toggle_fullscreen', keys: ['f11'], layer: 'game',
+      handler: (e) => { e.preventDefault(); toggleFullscreen(); return true; },
+    }),
   ];
 
   // Cross-validate UI keys against game InputResource bindings now that all
   // registrations are live. Logs (does not throw) on overlap.
   uiInputController.validateAgainst(engine.inputResource.bindings);
+
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  shellEl?.addEventListener('pointerdown', enterFullscreenOnce);
 
   // Start 5-second backend env tick loop
   envInterval = setInterval(async () => {
@@ -416,6 +442,10 @@ onDestroy(() => {
   if (envInterval) clearInterval(envInterval);
   engine?.destroy();
   for (const unsub of uiUnsubs) unsub();
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }
+  shellEl?.removeEventListener('pointerdown', enterFullscreenOnce);
 });
 </script>
 
@@ -432,7 +462,7 @@ onDestroy(() => {
   onclick={(e) => { if (e.shiftKey) e.preventDefault(); }}
 />
 
-<div class="shell">
+<div class="shell" bind:this={shellEl}>
   <div bind:this={containerEl} class="canvas-mount"></div>
   <div class="vignette"></div>
 
@@ -451,6 +481,8 @@ onDestroy(() => {
     onQuests={toggleQuests}
     onSettings={toggleSettings}
     onScenario={toggleScenario}
+    {isFullscreen}
+    onToggleFullscreen={toggleFullscreen}
   />
 
   {#if activeScenarioId}

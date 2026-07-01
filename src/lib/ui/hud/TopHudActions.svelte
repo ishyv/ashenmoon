@@ -11,6 +11,7 @@ let {
   activeScenario,
   showEquipment,
   showQuests,
+  isFullscreen,
   onSkills,
   onInventory,
   onCrafting,
@@ -18,6 +19,7 @@ let {
   onQuests,
   onSettings,
   onScenario,
+  onToggleFullscreen,
 }: {
   showInventory: boolean;
   inventoryTab: "stash" | "crafting" | "building";
@@ -25,6 +27,7 @@ let {
   activeScenario: boolean;
   showEquipment: boolean;
   showQuests: boolean;
+  isFullscreen: boolean;
   onSkills: () => void;
   onInventory: () => void;
   onCrafting: () => void;
@@ -32,6 +35,7 @@ let {
   onQuests: () => void;
   onSettings: () => void;
   onScenario: () => void;
+  onToggleFullscreen: () => void;
 } = $props();
 </script>
 
@@ -73,6 +77,13 @@ let {
   </button>
   <button class="settings-trigger-btn" onclick={onSettings} title="settings">
     settings
+  </button>
+  <button
+    class="settings-trigger-btn"
+    onclick={onToggleFullscreen}
+    title={isFullscreen ? 'exit fullscreen [F11]' : 'fullscreen [F11]'}
+  >
+    {isFullscreen ? 'windowed' : 'fullscreen'}
   </button>
   {#if showScenarioTools}
     <button

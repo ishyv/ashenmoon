@@ -194,7 +194,7 @@ export class InputResource {
   }
 
   public setupListeners(
-    canvas: HTMLCanvasElement,
+    inputEl: HTMLElement,
     worldContainer: Container,
     isPlacementMode: () => boolean,
     cancelPlacement: () => void,
@@ -223,7 +223,7 @@ export class InputResource {
     };
 
     const onMouseMove = (e: MouseEvent): void => {
-      const rect = canvas.getBoundingClientRect();
+      const rect = inputEl.getBoundingClientRect();
       const clientX = e.clientX - rect.left;
       const clientY = e.clientY - rect.top;
       const local = worldContainer.toLocal({ x: clientX, y: clientY });
@@ -278,19 +278,19 @@ export class InputResource {
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    canvas.addEventListener("mousemove", onMouseMove);
-    canvas.addEventListener("mousedown", onMouseDown);
+    inputEl.addEventListener("mousemove", onMouseMove);
+    inputEl.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mouseup", onMouseUp);
-    canvas.addEventListener("contextmenu", onContextMenuEvent);
+    inputEl.addEventListener("contextmenu", onContextMenuEvent);
 
     // Return cleanup function
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      canvas.removeEventListener("mousemove", onMouseMove);
-      canvas.removeEventListener("mousedown", onMouseDown);
+      inputEl.removeEventListener("mousemove", onMouseMove);
+      inputEl.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mouseup", onMouseUp);
-      canvas.removeEventListener("contextmenu", onContextMenuEvent);
+      inputEl.removeEventListener("contextmenu", onContextMenuEvent);
     };
   }
 

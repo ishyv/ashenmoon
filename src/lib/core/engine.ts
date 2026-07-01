@@ -46,6 +46,7 @@ import {
   TILE,
   type ForestAnimalZoneKind,
 } from "$lib/core/systems/map/map";
+import { catchUpRegeneration, tickRegenerationSystem } from "$lib/core/systems/map/regeneration-system";
 import {
   VFXResource,
   particleUpdateSystem,
@@ -280,6 +281,7 @@ export class GameEngine {
   private enemySeq = 1;
   private animalSeq = 1;
   private devSpawnSeq = 1;
+  private regenTimer = 0;
   private buildingChannel: {
     buildingId: string;
     nextStage: number;
@@ -390,15 +392,22 @@ export class GameEngine {
       });
       this.containerEl.appendChild(this.app.canvas);
 
+      // Intercept div sits above the canvas so contextmenu target is a <div>.
+      // Chrome bypasses contextmenu.preventDefault() on <canvas> for Shift+RMB;
+      // routing events through a div avoids this browser-level override entirely.
+      this.containerEl.style.position = 'relative';
+      const inputIntercept = document.createElement('div');
+      inputIntercept.style.cssText = 'position:absolute;inset:0;z-index:1;cursor:crosshair;';
+      (this.app.canvas as HTMLElement).style.pointerEvents = 'none';
+      this.containerEl.appendChild(inputIntercept);
+      this.inputIntercept = inputIntercept;
+
       // Load first-party Ashenmoon bundle only; old sprite-pack bundles must not be eagerly preloaded.
       await this.renderResources.preloadAll();
 
       // Setup listeners via input resource
-      const canvas = this.app.canvas as HTMLCanvasElement;
-      canvas.style.cursor = "crosshair";
-
       const cleanInputListeners = this.inputResource.setupListeners(
-        canvas,
+        inputIntercept,
         this.worldContainer,
         () => this.buildingResource.isPlacementMode || this.itemPlacementResource.isPlacementMode,
         () => { this.cancelBuildingPlacement(); this.cancelItemPlacement(); },
@@ -409,7 +418,7 @@ export class GameEngine {
       // Save cleanup references
       this.cleanupInputListeners = cleanInputListeners;
 
-      canvas.addEventListener("wheel", this.onWheel, { passive: false });
+      inputIntercept.addEventListener("wheel", this.onWheel, { passive: false });
 
       // Map generation: use scenario if active, otherwise procedural.
       if (this.scenarioId) {
@@ -520,13 +529,14 @@ export class GameEngine {
   }
 
   private cleanupInputListeners?: () => void;
+  private inputIntercept: HTMLDivElement | null = null;
 
   public destroy(): void {
     if (this.cleanupInputListeners) {
       this.cleanupInputListeners();
     }
-    if (this.app?.canvas) {
-      this.app.canvas.removeEventListener("wheel", this.onWheel);
+    if (this.inputIntercept) {
+      this.inputIntercept.removeEventListener("wheel", this.onWheel);
     }
     registerPlayerFeedback(null);
     registerPlayerHp(null);
@@ -576,6 +586,13 @@ export class GameEngine {
 
   private tickFrame(dt: number): void {
     try {
+      // Tick resource regeneration system
+      this.regenTimer += dt;
+      if (this.regenTimer >= 10) {
+        this.regenTimer = 0;
+        tickRegenerationSystem(this, Date.now());
+      }
+
       this.checkLoadoutChanged();
 
       // Check if player cancels building channeling by trying to move
@@ -1424,6 +1441,7 @@ export class GameEngine {
     }
 
     // Scatter resource nodes
+    catchUpRegeneration(this.mapResource.mapData.spawns, this.mapResource.forestMetadata.landmarks);
     const gatheredPickups = gameState.rpg.profile?.gatheredPickups ?? [];
     for (const spawn of this.mapResource.mapData.spawns) {
       if (gatheredPickups.includes(spawn.id)) continue;
