@@ -48,4 +48,22 @@ export const clothingItems = {
     icon: "🧣",
     physical: { carryClass: "pack", weight: 1.2, stackLimit: 3 },
   }).with(Wearable("body"), InsulationMaterial(3)),
+  boar_leather_coat: Item({
+    id: itemId("boar_leather_coat"),
+    name: "Boar Leather Coat",
+    description: "A heavy coat of layered boar hide and cured leather. Shields against wolf bites.",
+    rarity: Rarity.Uncommon,
+    category: Category.Clothing,
+    icon: "🧥",
+    physical: { carryClass: "pack", weight: 2.8, stackLimit: 1 },
+  }).with(Wearable("body"), ArmorMaterial(3), InsulationMaterial(1)),
+  stalker_mask: Item({
+    id: itemId("stalker_mask"),
+    name: "Stalker Mask",
+    description: "A fearsome mask made of wolf pelt and fangs. Keeps the throat warm and dry.",
+    rarity: Rarity.Rare,
+    category: Category.Clothing,
+    icon: "🐺",
+    physical: { carryClass: "pack", weight: 0.9, stackLimit: 1 },
+  }).with(Wearable("head"), ArmorMaterial(1), InsulationMaterial(3)),
 };

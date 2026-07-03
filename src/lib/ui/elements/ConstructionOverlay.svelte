@@ -3,9 +3,6 @@ import GamePanel from "$lib/ui/elements/GamePanel.svelte";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { getItemDef } from "$lib/domain/items";
 import { getItemQty } from "$lib/state/rpg/inventory-api";
-import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
-import { applyRpgState } from "$lib/state/rpg-actions.svelte";
-import { playSound } from "$lib/audio/audio-engine";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 
 let {
@@ -14,7 +11,9 @@ let {
   onClose,
 }: {
   entity: Entity;
-  engine: any;
+  engine: {
+    startBuildingChannel(buildingId: string, nextStage: number, cost: Record<string, number>): void;
+  } | null;
   onClose: () => void;
 } = $props();
 
@@ -48,27 +47,7 @@ async function applyMaterials() {
   if (!currentNextStageSpec || !meetsRequirements) return;
 
   onClose();
-
-  engine?.startBuildingChannel(currentBuildingId, currentNextStage, currentNextStageSpec.cost, async () => {
-    try {
-      const result = await dispatchRpgCommand({
-        type: "upgradeBuilding",
-        buildingId: currentBuildingId,
-      });
-
-      if (result.ok) {
-        applyRpgState(result.data.playerState);
-        engine?.upgradeBuilding(currentBuildingId, currentNextStage);
-        return true;
-      } else {
-        console.error("Upgrade failed:", result.error);
-        return false;
-      }
-    } catch (err) {
-      console.error("Upgrade error:", err);
-      return false;
-    }
-  });
+  engine?.startBuildingChannel(currentBuildingId, currentNextStage, currentNextStageSpec.cost);
 }
 </script>
 

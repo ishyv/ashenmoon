@@ -17,7 +17,9 @@ export type LandmarkKind =
   | "sentry_chest"
   | "skeleton_remains"
   | "cursed_monolith"
-  | "bone_pile";
+  | "bone_pile"
+  | "rabbit_burrow"
+  | "deer_bedding";
 
 export interface LandmarkDrop {
   itemId: string;
@@ -178,6 +180,20 @@ export const LANDMARK_DEFS: Record<LandmarkKind, LandmarkDef> = {
       { itemId: "small_bone", qty: 1 },
       { itemId: "bone_shard", qty: 1, chance: 0.5 },
     ],
+    solid: false,
+  },
+  rabbit_burrow: {
+    kind: "rabbit_burrow",
+    displayName: "rabbit burrow",
+    examineText: "A small hole dug into the side of a grassy mound. Dried grass and twigs clutter the entrance. Several small tunnels branch off inside.",
+    drops: [],
+    solid: false,
+  },
+  deer_bedding: {
+    kind: "deer_bedding",
+    displayName: "deer bedding",
+    examineText: "A patch of tall grass flattened into circular depressions. The earth is warm and smells faintly of musk. Fawn tracks are scattered nearby.",
+    drops: [],
     solid: false,
   },
 };

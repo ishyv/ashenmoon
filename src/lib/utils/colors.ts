@@ -114,5 +114,8 @@ export const Colors = {
     tremorMark: 0xc62828,      // dark red — the oscillating mark
     tremorZone: 0xfff3b0,      // warm white-gold — the clean zone
     compassGold: 0xc79c57,     // matches --accent gold
+    sequenceMarkDim: 0x6b5a3f, // unlit/waiting mark — muted bronze
+    sequenceMarkLit: 0xfff3b0, // currently tappable mark — warm white-gold, matches tremorZone
+    processRingSafe: 0x79a6a3, // calm teal, matches --signal — safe to walk away
   },
 } as const;

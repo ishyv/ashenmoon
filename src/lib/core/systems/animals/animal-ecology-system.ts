@@ -9,20 +9,25 @@ import {
   ANIMAL_DEFINITIONS,
   chooseAnimalBehavior,
   curiousRadiusPx,
+  stealthDetectionMult,
   type AnimalDecision,
   type AnimalSpeciesId,
 } from "$lib/domain/animals/animal-behavior";
+import { getPlayerStats } from "$lib/state/rpg/stats.svelte";
 import { spawnAnimal } from "$lib/core/systems/map/spawn-system";
 import { planInitialAnimalSpawns } from "$lib/core/systems/animals/animal-spawning";
 import { animalCenter, animalCenterRuntime } from "$lib/core/systems/animals/animal-runtime";
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { gameState } from "$lib/state/game-state.svelte";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 import {
   handleScaredAnimal,
   moveAnimalToward,
   updateWanderOrGraze,
+  updateFollowerSteering,
 } from "$lib/core/systems/animals/animal-movement";
 import { syncAnimalSprite } from "$lib/core/systems/animals/animal-sprite-sync";
+import { playAnimalSound } from "$lib/core/systems/animals/animal-audio";
 import {
   tryAnimalAttackPlayer,
   tryAnimalAttackPrey,
@@ -36,6 +41,10 @@ import { computeRenderZ } from "$lib/domain/collision";
 import type { GameEventQueue } from "$lib/domain/game-event-queue";
 import { coordKey } from "$lib/utils/coord-utils";
 import { Cell } from "$lib/core/types";
+import { tickNeeds, evaluateLifeStage, getLifeStageStats } from "$lib/domain/animals/needs";
+import { scanPerceivedTargets } from "$lib/domain/animals/perception";
+import { selectAnimalBehavior } from "$lib/domain/animals/behavior-selector";
+import { birthOffspring, shouldRetreatToDen, initiateMating } from "$lib/domain/animals/reproduction";
 
 type AnimalTimeOfDay = "day" | "dusk" | "night";
 
@@ -55,14 +64,41 @@ export function spawnInitialAnimalsSystem(
   return plan.nextSeq;
 }
 
-function tickAnimalNeeds(entity: Entity, dt: number, isRaining: boolean): void {
+function tickAnimalNeeds(entity: Entity, dt: number, isRaining: boolean, isHot: boolean): void {
   const animal = entity.animal!;
   const def = ANIMAL_DEFINITIONS[animal.speciesId];
-  const hungerRate = isRaining && def.temperament === "predator"
-    ? def.hungerDecayPerMinute * 1.5  // wolves get hungrier faster in rain
-    : def.hungerDecayPerMinute;
-  animal.hunger = Math.min(100, animal.hunger + (hungerRate / 60) * dt);
   animal.attackCooldownSec = Math.max(0, animal.attackCooldownSec - dt);
+
+  if (entity.needs) {
+    tickNeeds(entity.needs, def, dt, isRaining, isHot);
+    animal.hunger = entity.needs.hunger;
+
+    const nextStage = evaluateLifeStage(entity.needs);
+    if (nextStage === "dead") {
+      if (animal.dyingSec === undefined) {
+        animal.dyingSec = AWARENESS_DECAY_HOLD_SEC;
+      }
+    } else if (nextStage !== entity.needs.lifeStage) {
+      entity.needs.lifeStage = nextStage;
+      const stats = getLifeStageStats(nextStage, def);
+      if (entity.health) {
+        const hpPercent = entity.health.current / entity.health.max;
+        entity.health.max = stats.maxHealth;
+        entity.health.current = Math.round(stats.maxHealth * hpPercent);
+      }
+      if (entity.mover) {
+        entity.mover.speed = stats.moveSpeed;
+      }
+      if (stats.damage !== undefined) {
+        animal.damage = stats.damage;
+      }
+    }
+  } else {
+    const hungerRate = isRaining && def.temperament === "predator"
+      ? def.hungerDecayPerMinute * 1.5
+      : def.hungerDecayPerMinute;
+    animal.hunger = Math.min(100, animal.hunger + (hungerRate / 60) * dt);
+  }
 }
 
 /**
@@ -70,19 +106,27 @@ function tickAnimalNeeds(entity: Entity, dt: number, isRaining: boolean): void {
  * Transitions: unaware → curious → alert (→ flee is set by chooseAnimalBehavior).
  * Awareness decays when the player leaves both detection rings for AWARENESS_DECAY_HOLD_SEC.
  */
-function tickAwareness(entity: Entity, playerDistPx: number, isRaining: boolean, dt: number): void {
+function tickAwareness(entity: Entity, playerDistPx: number, isRaining: boolean, dt: number, detectionMult = 1): void {
   const animal = entity.animal!;
   const def = ANIMAL_DEFINITIONS[animal.speciesId];
 
   const alertR = isRaining && def.diet === "herbivore" ? def.detectionRadiusPx * 0.8 : def.detectionRadiusPx;
   const curiousR = curiousRadiusPx(def) * (isRaining && def.diet === "herbivore" ? 0.8 : 1);
 
-  if (playerDistPx <= alertR) {
+  // Stealth shrinks effective detection by inflating perceived distance.
+  const effectiveDist = playerDistPx / detectionMult;
+  if (effectiveDist <= alertR) {
+    if (animal.awarenessLevel === "unaware" && animal.speciesId === "rabbit") {
+      playAnimalSound(entity, "animal.thump");
+    }
     animal.awarenessLevel = "alert";
     animal.awarenessDecaySec = AWARENESS_DECAY_HOLD_SEC;
-  } else if (playerDistPx <= curiousR) {
+  } else if (effectiveDist <= curiousR) {
     if (animal.awarenessLevel === "unaware") {
       animal.awarenessLevel = "curious";
+      if (animal.speciesId === "rabbit") {
+        playAnimalSound(entity, "animal.thump");
+      }
     }
     animal.awarenessDecaySec = AWARENESS_DECAY_HOLD_SEC;
   } else {
@@ -224,11 +268,15 @@ function applyAnimalDecision(input: {
   if (decision.behavior === "hunt" && decision.targetId) {
     // Store huntTargetId for pack coordination (read by chooseAnimalBehavior next tick).
     animal.huntTargetId = decision.targetId;
-    const target = animalsById.get(decision.targetId);
+    const target = animalsById.get(decision.targetId) || ecsWorld.with("trap", "position").entities.find((e) => e.id === decision.targetId);
     if (target?.position) {
-      const targetCenter = animalCenter(target);
+      const targetCenter = target.trap
+        ? { x: target.position.x + TILE / 2, y: target.position.y + TILE / 2 }
+        : animalCenter(target);
       moveAnimalToward(entity, map, targetCenter.x, targetCenter.y, def.moveSpeed, dt);
-      tryAnimalAttackPrey(entity, target, config, vfx, entityLayer, entitySprites, ecsWorld, events);
+      if (!target.trap) {
+        tryAnimalAttackPrey(entity, target as Entity, config, vfx, entityLayer, entitySprites, ecsWorld, events);
+      }
     }
     return;
   }
@@ -248,6 +296,61 @@ function applyAnimalDecision(input: {
     // Init charge timer when boar first threatens — used if player backs into charge range.
     if (def.id === "boar" && animal.wanderTimerSec <= 0) {
       animal.wanderTimerSec = 1.5;
+    }
+    return;
+  }
+
+  if (decision.behavior === "sleep") {
+    if (decision.targetId) {
+      const shelter = ecsWorld.entities.find((e) => e.id === decision.targetId);
+      if (shelter?.position) {
+        const dist = Math.hypot(shelter.position.x - pos.x, shelter.position.y - pos.y);
+        if (dist > 48) {
+          moveAnimalToward(entity, map, shelter.position.x, shelter.position.y, def.moveSpeed, dt);
+          return;
+        }
+      }
+    }
+    delete animal.wanderTarget;
+    if (entity.needs) {
+      entity.needs.energy = Math.min(100, entity.needs.energy + (17.5 / 60) * dt);
+    }
+    return;
+  }
+
+  if (decision.behavior === "drink" && decision.targetId) {
+    const match = decision.targetId.match(/water_(\d+)_(\d+)/);
+    if (match) {
+      const wx = parseInt(match[1]!) * TILE + TILE / 2;
+      const wy = parseInt(match[2]!) * TILE + TILE / 2;
+      const dist = Math.hypot(wx - pos.x, wy - pos.y);
+      if (dist <= 48) {
+        if (entity.needs) {
+          entity.needs.thirst = 0;
+        }
+        delete animal.wanderTarget;
+      } else {
+        moveAnimalToward(entity, map, wx, wy, def.moveSpeed, dt);
+      }
+    }
+    return;
+  }
+
+  if (decision.behavior === "mate" && decision.targetId) {
+    const mate = animalsById.get(decision.targetId);
+    if (mate && mate.position) {
+      const dist = Math.hypot(mate.position.x - pos.x, mate.position.y - pos.y);
+      if (dist <= 48) {
+        if (entity.needs && mate.needs) {
+          const res = initiateMating(entity as any, mate as any);
+          if (res.success) {
+            entity.needs.gestationTimerSec = res.gestationTimerSec;
+          }
+        }
+        delete animal.wanderTarget;
+      } else {
+        moveAnimalToward(entity, map, mate.position.x, mate.position.y, def.moveSpeed, dt);
+      }
     }
     return;
   }
@@ -281,6 +384,10 @@ export function animalEcologySystem(
 ): number {
   if (!player.position) return animalSeq;
   const playerCenter = animalCenter(player);
+  let nextSeq = animalSeq;
+
+  // Woodcraft stealth reduces how far animals sense the player this tick.
+  const detectionMult = stealthDetectionMult(getPlayerStats().utility.stealth);
 
   tickCarcassAge(ecsWorld, dt, entityLayer, entitySprites);
 
@@ -288,7 +395,14 @@ export function animalEcologySystem(
   const runtimes = animals.map(animalCenterRuntime);
   const animalsById = new Map(animals.map((entity) => [entity.id, entity]));
 
-  // Collect entities that complete their death fade this tick — despawn after loop.
+  const nearbyDecoys = ecsWorld.with("trap", "position").entities
+    .filter((e) => e.trap?.type === "decoy" && e.trap?.state === "set")
+    .map((e) => ({
+      id: e.id,
+      x: e.position!.x + TILE / 2,
+      y: e.position!.y + TILE / 2,
+    }));
+
   const toFinalizeDeath: Entity[] = [];
 
   for (const entity of animals) {
@@ -306,13 +420,25 @@ export function animalEcologySystem(
     }
     if (animal.dyingSec === -1) continue; // already queued for removal
 
-    tickAnimalNeeds(entity, dt, isRaining);
+    const gx = Math.floor((entity.position!.x + TILE / 2) / TILE);
+    const gy = Math.floor((entity.position!.y + TILE / 2) / TILE);
+    const cell = map.cells[gy * map.mapW + gx];
+    const isHot = cell === Cell.ScorchedWastes;
 
-    const playerDistPx = Math.hypot(playerCenter.x - (entity.position!.x + TILE / 2), playerCenter.y - (entity.position!.y + TILE / 2));
-    tickAwareness(entity, playerDistPx, isRaining, dt);
+    tickAnimalNeeds(entity, dt, isRaining, isHot);
+
+    const playerDistPx = devFlags.spectatorEnabled
+      ? 999999
+      : Math.hypot(playerCenter.x - (entity.position!.x + TILE / 2), playerCenter.y - (entity.position!.y + TILE / 2));
+    tickAwareness(entity, playerDistPx, isRaining, dt, detectionMult);
 
     if (handleScaredAnimal(entity, map, dt)) {
-      syncAnimalSprite(entity, entitySprites, entityLayer);
+      syncAnimalSprite(entity, entitySprites, entityLayer, dt);
+      continue;
+    }
+
+    if (entity.follower && updateFollowerSteering(entity, ecsWorld, map, dt)) {
+      syncAnimalSprite(entity, entitySprites, entityLayer, dt);
       continue;
     }
 
@@ -341,21 +467,192 @@ export function animalEcologySystem(
       combat,
       vfx,
       entityLayer,
+      detectionMult,
       ...(events !== undefined ? { events } : {}),
     })) {
       syncAnimalSprite(entity, entitySprites, entityLayer);
       continue;
     }
 
+    const def = ANIMAL_DEFINITIONS[animal.speciesId];
+
+    // 1. Scan Perception if senses component exists
+    if (entity.senses && entity.position) {
+      const nearbyAnimals = animals
+        .filter((a) => a.id !== entity.id)
+        .map((a) => ({
+          id: a.id,
+          speciesId: a.animal!.speciesId,
+          x: a.position!.x + TILE / 2,
+          y: a.position!.y + TILE / 2,
+        }));
+      const playerEntity = {
+        id: player.id,
+        x: playerCenter.x,
+        y: playerCenter.y,
+        isPlayer: true,
+      };
+      const plantPool = ["grass_patch", "mushroom_patch", "wild_herb_patch", "mossPatch"];
+      const foodNodes = ecsWorld.with("resource", "position").entities
+        .filter((r) => r.resource?.gatherableId && plantPool.includes(r.resource.gatherableId))
+        .map((r) => ({
+          id: r.id,
+          x: r.position!.x + TILE / 2,
+          y: r.position!.y + TILE / 2,
+        }));
+      const shelters = ecsWorld.with("nest", "position").entities
+        .map((n) => ({
+          id: n.id,
+          x: n.position!.x + TILE / 2,
+          y: n.position!.y + TILE / 2,
+        }));
+
+      const radiusTiles = Math.ceil(def.detectionRadiusPx * 2 / TILE);
+      const egx = Math.floor(entity.position.x / TILE);
+      const egy = Math.floor(entity.position.y / TILE);
+      const waterTiles: { x: number; y: number }[] = [];
+      for (let dy = -radiusTiles; dy <= radiusTiles; dy++) {
+        for (let dx = -radiusTiles; dx <= radiusTiles; dx++) {
+          const tx = egx + dx;
+          const ty = egy + dy;
+          if (map.inBounds(tx, ty)) {
+            const cell = map.cells[ty * map.mapW + tx];
+            if (cell === Cell.Water) {
+              waterTiles.push({ x: tx, y: ty });
+            }
+          }
+        }
+      }
+
+      entity.senses.perceivedEntities = scanPerceivedTargets({
+        ax: entity.position.x + TILE / 2,
+        ay: entity.position.y + TILE / 2,
+        speciesId: animal.speciesId,
+        detectionRadiusPx: def.detectionRadiusPx,
+        temperament: def.temperament,
+        nearbyAnimals,
+        player: devFlags.spectatorEnabled ? undefined : playerEntity,
+        waterTiles,
+        foodNodes,
+        shelters,
+        ...(def.preySpecies ? { preySpecies: def.preySpecies } : {}),
+      });
+      entity.senses.lastScanSec = 0;
+    }
+
+    // 2. Handle pregnancy den-retreat hideout and birth
+    let retreated = false;
+    if (entity.needs && shouldRetreatToDen(entity.needs)) {
+      const nests = ecsWorld.with("nest", "position").entities;
+      const myNests = nests.filter((n) => n.nest!.speciesId === animal.speciesId);
+      if (myNests.length > 0) {
+        let closestNest = myNests[0]!;
+        let minDist = Infinity;
+        const ax = entity.position!.x;
+        const ay = entity.position!.y;
+        for (const n of myNests) {
+          const d = Math.hypot(n.position!.x - ax, n.position!.y - ay);
+          if (d < minDist) {
+            minDist = d;
+            closestNest = n;
+          }
+        }
+
+        const npx = closestNest.position!.x;
+        const npy = closestNest.position!.y;
+        const distToNest = Math.hypot(npx - ax, npy - ay);
+
+        if (distToNest <= 48) {
+          const sprite = entitySprites.get(entity.id);
+          if (sprite) sprite.visible = false;
+
+          entity.position!.x = npx;
+          entity.position!.y = npy;
+          entity.position!.targetX = npx;
+          entity.position!.targetY = npy;
+
+          tickNeeds(entity.needs, def, dt, isRaining, isHot);
+
+          if (entity.needs.gestationTimerSec === 0) {
+            const offspring = birthOffspring(entity.id, animal.speciesId, ax, ay, npx, npy);
+            for (const spec of offspring) {
+              const kitGx = Math.floor(spec.x / TILE);
+              const kitGy = Math.floor(spec.y / TILE);
+              const kitId = spawnAnimal(kitGx, kitGy, spec.speciesId, entityLayer, entitySprites, map, nextSeq++);
+              if (kitId) {
+                const kitEntity = ecsWorld.entities.find((e) => e.id === kitId);
+                if (kitEntity) {
+                  kitEntity.needs = {
+                    hunger: 0,
+                    thirst: 0,
+                    energy: 100,
+                    ageSec: 0,
+                    lifeStage: "juvenile",
+                  };
+                  kitEntity.follower = {
+                    targetEntityId: entity.id,
+                    maxSeparationPx: 64,
+                  };
+                  const stats = getLifeStageStats("juvenile", def);
+                  if (kitEntity.health) {
+                    kitEntity.health.max = stats.maxHealth;
+                    kitEntity.health.current = stats.maxHealth;
+                  }
+                  if (kitEntity.mover) {
+                    kitEntity.mover.speed = stats.moveSpeed;
+                  }
+                  if (kitEntity.interactable) {
+                    kitEntity.interactable.name = `${def.name} (Juvenile) (Lvl 1)`;
+                  }
+                }
+              }
+            }
+
+            entity.needs.gestationTimerSec = undefined;
+            if (sprite) sprite.visible = true;
+          }
+        } else {
+          moveAnimalToward(entity, map, npx, npy, def.moveSpeed, dt);
+          const sprite = entitySprites.get(entity.id);
+          if (sprite) sprite.visible = true;
+        }
+
+        syncAnimalSprite(entity, entitySprites, entityLayer, dt);
+        retreated = true;
+      }
+    }
+
+    if (retreated) continue;
+
+    // 3. Choose Decision
     const runtime = runtimes.find((candidate) => candidate.id === entity.id)!;
-    const decision = chooseAnimalBehavior(runtime, {
-      player: playerCenter,
-      litCampfires,
-      nearbyAnimals: runtimes.filter((candidate) => candidate.id !== entity.id),
-      timeOfDay,
-      isRaining,
-    });
-    animal.behavior = decision.behavior;
+    let decision: AnimalDecision;
+    if (entity.needs && entity.senses) {
+      decision = selectAnimalBehavior(
+        entity.needs,
+        entity.senses.perceivedEntities,
+        def,
+        {
+          timeOfDay,
+          isRaining,
+          isHot,
+          hasDen: entity.home?.nestId !== undefined,
+        }
+      );
+      animal.behavior = decision.behavior;
+    } else {
+      decision = chooseAnimalBehavior(runtime, {
+        player: playerCenter,
+        litCampfires,
+        nearbyAnimals: runtimes.filter((candidate) => candidate.id !== entity.id),
+        timeOfDay,
+        isRaining,
+        nearbyDecoys,
+        detectionMult,
+      });
+      animal.behavior = decision.behavior;
+    }
+
     applyAnimalDecision({
       entity,
       decision,
@@ -373,7 +670,7 @@ export function animalEcologySystem(
       ...(events !== undefined ? { events } : {}),
     });
 
-    syncAnimalSprite(entity, entitySprites, entityLayer);
+    syncAnimalSprite(entity, entitySprites, entityLayer, dt);
   }
 
   // Finalize deaths after the loop — safe to mutate the ECS world here.
@@ -421,7 +718,6 @@ export function animalEcologySystem(
     return count;
   }
 
-  let nextSeq = animalSeq;
   const activeAnimalsCount = animals.filter(e => e.animal && e.animal.dyingSec === undefined).length;
   if (activeAnimalsCount < 20) {
     if (Math.random() < 0.18 * dt) {

@@ -113,7 +113,7 @@ function onInputKey(e: KeyboardEvent): void {
         onkeydown={onInputKey}
         spellcheck="false"
         autocomplete="off"
-        placeholder="type a command, 'help' for the list"
+        placeholder="type js, help() for the api"
       />
     </div>
   </div>

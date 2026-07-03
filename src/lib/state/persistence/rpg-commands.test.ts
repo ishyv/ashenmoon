@@ -32,6 +32,63 @@ describe("local RPG commands", () => {
     expect(normalized.skills.lumberjacking).toEqual({ level: 2, xp: 5, nextXp: 200 });
   });
 
+  it("round-trips a tiered/cursed item instance's optional fields through normalization", () => {
+    const normalized = normalizePlayerState({
+      rpg: {
+        inventory: {
+          slots: {
+            flint_axe: {
+              instances: [
+                {
+                  instanceId: "a1",
+                  durability: 80,
+                  tier: "masterwork",
+                  rolledStats: { power: 5.5, junk: "nope" },
+                  cursed: true,
+                  curseLevel: 3,
+                  curseEffectIds: ["self_knockback", "lying_tooltip"],
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const slot = normalized.inventory.slots.flint_axe;
+    expect(slot && "instances" in slot ? slot.instances : undefined).toEqual([
+      {
+        instanceId: "a1",
+        durability: 80,
+        tier: "masterwork",
+        rolledStats: { power: 5.5 },
+        cursed: true,
+        curseLevel: 3,
+        curseEffectIds: ["self_knockback", "lying_tooltip"],
+      },
+    ]);
+  });
+
+  it("drops an invalid tier and malformed curse fields during normalization", () => {
+    const normalized = normalizePlayerState({
+      rpg: {
+        inventory: {
+          slots: {
+            flint_axe: {
+              instances: [
+                { instanceId: "b1", durability: 100, tier: "godlike", curseLevel: "high" },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const slot = normalized.inventory.slots.flint_axe;
+    const instances = slot && "instances" in slot ? slot.instances : undefined;
+    expect(instances).toEqual([{ instanceId: "b1", durability: 100 }]);
+  });
+
   it("loads and saves RPG state through localStorage", () => {
     const state = createDefaultPlayerState();
     state.inventory.slots.stick = { qty: 3 };
@@ -50,9 +107,11 @@ describe("local RPG commands", () => {
     localRpgCommands.pickup("flint_shard", "pickup_flint");
     localRpgCommands.pickup("grass_fiber", "pickup_fiber");
 
-    const next = localRpgCommands.craft("flint_axe", { isNearCampfire: false });
+    // flint_axe is a tiered, station-gated recipe, so its output is an instances stack, not a flat qty.
+    const next = localRpgCommands.craft("flint_axe", { isNearCampfire: false, stationId: "primitive_work_surface" });
 
-    expect(next.inventory.slots.flint_axe).toEqual({ qty: 1 });
+    const flintAxeSlot = next.inventory.slots.flint_axe;
+    expect(flintAxeSlot && "instances" in flintAxeSlot ? flintAxeSlot.instances.length : 0).toBe(1);
     expect(next.inventory.slots.stick).toBeUndefined();
     expect(next.inventory.slots.flint_shard).toBeUndefined();
     expect(next.inventory.slots.grass_fiber).toBeUndefined();
@@ -192,7 +251,9 @@ describe("local RPG commands", () => {
 
     const unequipped = localRpgCommands.equipGear(null, "chest");
     expect(unequipped.profile.loadout.chest).toBeNull();
-    expect(unequipped.inventory.slots.hide_cloak).toEqual({ qty: 1 });
+    // Unequipping now returns the full instance (not a flat qty), preserving any tier/curse data it carries.
+    const returnedSlot = unequipped.inventory.slots.hide_cloak;
+    expect(returnedSlot && "instances" in returnedSlot ? returnedSlot.instances.length : 0).toBe(1);
   });
 });
 

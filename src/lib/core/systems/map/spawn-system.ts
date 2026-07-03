@@ -142,6 +142,31 @@ export function spawnAnimal(
       awarenessDecaySec: 0,
       ...(dmg !== undefined ? { damage: dmg } : {}),
     },
+    home: {
+      x: ex + TILE / 2,
+      y: ey + TILE / 2,
+      leashRadiusPx: TILE * 3,
+    },
+    needs: {
+      hunger: def.initialHunger,
+      thirst: 0,
+      energy: 100,
+      ageSec: 0,
+      lifeStage: "adult",
+    },
+    senses: {
+      lastScanSec: 0,
+      perceivedEntities: [],
+    },
+    ...(speciesId === "wolf" || speciesId === "deer"
+      ? {
+          pack: {
+            packId: `${speciesId}_pack_${animalSeq}`,
+            isLeader: false,
+            membersIds: [],
+          },
+        }
+      : {}),
     mover: { speed: def.moveSpeed },
     knockback: { vx: 0, vy: 0, timer: 0 },
     health: { current: hp, max: hp, faction: "hostile", invulnTimer: 0 },
@@ -384,6 +409,8 @@ function getLandmarkVisual(kind: LandmarkKind): LandmarkVisual | null {
       skeleton_remains: 0.85,
       cursed_monolith: 1.85,
       bone_pile: 0.9,
+      rabbit_burrow: 0.6,
+      deer_bedding: 0.7,
     };
     return { texture: getAshenmoonLandmarkTexture(firstPartyKey), heightTiles: heightTilesByKind[kind] ?? 1.0 };
   }
@@ -401,13 +428,14 @@ export function spawnLandmark(
   entityLayer: Container,
   entitySprites: Map<string, Container>,
   map: MapResource,
+  customId?: string,
 ): void {
   const def = LANDMARK_DEFS[kind];
   if (!def) return;
 
   const ex = gx * TILE;
   const ey = gy * TILE;
-  const entityId = `landmark_${kind}_${++landmarkSeq}`;
+  const entityId = customId || `landmark_${kind}_${++landmarkSeq}`;
 
   world.add({
     id: entityId,
@@ -415,6 +443,9 @@ export function spawnLandmark(
     ...(def.solid ? { collider: { isSolid: true } } : {}),
     interactable: { name: def.displayName, action: "examine" },
     landmark: { kind, depleted: false },
+    ...(kind === "wolf_den" ? { nest: { speciesId: "wolf", capacity: 4, occupantIds: [], spawnCooldownSec: 0 } } : {}),
+    ...(kind === "rabbit_burrow" ? { nest: { speciesId: "rabbit", capacity: 6, occupantIds: [], spawnCooldownSec: 0 } } : {}),
+    ...(kind === "deer_bedding" ? { nest: { speciesId: "deer", capacity: 4, occupantIds: [], spawnCooldownSec: 0 } } : {}),
   });
 
   if (def.solid) {

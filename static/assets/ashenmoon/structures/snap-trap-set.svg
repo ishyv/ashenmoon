@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="snap trap set">
+  <!-- Shadow -->
+  <ellipse cx="64" cy="112" rx="42" ry="8" fill="#080706" opacity=".42"/>
+  
+  <!-- Base Plate and Springs -->
+  <rect x="28" y="94" width="72" height="14" rx="4" fill="#323436" stroke="#080706" stroke-width="4"/>
+  <circle cx="36" cy="101" r="10" fill="#1b1c1d" stroke="#080706" stroke-width="3"/>
+  <circle cx="92" cy="101" r="10" fill="#1b1c1d" stroke="#080706" stroke-width="3"/>
+
+  <!-- Left Open Jaw -->
+  <path d="M 28 94 C 20 80, 20 60, 44 60 C 50 60, 54 75, 54 94 Z" fill="#4d5054" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Teeth on Left Jaw -->
+  <path d="M 26 76 L 31 82 L 34 72 L 39 80 L 42 70 L 47 78 L 50 72 L 53 82" fill="none" stroke="#080706" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Right Open Jaw -->
+  <path d="M 100 94 C 108 80, 108 60, 84 60 C 78 60, 74 75, 74 94 Z" fill="#4d5054" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Teeth on Right Jaw -->
+  <path d="M 102 76 L 97 82 L 94 72 L 89 80 L 86 70 L 81 78 L 78 72 L 75 82" fill="none" stroke="#080706" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Center Trigger Plate -->
+  <circle cx="64" cy="101" r="14" fill="#686d73" stroke="#080706" stroke-width="4"/>
+  <circle cx="64" cy="101" r="6" fill="#1b1c1d"/>
+</svg>

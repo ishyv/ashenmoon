@@ -1,7 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="96" viewBox="0 0 128 96">
-  <ellipse cx="64" cy="68" rx="48" ry="17" fill="#090807" opacity=".55"/>
-  <ellipse cx="64" cy="59" rx="42" ry="22" fill="#2a2520" stroke="#0c0b0a" stroke-width="6"/>
-  <ellipse cx="64" cy="58" rx="25" ry="12" fill="#10100f"/>
-  <path d="M37 61l54-22M38 43l55 24" stroke="#4d3322" stroke-width="9" stroke-linecap="round"/>
-  <path d="M48 55c12 5 24 5 36 0" stroke="#79736a" stroke-width="4" stroke-linecap="round" opacity=".5"/>
+  <!-- Ground soft shadow -->
+  <ellipse cx="64" cy="74" rx="54" ry="12" fill="#090807" opacity="0.62"/>
+
+  <g id="firepit-cold" stroke="#080706" stroke-linecap="round" stroke-linejoin="round" stroke-width="4">
+    <!-- Ash Bed (Dark grey textured area in center) -->
+    <ellipse cx="64" cy="62" rx="36" ry="16" fill="#1b1c1e"/>
+    <ellipse cx="64" cy="62" rx="28" ry="11" fill="#303236" opacity="0.8"/>
+    <!-- Ash speckles / charcoal chunks -->
+    <path d="M52 58h5v3h-5zM76 65h6v4h-6zM46 64h4v2h-4z" fill="#080706" stroke="none"/>
+    <path d="M60 62h4v3h-4zM68 56h3v3h-3z" fill="#464b52" stroke="none"/>
+
+    <!-- Criss-crossed split logs -->
+    <path d="M38 72l52-20" fill="none" stroke="#3d281a" stroke-width="10"/> <!-- Log 1 -->
+    <path d="M39 52l50 20" fill="none" stroke="#312015" stroke-width="10"/> <!-- Log 2 -->
+    <!-- Bark cracks and splitting wood details -->
+    <line x1="42" y1="71" x2="86" y2="54" stroke="#1c120c" stroke-width="2"/>
+    <line x1="44" y1="54" x2="84" y2="70" stroke="#1c120c" stroke-width="2"/>
+
+    <!-- Border Ring of Rough Cracked Stones -->
+    <!-- Stone 1 (Bottom) -->
+    <path d="M42 78c6 10 38 10 44 0c2-6-46-6-44 0z" fill="#484a4d"/>
+    <!-- Stone 2 (Left) -->
+    <path d="M16 62c6-10 12-14 24-8c2 8-18 18-24 8z" fill="#3a3c3e"/>
+    <!-- Stone 3 (Right) -->
+    <path d="M88 54c12-6 18-2 24 8c-6 10-26 0-24-8z" fill="#3a3c3e"/>
+    <!-- Stone 4 (Top Left) -->
+    <path d="M32 46c10-6 20-4 24 4c-6 6-18 2-24-4z" fill="#2d2f30"/>
+    <!-- Stone 5 (Top Right) -->
+    <path d="M72 50c4-8 14-10 24-4c-6 6-18 10-24 4z" fill="#2d2f30"/>
+
+    <!-- Individual stone detail cracks -->
+    <path d="M60 82l4-8M24 60l6 2M98 64l-6-2" fill="none" stroke="#1c1d1e" stroke-width="2"/>
+    <!-- Moss on stones -->
+    <path d="M54 78c4-2 12-2 16 0" fill="none" stroke="#4b573a" stroke-width="4" opacity="0.8"/>
+    <path d="M28 50c4 0 6 4 4 6" fill="none" stroke="#4b573a" stroke-width="3" opacity="0.8"/>
+
+  </g>
 </svg>

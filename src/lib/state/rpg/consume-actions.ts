@@ -26,6 +26,7 @@ import { propertiesFromConsume } from "$lib/domain/knowledge/knowledge-unlock";
 import { getActionFeedback } from "$lib/domain/feedback/action-feedback";
 import { addCritSetupStack } from "$lib/state/rpg/crit-setup.svelte";
 import { CRIT_SETUP_STACK_ON_CONSUME } from "$lib/domain/combat/crit";
+import { rpgEventQueue, playerRpgEntityId } from "$lib/state/rpg/rpg-feedback-router";
 
 
 /** Whether one unit of this item can be consumed right now. */
@@ -102,6 +103,8 @@ export function consumeItem(itemId: string, rng: () => number = Math.random): bo
   learnAbout(itemId, ...propertiesFromConsume({ harmed, restoredThirst }));
 
   triggerQuestEvent(GameEvent.Consume, itemId);
+  // Vigilance XP: routed via the feedback queue so the engine's flush supplies VFX context.
+  rpgEventQueue.push({ type: "item_consumed", actorId: playerRpgEntityId(), itemId });
   addCritSetupStack(CRIT_SETUP_STACK_ON_CONSUME);
   return true;
 }

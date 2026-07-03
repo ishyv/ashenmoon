@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="bait decoy">
+  <!-- Ground Shadow -->
+  <ellipse cx="64" cy="118" rx="28" ry="6" fill="#080706" opacity=".42"/>
+
+  <!-- Wooden Stake driven into ground -->
+  <path d="M 60 118 L 68 118 L 70 70 L 58 70 Z" fill="#6d4c2a" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- Chunk of raw meat wrapped around the top of the stake -->
+  <path d="M 44 48 C 36 28, 92 28, 84 48 C 96 68, 32 68, 44 48 Z" fill="#b13b42" stroke="#080706" stroke-width="4.5" stroke-linejoin="round"/>
+  <!-- Meat marbling lines (fat streaks) -->
+  <path d="M 48 40 Q 56 34 64 42 T 76 38" fill="none" stroke="#ded8c9" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 44 52 Q 58 48 64 56 T 80 50" fill="none" stroke="#ded8c9" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Binding Twine/Rope wrapped around the meat -->
+  <path d="M 40 44 L 88 56" fill="none" stroke="#8a6a45" stroke-width="3.5"/>
+  <path d="M 40 52 L 88 40" fill="none" stroke="#8a6a45" stroke-width="3.5"/>
+  <path d="M 52 34 L 76 64" fill="none" stroke="#8a6a45" stroke-width="3.5"/>
+
+  <!-- Drips of blood on the stake / ground -->
+  <circle cx="64" cy="80" r="3" fill="#8d2b35"/>
+  <circle cx="68" cy="92" r="2" fill="#8d2b35"/>
+  <path d="M 52 116 Q 50 118 48 116 Z" fill="#8d2b35"/>
+</svg>

@@ -89,4 +89,7 @@ export const blueprintItems: Record<string, ItemDefinition> = {
   blueprint_rain_catcher_kit: bp("rain_catcher_kit", "rain catcher kit", "instructions for stretching a sealed hide over a branch frame to collect rainwater."),
   blueprint_meat_smoking_rack_kit: bp("meat_smoking_rack_kit", "meat smoking rack kit", "a build plan for a rack that routes smoke around meat to preserve it without burning."),
   blueprint_simple_bedroll: bp("simple_bedroll", "simple bedroll", "a method for layering dried hide, leaves, and cord into a basic sleeping surface."),
+  blueprint_snap_trap_kit: bp("snap_trap_kit", "snap trap kit", "a guide to building a spring-loaded snap trap from sticks and bones."),
+  blueprint_caltrops_kit: bp("caltrops_kit", "caltrops kit", "instructions for shaping flint shards into scatterable caltrops."),
+  blueprint_bait_decoy_kit: bp("bait_decoy_kit", "bait decoy kit", "notes on wrapping raw meat around a peg to lure wild beasts."),
 };

@@ -22,11 +22,26 @@ export type PlayerAnimationClipId =
   | "gather_ore_pick"
   | "gather_clay_hands"
   | "gather_water_container"
-  | "combat_active"
-  | "combat_stance_spear"
-  | "combat_attack_spear";
+  | "combat_guard_unarmed"
+  | "combat_attack_unarmed"
+  | "combat_guard_knife"
+  | "combat_attack_knife"
+  | "combat_guard_spear"
+  | "combat_attack_spear"
+  | "combat_guard_axe"
+  | "combat_attack_axe"
+  | "combat_attack_axe_heavy";
 
 export type PlayerAnimationCategory = "movement" | "gathering" | "combat";
+export type PlayerAnimationProfileId = "unarmed" | "knife" | "spear" | "axe" | "tool";
+export type PlayerAnimationClipRole =
+  | "idle"
+  | "walk"
+  | "run"
+  | "guard"
+  | "quick_attack"
+  | "heavy_attack"
+  | "gather";
 
 export type AnimationFrameEventKind = "footstep" | "tool_impact" | "gather_pull" | "swing_release";
 
@@ -64,6 +79,16 @@ export interface PlayerAnimationContext {
   readonly guardActive: boolean;
 }
 
+export interface PlayerAnimationProfileClips {
+  readonly idle: PlayerAnimationClipId;
+  readonly walk: PlayerAnimationClipId;
+  readonly run: PlayerAnimationClipId;
+  readonly guard: PlayerAnimationClipId;
+  readonly quick_attack: PlayerAnimationClipId;
+  readonly heavy_attack?: PlayerAnimationClipId;
+  readonly gather: PlayerAnimationClipId;
+}
+
 export interface AnimationVariantRule {
   readonly clipId: PlayerAnimationClipId;
   readonly priority: number;
@@ -78,6 +103,7 @@ export interface AnimationVariantRule {
     readonly encumbranceMin?: number;
     readonly wetnessMin?: WetnessLevel;
     readonly combatActive?: boolean;
+    readonly guardActive?: boolean;
   };
   readonly speedMultiplier?: number;
 }
@@ -87,6 +113,66 @@ export interface PlayerAnimationSelection {
   readonly speedMultiplier: number;
   readonly priority: number;
   readonly modifiers: readonly PlayerAnimationModifier[];
+}
+
+export const PLAYER_ANIMATION_PROFILE_CLIPS = {
+  unarmed: {
+    idle: "idle",
+    walk: "walk",
+    run: "run",
+    guard: "combat_guard_unarmed",
+    quick_attack: "combat_attack_unarmed",
+    gather: "gather_bush_hands",
+  },
+  knife: {
+    idle: "idle",
+    walk: "walk",
+    run: "run",
+    guard: "combat_guard_knife",
+    quick_attack: "combat_attack_knife",
+    gather: "gather_bush_hands",
+  },
+  spear: {
+    idle: "idle",
+    walk: "walk",
+    run: "run",
+    guard: "combat_guard_spear",
+    quick_attack: "combat_attack_spear",
+    gather: "gather_bush_hands",
+  },
+  axe: {
+    idle: "idle",
+    walk: "walk",
+    run: "run",
+    guard: "combat_guard_axe",
+    quick_attack: "combat_attack_axe",
+    heavy_attack: "combat_attack_axe_heavy",
+    gather: "gather_tree_axe",
+  },
+  tool: {
+    idle: "idle",
+    walk: "walk",
+    run: "run",
+    guard: "combat_guard_unarmed",
+    quick_attack: "combat_attack_unarmed",
+    gather: "gather_bush_hands",
+  },
+} as const satisfies Record<PlayerAnimationProfileId, PlayerAnimationProfileClips>;
+
+export function playerAnimationProfileForWeaponAnimation(animationProfile: string | null | undefined): PlayerAnimationProfileId {
+  switch (animationProfile) {
+    case "small_slash":
+    case "quick_stab":
+      return "knife";
+    case "straight_thrust":
+    case "guarded_poke":
+      return "spear";
+    case "heavy_chop":
+    case "overhead_slam":
+      return "axe";
+    default:
+      return "unarmed";
+  }
 }
 
 const WETNESS_RANK: Record<WetnessLevel, number> = {
@@ -121,15 +207,26 @@ export const PLAYER_ANIMATION_CLIPS: readonly AnimationDefinition[] = [
   { id: "gather_ore_pick", category: "gathering", baseSpeed: 0.96, loop: false, priority: 88, events: [{ atNormalizedTime: 0.4, kind: "swing_release" }, { atNormalizedTime: 0.58, kind: "tool_impact" }] },
   { id: "gather_clay_hands", category: "gathering", baseSpeed: 0.85, loop: false, priority: 82, events: [{ atNormalizedTime: 0.52, kind: "gather_pull" }] },
   { id: "gather_water_container", category: "gathering", baseSpeed: 0.78, loop: false, priority: 82, events: [{ atNormalizedTime: 0.54, kind: "gather_pull" }] },
-  { id: "combat_active", category: "combat", baseSpeed: 1, loop: false, priority: 100 },
-  { id: "combat_stance_spear", category: "combat", baseSpeed: 0.65, loop: true, priority: 100 },
+  { id: "combat_guard_unarmed", category: "combat", baseSpeed: 0.7, loop: true, priority: 100 },
+  { id: "combat_attack_unarmed", category: "combat", baseSpeed: 1.08, loop: false, priority: 110, events: [{ atNormalizedTime: 0.38, kind: "swing_release" }] },
+  { id: "combat_guard_knife", category: "combat", baseSpeed: 0.78, loop: true, priority: 100 },
+  { id: "combat_attack_knife", category: "combat", baseSpeed: 1.18, loop: false, priority: 110, events: [{ atNormalizedTime: 0.32, kind: "swing_release" }] },
+  { id: "combat_guard_spear", category: "combat", baseSpeed: 0.65, loop: true, priority: 100 },
   { id: "combat_attack_spear", category: "combat", baseSpeed: 1, loop: false, priority: 110, events: [{ atNormalizedTime: 0.35, kind: "swing_release" }] },
+  { id: "combat_guard_axe", category: "combat", baseSpeed: 0.58, loop: true, priority: 100 },
+  { id: "combat_attack_axe", category: "combat", baseSpeed: 0.82, loop: false, priority: 110, events: [{ atNormalizedTime: 0.5, kind: "swing_release" }] },
+  { id: "combat_attack_axe_heavy", category: "combat", baseSpeed: 0.68, loop: false, priority: 112, events: [{ atNormalizedTime: 0.56, kind: "swing_release" }] },
 ] as const;
 
 export const PLAYER_ANIMATION_VARIANTS: readonly AnimationVariantRule[] = [
+  { clipId: "combat_guard_axe", priority: 116, when: { combatActive: true, equippedToolKind: "axe", guardActive: true } },
+  { clipId: "combat_guard_spear", priority: 116, when: { combatActive: true, equippedToolKind: "spear", guardActive: true } },
+  { clipId: "combat_guard_knife", priority: 116, when: { combatActive: true, equippedToolKind: "knife", guardActive: true } },
+  { clipId: "combat_guard_unarmed", priority: 116, when: { combatActive: true, guardActive: true } },
+  { clipId: "combat_attack_axe", priority: 110, when: { combatActive: true, equippedToolKind: "axe" } },
   { clipId: "combat_attack_spear", priority: 110, when: { combatActive: true, equippedToolKind: "spear", action: "combat" } },
-  { clipId: "combat_stance_spear", priority: 105, when: { combatActive: true, equippedToolKind: "spear" } },
-  { clipId: "combat_active", priority: 100, when: { combatActive: true } },
+  { clipId: "combat_attack_knife", priority: 110, when: { combatActive: true, equippedToolKind: "knife" } },
+  { clipId: "combat_attack_unarmed", priority: 100, when: { combatActive: true } },
   { clipId: "gather_tree_axe", priority: 88, when: { action: "gathering", gatherTargetKind: "tree", equippedToolKind: "axe" } },
   { clipId: "gather_ore_pick", priority: 88, when: { action: "gathering", gatherTargetKind: "ore", equippedToolKind: "pickaxe" } },
   { clipId: "gather_clay_hands", priority: 82, when: { action: "gathering", gatherTargetKind: "clay" } },
@@ -180,6 +277,7 @@ export function selectPlayerAnimation(context: PlayerAnimationContext): PlayerAn
 function matchesVariant(context: PlayerAnimationContext, variant: AnimationVariantRule): boolean {
   const when = variant.when;
   if (when.combatActive !== undefined && context.combatActive !== when.combatActive) return false;
+  if (when.guardActive !== undefined && context.guardActive !== when.guardActive) return false;
   if (when.action !== undefined && context.action !== when.action) return false;
   if (when.moving !== undefined && (context.velocityPxPerSec > 1) !== when.moving) return false;
   if (when.sprinting !== undefined && context.sprinting !== when.sprinting) return false;

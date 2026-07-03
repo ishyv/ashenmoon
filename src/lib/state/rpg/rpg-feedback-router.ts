@@ -10,6 +10,20 @@ import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { learnAbout, discoverSource } from "$lib/state/rpg/knowledge.svelte";
 import { propertyFromReaction, eurekaRecipesFor } from "$lib/domain/knowledge/knowledge-unlock";
 import type { KnowledgeProperty } from "$lib/domain/knowledge/item-knowledge";
+import { awardSkillXp } from "$lib/state/rpg/skill-xp";
+import { SkillKey } from "$lib/domain/game-events";
+import type { VFXResource } from "$lib/core/vfx/vfx";
+import type { Container } from "pixi.js";
+
+/** VFX context the engine hands the flush so state-originated events can award skill XP. */
+export interface FeedbackFlushContext {
+  vfx: VFXResource;
+  playerPos: { x: number; y: number };
+  entityLayer: Container;
+}
+
+const VIGILANCE_XP_PER_CONSUME = 3;
+const CRAFTSMANSHIP_XP_PER_CRAFT = 5;
 
 export const rpgEventQueue = createGameEventQueue();
 
@@ -135,7 +149,17 @@ function routePlacedItemKnowledge(event: QueuedGameEvent): void {
   if (event.intoItemId === "charcoal") learnRecipe("charcoal");
 }
 
-export function flushRpgFeedbackEvents(): readonly QueuedGameEvent[] {
+/** Grant skill XP for state-originated events. No-op without a VFX context (e.g. in tests). */
+function routeSkillXpEvent(event: QueuedGameEvent, ctx?: FeedbackFlushContext): void {
+  if (!ctx) return;
+  if (event.type === "item_consumed") {
+    awardSkillXp(SkillKey.Vigilance, VIGILANCE_XP_PER_CONSUME, ctx.vfx, ctx.playerPos, ctx.entityLayer);
+  } else if (event.type === "item_crafted") {
+    awardSkillXp(SkillKey.Craftsmanship, CRAFTSMANSHIP_XP_PER_CRAFT, ctx.vfx, ctx.playerPos, ctx.entityLayer);
+  }
+}
+
+export function flushRpgFeedbackEvents(ctx?: FeedbackFlushContext): readonly QueuedGameEvent[] {
   const events = rpgEventQueue.drain();
   for (const event of events) {
     if (event.type === "status_all_cleared") {
@@ -148,6 +172,7 @@ export function flushRpgFeedbackEvents(): readonly QueuedGameEvent[] {
     routeReactionKnowledgeEvent(event);
     routeGatheredEvent(event);
     routePlacedItemKnowledge(event);
+    routeSkillXpEvent(event, ctx);
   }
   return events;
 }

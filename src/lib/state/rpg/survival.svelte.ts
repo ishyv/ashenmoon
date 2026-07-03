@@ -23,6 +23,7 @@ import { StatusId } from "$lib/domain/systems/status-types";
 import { applyStatusEffect, clearStatusEffect } from "$lib/state/rpg/status-effects.svelte";
 import { emitPlayerFeedback } from "$lib/ui/player-feedback.svelte";
 import { gameState } from "$lib/state/game-state.svelte";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 
 // Configs
 export const thirstConfig = $state<ThirstConfig>({ ...DEFAULT_THIRST_CONFIG });
@@ -49,12 +50,17 @@ export const hungerEvent = $state<{ seq: number; mode: "drain" | "burst" }>({
 const PARCHED_EXHAUSTION_DURATION_SEC = 30;
 const STARVING_DURATION_SEC = 999999;
 
-/** Drain thirst for this frame. Called by the engine each tick. */
-export function tickThirst(dt: number, activity: ThirstActivity): void {
+/**
+ * Drain thirst for this frame. Called by the engine each tick. `decayMult` scales
+ * the computed drain (Vigilance skill reduces it; 1 = unmodified), computed by the
+ * caller from the stat pipeline so this stays free of stats imports.
+ */
+export function tickThirst(dt: number, activity: ThirstActivity, decayMult = 1): void {
+  if (devFlags.spectatorEnabled) return;
   const isRaining = !!activity.raining;
   if (gameState.survival.thirst <= 0 && gameState.survival.wasParched && !isRaining) return;
 
-  const drained = computeThirstDrain(dt, activity, thirstConfig);
+  const drained = computeThirstDrain(dt, activity, thirstConfig) * decayMult;
   const rainIncome = isRaining ? 0.35 * dt : 0;
   
   const nextThirst = Math.max(0, Math.min(thirstConfig.max, gameState.survival.thirst - drained + rainIncome));
@@ -84,11 +90,12 @@ export function setThirst(value: number): void {
   if (gameState.survival.thirst > 0) gameState.survival.wasParched = false;
 }
 
-/** Drain hunger for this frame. Called by the engine each tick. */
-export function tickHunger(dt: number, activity: HungerActivity): void {
+/** Drain hunger for this frame. Called by the engine each tick. `decayMult` as in `tickThirst`. */
+export function tickHunger(dt: number, activity: HungerActivity, decayMult = 1): void {
+  if (devFlags.spectatorEnabled) return;
   if (gameState.survival.hunger <= 0 && gameState.survival.wasStarving) return;
 
-  const drained = computeHungerDrain(dt, activity, hungerConfig);
+  const drained = computeHungerDrain(dt, activity, hungerConfig) * decayMult;
   gameState.survival.hunger = Math.max(0, gameState.survival.hunger - drained);
 
   if (gameState.survival.hunger <= 0 && !gameState.survival.wasStarving) {

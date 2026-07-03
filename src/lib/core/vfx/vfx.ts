@@ -37,6 +37,17 @@ export class VFXResource {
   public strikeRing!: Graphics;
   public tremorLine!: Graphics;
   public placementCompass!: Graphics;
+  /** "sequence"-kind attended-crafting minigame (no existing timer metaphor fit reuse). */
+  public craftSequenceMarks!: Graphics;
+  /**
+   * Overall process/craft progress rings, one per currently-busy station —
+   * separate from the minigame VFX above, and a pool (not a singleton)
+   * since stations now run independently. Keyed by station entity id;
+   * created on first tick a station goes busy, destroyed when it clears.
+   */
+  public processProgressRings = new Map<string, Graphics>();
+  /** Always-on fuel-remaining ring per lit campfire, keyed by entity id. See campfire-fuel-ring.ts. */
+  public campfireFuelRings = new Map<string, Graphics>();
   public selectionRing!: Graphics;
   public comboRing!: Graphics;
   public fourfoldRing!: Graphics;

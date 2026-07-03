@@ -17,7 +17,23 @@ export interface RpgSkillState {
   nextXp: number;
 }
 
-export interface RpgDurableEquipment {
+/** Crafting quality tier rolled at craft time; absent means the item was never tiered (untiered recipe, or pre-feature save). */
+export type CraftTier = "sloppy" | "robust" | "pristine" | "masterwork" | "fable" | "divine";
+
+/** Per-instance data rolled onto a tiered craft. All optional: untiered items carry none of this. */
+export interface RpgItemInstanceTierData {
+  tier?: CraftTier;
+  /** Per-stat rolled values, e.g. `{ damage: 62 }`. Stored this phase; combat/gathering math does not read it yet. */
+  rolledStats?: Record<string, number>;
+  cursed?: boolean;
+  /** 1..N, only meaningful when `cursed` is true. */
+  curseLevel?: number;
+  curseEffectIds?: readonly string[];
+  /** Key into the hand-authored Divine outcome pool; only set when `tier === "divine"`. */
+  divineId?: string;
+}
+
+export interface RpgDurableEquipment extends RpgItemInstanceTierData {
   instanceId: string;
   itemId: string;
   durability: number;
@@ -25,13 +41,14 @@ export interface RpgDurableEquipment {
 
 export type RpgWeaponSlot = RpgDurableEquipment | string | null;
 export type RpgEquipmentSlot = RpgDurableEquipment | string | null;
+export interface RpgItemInstance extends RpgItemInstanceTierData {
+  instanceId: string;
+  durability: number;
+}
 export type RpgInventorySlot =
   | { qty: number }
   | {
-      instances: {
-        instanceId: string;
-        durability: number;
-      }[];
+      instances: RpgItemInstance[];
     };
 
 export interface RpgPlayerState {

@@ -67,6 +67,9 @@ export const ASHENMOON_STRUCTURE_COVERAGE = {
   rain_catcher: { status: "asset", tier: 2, key: "rainCatcher", reason: "water utility structure asset exists" },
   meat_smoking_rack: { status: "asset", tier: 2, key: "meatSmokingRack", reason: "food preservation station asset exists" },
   simple_bedroll: { status: "asset", tier: 2, key: "simpleBedroll", reason: "rest structure asset exists" },
+  snap_trap: { status: "asset", tier: 2, key: "snapTrapSet", reason: "camp trap asset exists" },
+  caltrops: { status: "asset", tier: 2, key: "caltrops", reason: "camp trap asset exists" },
+  bait_decoy: { status: "asset", tier: 2, key: "baitDecoy", reason: "camp trap bait asset exists" },
   wall: { status: "deferred", tier: 5, key: "wall", fallback: "external-pack", reason: "settlement/outpost legacy structure" },
   house1: { status: "deferred", tier: 5, key: "legacyHouse", fallback: "external-pack", reason: "settlement/outpost legacy structure" },
   house2: { status: "deferred", tier: 5, key: "legacyHouse", fallback: "external-pack", reason: "settlement/outpost legacy structure" },
@@ -91,6 +94,8 @@ export const ASHENMOON_LANDMARK_COVERAGE = {
   skeleton_remains: { status: "asset", tier: 1, key: "skeletonRemains", reason: "lootable skeleton remains landmark exists" },
   cursed_monolith: { status: "asset", tier: 1, key: "cursedMonolith", reason: "cursed altar landmark exists" },
   bone_pile: { status: "asset", tier: 1, key: "bonePile", reason: "wolves bone pile landmark exists" },
+  rabbit_burrow: { status: "asset", tier: 1, key: "wolfDen", reason: "reused wolf den visual for rabbit burrow" },
+  deer_bedding: { status: "asset", tier: 1, key: "deerGrazingArea", reason: "reused deer grazing area visual for deer bedding" },
 } as const satisfies Record<string, AshenmoonAssetCoverage<AshenmoonLandmarkKey>>;
 
 export const ASHENMOON_CARCASS_COVERAGE = {

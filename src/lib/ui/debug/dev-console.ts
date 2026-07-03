@@ -42,6 +42,7 @@ class DevConsole {
   private seq = 0;
   private commands = new Map<string, Command>();
   private listeners = new Set<() => void>();
+  private evaluator: ((src: string) => string | Promise<string>) | null = null;
 
   /**
    * Whether the overlay is open. Doubles as the input-capture flag: the engine
@@ -51,14 +52,6 @@ class DevConsole {
   open = false;
 
   constructor() {
-    this.register({
-      name: "help",
-      help: "help : list commands",
-      run: () =>
-        this.list()
-          .map((c) => `  ${c.help}`)
-          .join("\n"),
-    });
     this.register({
       name: "clear",
       help: "clear : clear the console",
@@ -93,31 +86,38 @@ class DevConsole {
     this.commands.set(cmd.name, cmd);
   }
 
-  /** Commands sorted by name, for `help` and any future palette UI. */
-  list(): Command[] {
-    return [...this.commands.values()].sort((a, b) => a.name.localeCompare(b.name));
+  /**
+   * Sets the fallback evaluator for any input that isn't a built-in command.
+   * The game wires this to the scriptable engine facade (`dev-runtime.ts`), so
+   * the console is a JS REPL over the game world rather than a fixed vocabulary.
+   */
+  setEvaluator(fn: (src: string) => string | Promise<string>): void {
+    this.evaluator = fn;
   }
 
   /**
-   * Parses `name arg arg…`, echoes it, and dispatches. Whitespace-only input is
-   * ignored. Unknown commands report rather than throw — this is a REPL.
+   * Echoes the input, then dispatches. Built-in commands (by first token) run
+   * first; everything else goes to the evaluator, so typed JS reaches the game
+   * facade. Errors are reported rather than thrown — this is a REPL.
    */
   async run(input: string): Promise<void> {
     const trimmed = input.trim();
     if (!trimmed) return;
     this.log(`> ${trimmed}`, "echo");
 
-    // trimmed is non-empty, so name is always present; the default satisfies TS.
     const [name = "", ...args] = trimmed.split(/\s+/);
     const cmd = this.commands.get(name);
-    if (!cmd) {
-      this.log(`unknown command: ${name}. type 'help'.`, "error");
-      return;
-    }
 
     try {
-      const out = await cmd.run(args);
-      if (out) this.log(out);
+      if (cmd) {
+        const out = await cmd.run(args);
+        if (out) this.log(out);
+      } else if (this.evaluator) {
+        const out = await this.evaluator(trimmed);
+        if (out) this.log(out);
+      } else {
+        this.log(`unknown command: ${name}. type 'help()'.`, "error");
+      }
     } catch (error) {
       this.log(error instanceof Error ? error.message : String(error), "error");
     }

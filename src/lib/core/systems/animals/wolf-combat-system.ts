@@ -86,8 +86,12 @@ export function buildWolfOutcomeFeedback(outcome: WolfLungeOutcome): { readonly 
 export function shouldWolfCombatOwnTick(input: {
   readonly existingRuntime: WolfCombatRuntime | null | undefined;
   readonly playerDistancePx: number;
+  /** Woodcraft stealth: inflates perceived distance for initial acquisition only. */
+  readonly detectionMult?: number;
 }): boolean {
-  if (!input.existingRuntime) return input.playerDistancePx <= WOLF_COMBAT_TUNING.stalkRadiusPx;
+  if (!input.existingRuntime) {
+    return input.playerDistancePx / (input.detectionMult ?? 1) <= WOLF_COMBAT_TUNING.stalkRadiusPx;
+  }
   return !(input.existingRuntime.state === "prowl" && input.playerDistancePx > WOLF_COMBAT_TUNING.disengageRadiusPx);
 }
 
@@ -201,12 +205,13 @@ export function updateWolfCombatEntity(input: {
   readonly vfx: VFXResource;
   readonly entityLayer: Container;
   readonly events?: GameEventQueue;
+  readonly detectionMult?: number;
 }): boolean {
-  const { entity, player, map, dt, config, combat, vfx, entityLayer, events } = input;
+  const { entity, player, map, dt, config, combat, vfx, entityLayer, events, detectionMult } = input;
   if (!entity.position || !entity.animal || entity.animal.speciesId !== "wolf" || !player.position) return false;
 
   const playerDistance = Math.hypot(animalCenter(entity).x - animalCenter(player).x, animalCenter(entity).y - animalCenter(player).y);
-  if (!shouldWolfCombatOwnTick({ existingRuntime: entity.animal.wolfCombat, playerDistancePx: playerDistance })) {
+  if (!shouldWolfCombatOwnTick({ existingRuntime: entity.animal.wolfCombat, playerDistancePx: playerDistance, detectionMult: detectionMult ?? 1 })) {
     if (entity.animal.wolfCombat?.state === "prowl") delete entity.animal.wolfCombat;
     return false;
   }

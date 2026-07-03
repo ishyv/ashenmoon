@@ -19,12 +19,17 @@ export type AnimalBehaviorState =
   | "lunge_windup"
   | "lunge"
   | "eat"
-  | "rest";
+  | "rest"
+  | "sleep"
+  | "drink"
+  | "mate"
+  | "wallow"
+  | "courtship";
 
 export type AnimalDiet = "herbivore" | "omnivore" | "carnivore";
 export type AnimalTemperament = "fearful" | "timid" | "territorial" | "predator";
 export type AnimalSpeciesId = "rabbit" | "deer" | "boar" | "wolf";
-export type AnimalDecisionTargetKind = "player" | "animal" | "fire" | "zone";
+export type AnimalDecisionTargetKind = "player" | "animal" | "fire" | "zone" | "water" | "food";
 
 export interface AnimalDefinition {
   id: AnimalSpeciesId;
@@ -152,6 +157,22 @@ export function curiousRadiusPx(def: AnimalDefinition): number {
   return def.detectionRadiusPx * 1.5;
 }
 
+/**
+ * Woodcraft stealth → detection multiplier. Divides the player distance at every
+ * detection gate, so a stealthy player is noticed as if farther away. `stealth` is a
+ * percentage-like stat (0 at Woodcraft lvl 1, ~28.5 at 20); floored at 0.4 so animals
+ * are never fully blind even under future stealth sources.
+ */
+export function stealthDetectionMult(stealth: number): number {
+  return Math.max(0.4, Math.min(1, 1 - stealth / 100));
+}
+
+/** Whether an animal is near the player yet unbothered — the stalking-XP condition. */
+export function isCalmNearby(animal: AnimalRuntime, playerPos: { x: number; y: number }): boolean {
+  if (animal.awarenessLevel === "alert" || animal.awarenessLevel === "fleeing") return false;
+  return distance({ x: animal.x, y: animal.y }, playerPos) <= curiousRadiusPx(ANIMAL_DEFINITIONS[animal.speciesId]);
+}
+
 export function shouldAvoidFire(
   def: AnimalDefinition,
   position: { x: number; y: number },
@@ -168,6 +189,9 @@ export function chooseAnimalBehavior(
     nearbyAnimals: readonly AnimalRuntime[];
     timeOfDay: "day" | "dusk" | "night";
     isRaining: boolean;
+    nearbyDecoys?: readonly { id: string; x: number; y: number }[];
+    /** Woodcraft stealth: shrinks effective detection by inflating perceived distance. */
+    detectionMult?: number;
   },
 ): AnimalDecision {
   const def = ANIMAL_DEFINITIONS[animal.speciesId];
@@ -177,7 +201,7 @@ export function chooseAnimalBehavior(
     return { behavior: "flee", targetKind: "fire" };
   }
 
-  const playerDistance = distance(position, context.player);
+  const playerDistance = distance(position, context.player) / (context.detectionMult ?? 1);
 
   // Rain: herbivores shelter in place if unaware (rain masks approach noise).
   if (context.isRaining && def.diet === "herbivore" && animal.awarenessLevel === "unaware") {
@@ -219,6 +243,14 @@ export function chooseAnimalBehavior(
   if (def.temperament === "predator") {
     const huntThreshold = context.isRaining ? 45 : 60;
     if (animal.hunger >= huntThreshold) {
+      // Prioritize bait decoy if nearby
+      const decoy = context.nearbyDecoys
+        ? [...context.nearbyDecoys].sort((a, b) => distance(position, a) - distance(position, b))[0]
+        : undefined;
+      if (decoy && distance(position, decoy) <= def.detectionRadiusPx) {
+        return { behavior: "hunt", targetKind: "animal", targetId: decoy.id };
+      }
+
       // Pack coordination: join a nearby hunting wolf even before personal hunger is high.
       const packLeader = context.nearbyAnimals.find(
         (candidate) =>

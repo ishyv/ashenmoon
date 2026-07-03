@@ -1,0 +1,55 @@
+import type { RecipeInput } from "$lib/domain/crafting/recipe-types";
+
+export const trapRecipes: readonly RecipeInput[] = [
+  {
+    id: "snap_trap_kit",
+    name: "Snap Trap Kit",
+    description: "You align wood pegs and snap jaws into a spring-loaded trap.",
+    category: "structures",
+    requiredContext: "primitive_work_surface",
+    discoverable: true,
+    discoveryText: "The iron teeth are set and ready to snap.",
+    costs: [
+      { itemId: "stick", name: "stick", required: 4 },
+      { itemId: "grass_cord", name: "grass cord", required: 2 },
+      { itemId: "small_bone", name: "small bone", required: 2 },
+    ],
+    output: { itemId: "snap_trap_kit", qty: 1 },
+    process: "assemble",
+    durationSec: 25,
+  },
+  {
+    id: "caltrops_kit",
+    name: "Caltrops Kit",
+    description: "You pack flint shards and binding cords into a pouch of spikes.",
+    category: "structures",
+    requiredContext: "primitive_work_surface",
+    discoverable: true,
+    discoveryText: "The sharp points will chew up feet and paws.",
+    costs: [
+      { itemId: "flint_shard", name: "flint shard", required: 2 },
+      { itemId: "stick", name: "stick", required: 2 },
+      { itemId: "grass_cord", name: "grass cord", required: 1 },
+    ],
+    output: { itemId: "caltrops_kit", qty: 1 },
+    process: "assemble",
+    durationSec: 15,
+  },
+  {
+    id: "bait_decoy_kit",
+    name: "Bait Decoy Kit",
+    description: "You wrap fresh raw meat around a stick and bind it securely.",
+    category: "structures",
+    requiredContext: "primitive_work_surface",
+    discoverable: true,
+    discoveryText: "The fresh meat scent carries in the wind.",
+    costs: [
+      { itemId: "raw_meat", name: "raw meat", required: 1, substitutes: [{ itemId: "raw_small_meat", name: "small raw meat", required: 1 }, { itemId: "raw_large_meat", name: "large raw meat", required: 1 }] },
+      { itemId: "stick", name: "stick", required: 2 },
+      { itemId: "grass_cord", name: "grass cord", required: 1 },
+    ],
+    output: { itemId: "bait_decoy_kit", qty: 1 },
+    process: "assemble",
+    durationSec: 10,
+  },
+];

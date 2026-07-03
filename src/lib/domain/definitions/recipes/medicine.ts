@@ -177,4 +177,21 @@ export const medicineRecipes: readonly RecipeInput[] = [
     process: "assemble",
     durationSec: 10,
   },
+  {
+    id: "essence_poultice",
+    name: "Essence Poultice",
+    description: "You blend vital red herbs and sticky resin into clean bandages to seal severe wounds.",
+    category: "medicine",
+    requiredContext: "hand",
+    discoverable: true,
+    discoveryText: "The paste warms against the skin and stops the bleeding.",
+    costs: [
+      { itemId: "red_herb", name: "red herb", required: 1 },
+      { itemId: "resin", name: "resin", required: 1 },
+      { itemId: "clean_bandage", name: "clean bandage", required: 1 },
+    ],
+    output: { itemId: "essence_poultice", qty: 1 },
+    process: "assemble",
+    durationSec: 15,
+  },
 ];

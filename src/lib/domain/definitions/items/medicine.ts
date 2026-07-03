@@ -199,4 +199,15 @@ export const medicineItems = {
   }).with(
     Consumable({ verb: "drink", onConsume: [ClearAllStatuses(), RestoreThirst(100), RestoreHp(100)] })
   ),
+  essence_poultice: Item({
+    id: itemId("essence_poultice"),
+    name: "Essence Poultice",
+    description: "A potent paste of red herbs and resin wrapped in clean bandages. Mends skin and offsets infection.",
+    rarity: Rarity.Rare,
+    category: Category.Medicine,
+    icon: "🩹",
+    physical: { carryClass: "pocket", weight: 0.15, stackLimit: 10 },
+  }).with(
+    Consumable({ verb: "apply", onConsume: [RestoreHp(40), ReduceStatus(StatusId.Bleeding, 2), ReduceStatus(StatusId.Sickness, 1)] })
+  ),
 };

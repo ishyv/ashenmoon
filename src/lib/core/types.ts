@@ -20,6 +20,19 @@ export interface WorldContextMenuTarget {
   buildingId?: string;
 }
 
+/** A single active station process/craft — see InteractionResource.activeProcesses/activeCraftProcesses. Each busy station gets its own entry; stations run independently. */
+export interface ActiveStationCraftStatus {
+  stationEntityId: string;
+  label: string;
+  iconItemId: string;
+  /** 0..1 across the runtime's whole duration. */
+  progress: number;
+  /** True for a "recipe" craft (safe to leave, ticks to completion unattended); false for a "process" (cancels on leaving range). */
+  walkAwaySafe: boolean;
+  /** True once a "recipe" craft's timer has finished and it's parked at the station awaiting collection. Always false for "process" kind, which resolves immediately on completion. */
+  readyForPickup: boolean;
+}
+
 export interface GameEngineConfig {
   container: HTMLDivElement;
   onInteract: (target: Entity) => void;
@@ -32,6 +45,8 @@ export interface GameEngineConfig {
   onStationInteract?: (target: Entity) => void;
   /** Called when the player presses E on a carcass — opens the loot panel. */
   onOpenCarcassPanel?: (targetId: string) => void;
+  /** Called every frame with every currently-active station's busy status (empty array when nothing is active). */
+  onActiveCraftUpdate?: (statuses: ActiveStationCraftStatus[]) => void;
 }
 
 /**

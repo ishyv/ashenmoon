@@ -24,12 +24,14 @@ import {
 } from "$lib/core/assets/ashenmoon-assets";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import { type Entity, world } from "$lib/core/ecs/ecs-miniplex";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 import {
   Cell,
   type HudState,
   type GameEngineConfig,
   type AnimState,
   type WorldContextMenuTarget,
+  type ActiveStationCraftStatus,
 } from "$lib/core/types";
 export type { HudState };
 import { playSound, setListener, setMuted, tickAmbient, unlock as unlockAudio } from "$lib/audio/audio-engine";
@@ -69,6 +71,9 @@ import {
 import { updateStrikeRing, ringColorForSolidKind } from "$lib/core/vfx/action-timers/gathering-strike-ring";
 import { updateTremorLine } from "$lib/core/vfx/action-timers/butcher-tremor-line";
 import { updatePlacementCompass } from "$lib/core/vfx/action-timers/building-placement-compass";
+import { updateSequenceMarks } from "$lib/core/vfx/action-timers/craft-sequence-marks";
+import { updateProcessProgressRing } from "$lib/core/vfx/action-timers/process-progress-ring";
+import { updateCampfireFuelRing } from "$lib/core/vfx/action-timers/campfire-fuel-ring";
 import {
   MovementConfig,
   MovementResource,
@@ -86,6 +91,7 @@ import {
   knockbackSystem,
   despawnEntity,
 } from "$lib/core/systems/combat/combat";
+import { tickTrapSystem } from "$lib/core/systems/combat/trap-system";
 import { updateWeaponGuardSystem, weaponAttackSystem } from "$lib/core/systems/combat/weapon-attack-system";
 import { applyPlayerWeaponPresentation } from "$lib/core/systems/combat/player-weapon-presentation";
 import { enemyAiSystem, makeEnemyEntity, GRUNT, type EnemyArchetype } from "$lib/core/systems/enemy-ai/enemy-ai";
@@ -98,19 +104,21 @@ import {
   refuelCampfireEntity,
   tickCampfireEntities,
 } from "$lib/core/systems/camp/campfire-runtime-system";
-import { sampleEnvironmentAt } from "$lib/core/systems/environment/environment-signal-system";
+import { sampleEnvironmentAt, syncCampfireEmitters, syncShelterEmitter } from "$lib/core/systems/environment/environment-signal-system";
 import { EnvironmentInspector } from "$lib/core/systems/environment/environment-inspector";
 import {
   InteractionResource,
   runInteractionSystem,
   handleHitFeedbackSystem,
   depleteNodeSystem,
+  collectCraftProcess,
 } from "$lib/core/systems/interaction/interaction-system";
 import { updateTargetSystem } from "$lib/core/systems/interaction/targeting-system";
 import { FocusedGatherResource, runFocusedGatherSystem } from "$lib/core/systems/focused-gather/focused-gather-system";
 import { renderFocusedGatherSystem } from "$lib/core/systems/focused-gather/focused-gather-renderer";
 import {
   BuildingResource,
+  drawBuildingVisuals,
   updatePlacementPreviewSystem,
   placeBuildingSystem,
   spawnBuildingSystem,
@@ -128,7 +136,12 @@ import { createWorldActionRuntime } from "$lib/domain/world-action-runtime";
 import { chooseFuelOption } from "$lib/domain/camp/fuel";
 import { shelterExposureMitigation } from "$lib/domain/camp/camp-state";
 import type { StationId } from "$lib/domain/stations";
-import { ANIMAL_DEFINITIONS, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import { getRecipe } from "$lib/domain/crafting/recipes";
+import { checkCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { createCraftProcessRuntime, recordMinigameWindow, type CraftProcessRuntime } from "$lib/domain/crafting/craft-process-runtime";
+import { ANIMAL_DEFINITIONS, isCalmNearby, type AnimalSpeciesId } from "$lib/domain/animals/animal-behavior";
+import { collectCursedEquipped, tickCurseEffects } from "$lib/core/systems/curse/curse-effect-system";
+import { animalCenterRuntime } from "$lib/core/systems/animals/animal-runtime";
 import {
   effectivePlayerTemperature,
   nightEnvironmentModifiers,
@@ -167,6 +180,7 @@ import {
   tickVisualPresentation,
   clearVisualPresentation,
 } from "$lib/core/systems/visual/visual-presentation-system.js";
+import { buildCarcassSprite } from "$lib/core/systems/animals/carcass-runtime";
 import { createGatherableRenderSprite } from "$lib/core/systems/gatherable-render-adapter";
 import { Category, ITEM_DEFINITIONS, resolveItemVisuals, traitOf } from "$lib/domain/items";
 import { resolveWorldVisualScale } from "$lib/domain/visual/world-visual-size";
@@ -181,7 +195,6 @@ import {
 } from "$lib/core/systems/item-placement/item-placement-system";
 import { StatusId } from "$lib/domain/systems/status-types";
 import { getPlayerJointAnchors } from "$lib/core/systems/player-animation/player-joint-anchors";
-import { ASHENMOON_PLAYER_ANIMATION_PATHS } from "$lib/core/assets/ashenmoon-assets";
 import { loadKnowledge } from "$lib/state/rpg/knowledge.svelte";
 import { loadRecipes } from "$lib/state/rpg/crafting.svelte";
 import { flushRpgFeedbackEvents } from "$lib/state/rpg/rpg-feedback-router";
@@ -192,12 +205,9 @@ import { EntityId, SkillKey, InputAction, GameEvent } from "$lib/domain/game-eve
 import { getBuildingSpec } from "$lib/domain/building-specs";
 import { awardSkillXp } from "$lib/state/rpg/skill-xp";
 import { awardCharacterXp, getPlayerStats, getCharacterLevel, levelUpEvent } from "$lib/state/rpg/stats.svelte";
-import { BASE_COMBAT_STATS } from "$lib/domain/stats/player-stat-growth";
+import { BASE_COMBAT_STATS, BASE_SURVIVAL_STATS } from "$lib/domain/stats/player-stat-growth";
 import { getGatherableDefinition } from "$lib/domain/gathering/gatherables";
 import { getPrefabDefinition } from "$lib/domain/definition-registry";
-import { executeGameCommand } from "$lib/core/command-runtime/command-runtime";
-import { createEngineCommandContext } from "$lib/core/command-runtime/engine-command-context";
-import type { CommandSource, GameCommand, GameCommandResult } from "$lib/domain/game-command";
 import {
   createRuntimeContext,
   createRuntimeRegistry,
@@ -216,6 +226,17 @@ import {
 } from "$lib/core/systems/weather/weather-system";
 import { syncHudCooldownsSystem } from "$lib/core/systems/hud-sync-system";
 import { spawnResourceEntity, spawnCampSystem, spawnEnemy, spawnLandmark } from "$lib/core/systems/map/spawn-system";
+import {
+  hydrateEntitySnapshot,
+  loadWorldSnapshot,
+  PERSISTED_ENTITY_COMPONENT_KEYS,
+  saveWorldSnapshot,
+  serializeWorld,
+  type ConstructionRuntimeSnapshot,
+  type PersistedEntitySnapshot,
+  type WorldResourcesSnapshot,
+  type WorldSnapshot,
+} from "$lib/core/persistence/world-snapshot";
 import { FogSystem } from "$lib/core/systems/atmosphere/fog-system";
 import { VisionSystem } from "$lib/core/systems/atmosphere/vision-system";
 import { RainEffectSystem } from "$lib/core/systems/weather/rain-effect-system";
@@ -248,6 +269,7 @@ export class GameEngine {
   private onContextMenu: GameEngineConfig["onContextMenu"];
   private onStationInteract?: GameEngineConfig["onStationInteract"];
   private onOpenCarcassPanel?: GameEngineConfig["onOpenCarcassPanel"];
+  private onActiveCraftUpdate?: GameEngineConfig["onActiveCraftUpdate"];
   private containerEl: HTMLDivElement;
 
   // Bevy-aligned Resources / Singletons
@@ -283,14 +305,19 @@ export class GameEngine {
   private animalSeq = 1;
   private devSpawnSeq = 1;
   private regenTimer = 0;
-  private buildingChannel: {
-    buildingId: string;
-    nextStage: number;
-    timer: number;
-    duration: number;
-    cost: Record<string, number>;
-    onComplete: () => Promise<boolean>;
-  } | null = null;
+  /** Seconds of continuous cold exposure, for granting Vigilance XP in 10s ticks. */
+  private coldXpTimer = 0;
+  /** Seconds of continuous proximity to calm wildlife, for granting Woodcraft XP. */
+  private woodcraftXpTimer = 0;
+  /** Per-`${instanceId}:${effectId}` accumulators for equipped Possessed items — see curse-effect-system.ts. */
+  private curseEffectTimers = new Map<string, number>();
+  /** Bookkeeping for the current attended-crafting minigame window — reset in startCraftProcess(). */
+  private craftMinigameWindowElapsed = 0;
+  private craftMinigameWindowHit = false;
+  private buildingChannel: ConstructionRuntimeSnapshot | null = null;
+  private worldSaveAccumulator = 0;
+  private lastWorldSnapshotJson = "";
+  private readonly worldSaveStepSec = 1;
 
   private runtimeRegistry = createRuntimeRegistry([defaultRuntimeFeature]);
   private scheduler = new RuntimeScheduler([
@@ -328,6 +355,7 @@ export class GameEngine {
 
   // Player Entity & Sprite
   private playerEntity!: Entity;
+  private cameraCenter = { x: 0, y: 0 };
   private playerSprite!: AnimatedSprite;
   private playerShadow!: Sprite;
   private attachmentSprites = new Map<string, Sprite>();
@@ -374,6 +402,7 @@ export class GameEngine {
     this.onContextMenu = config.onContextMenu;
     this.onStationInteract = config.onStationInteract;
     this.onOpenCarcassPanel = config.onOpenCarcassPanel;
+    this.onActiveCraftUpdate = config.onActiveCraftUpdate;
     this.scenarioId = config.scenarioId ?? null;
     this.lastObservedLevelUpSeq = levelUpEvent.seq;
   }
@@ -519,6 +548,7 @@ export class GameEngine {
       });
 
       // Main ticking loop schedule runner
+      window.addEventListener("beforeunload", this.flushWorldSnapshotBeforeUnload);
       this.app.ticker.add((ticker) => this.tick(ticker.deltaTime / 60));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -531,8 +561,13 @@ export class GameEngine {
 
   private cleanupInputListeners?: () => void;
   private inputIntercept: HTMLDivElement | null = null;
+  private flushWorldSnapshotBeforeUnload = (): void => {
+    this.flushWorldSnapshot(true);
+  };
 
   public destroy(): void {
+    this.flushWorldSnapshot(true);
+    window.removeEventListener("beforeunload", this.flushWorldSnapshotBeforeUnload);
     if (this.cleanupInputListeners) {
       this.cleanupInputListeners();
     }
@@ -566,6 +601,10 @@ export class GameEngine {
     this.vfxResource.strikeRing?.destroy();
     this.vfxResource.tremorLine?.destroy();
     this.vfxResource.placementCompass?.destroy();
+    for (const ring of this.vfxResource.processProgressRings.values()) ring.destroy();
+    this.vfxResource.processProgressRings.clear();
+    for (const ring of this.vfxResource.campfireFuelRings.values()) ring.destroy();
+    this.vfxResource.campfireFuelRings.clear();
     this.vfxResource.selectionRing?.destroy();
     this.vfxResource.comboRing?.destroy();
     this.vfxResource.fourfoldRing?.destroy();
@@ -613,20 +652,55 @@ export class GameEngine {
       }
 
       // Run player movement system
-      const wasSprinting = playerMovementSystem(
-        world,
-        this.movementResource,
-        this.inputResource,
-        this.movementConfig,
-        this.vfxResource,
-        this.mapResource,
-        dt,
-        this.playerSprite,
-        (state) => this.setPlayerAnim(state),
-        this.entityLayer,
-        this.combatResource,
-        this.playerAnimationResource,
-      );
+      let wasSprinting = false;
+      if (devFlags.spectatorEnabled) {
+        // Move the spectator camera center instead of player
+        let inputX = 0;
+        let inputY = 0;
+        if (this.inputResource.isActionPressed(InputAction.MoveUp)) inputY = -1;
+        if (this.inputResource.isActionPressed(InputAction.MoveDown)) inputY = 1;
+        if (this.inputResource.isActionPressed(InputAction.MoveLeft)) inputX = -1;
+        if (this.inputResource.isActionPressed(InputAction.MoveRight)) inputX = 1;
+
+        if (inputX !== 0 || inputY !== 0) {
+          const len = Math.sqrt(inputX * inputX + inputY * inputY);
+          const dirX = inputX / len;
+          const dirY = inputY / len;
+          const isSprinting = this.inputResource.isActionPressed(InputAction.Sprint);
+          const baseSpeed = TILE * 6; // Match player base speed (TILE * 6)
+          const speed = baseSpeed * (isSprinting ? 3.0 : 1.5) * 2;
+          
+          this.cameraCenter.x += dirX * speed * dt;
+          this.cameraCenter.y += dirY * speed * dt;
+
+          const maxW = (this.mapResource.mapW - 1) * TILE;
+          const maxH = (this.mapResource.mapH - 1) * TILE;
+          this.cameraCenter.x = Math.max(0, Math.min(maxW, this.cameraCenter.x));
+          this.cameraCenter.y = Math.max(0, Math.min(maxH, this.cameraCenter.y));
+        }
+
+        // Keep player stationary
+        this.setPlayerAnim("idle");
+      } else {
+        // Run player movement system normally
+        wasSprinting = playerMovementSystem(
+          world,
+          this.movementResource,
+          this.inputResource,
+          this.movementConfig,
+          this.vfxResource,
+          this.mapResource,
+          dt,
+          this.playerSprite,
+          (state) => this.setPlayerAnim(state),
+          this.entityLayer,
+          this.combatResource,
+          this.playerAnimationResource,
+        );
+        // Sync camera center to player
+        this.cameraCenter.x = this.playerEntity.position!.x;
+        this.cameraCenter.y = this.playerEntity.position!.y;
+      }
 
       // Zoom Lerp update
       const rate = Math.min(1.0, this.zoomSmoothing * 60 * dt);
@@ -638,7 +712,7 @@ export class GameEngine {
         this.vfxResource,
         dt,
         this.app.screen,
-        this.playerEntity.position!,
+        this.cameraCenter,
         this.zoom,
         this.worldContainer
       );
@@ -907,6 +981,31 @@ export class GameEngine {
         this.animalSeq,
         this.eventQueue,
       );
+
+      // Woodcraft XP: reward stalking — time near calm wildlife, in 4s ticks.
+      if (this.playerEntity.position) {
+        const pc = { x: this.playerEntity.position.x + TILE / 2, y: this.playerEntity.position.y + TILE / 2 };
+        const nearCalm = world
+          .with("animal", "position")
+          .entities.some((e) => e.animal && isCalmNearby(animalCenterRuntime(e), pc));
+        if (nearCalm) {
+          this.woodcraftXpTimer += dt;
+          if (this.woodcraftXpTimer >= 4) {
+            this.woodcraftXpTimer -= 4;
+            awardSkillXp(SkillKey.Woodcraft, 3, this.vfxResource, this.playerEntity.position, this.entityLayer);
+          }
+        } else {
+          this.woodcraftXpTimer = 0;
+        }
+      }
+
+      tickCurseEffects(
+        collectCursedEquipped(gameState.rpg.profile?.loadout),
+        this.curseEffectTimers,
+        dt,
+        this.playerEntity,
+      );
+
       tickEnemyBleedSystem(
         world,
         this.combatResource,
@@ -926,25 +1025,47 @@ export class GameEngine {
       );
 
       knockbackSystem(world, this.mapResource, this.entitySprites, dt);
+      tickTrapSystem(
+        world,
+        dt,
+        this.vfxResource,
+        this.entityLayer,
+        this.entitySprites,
+        this.combatConfig,
+        (trapEnt) => {
+          const container = this.entitySprites.get(trapEnt.id);
+          if (container && container.children.length >= 2) {
+            const interiorContainer = container.children[0] as Container;
+            const shellContainer = container.children[1] as Container;
+            drawBuildingVisuals(trapEnt.building?.type ?? "snap_trap", 5, interiorContainer, shellContainer, trapEnt);
+          }
+        }
+      );
 
       // Pin the player sprite after any knockback displacement.
       this.playerSprite.x = this.playerEntity.position!.x + TILE / 2;
       this.playerSprite.y = this.playerEntity.position!.y + TILE;
       this.updateAdaptivePlayerAnimation(dt);
       this.updatePlayerVisualFeedback(dt);
+      this.playerSprite.alpha = devFlags.spectatorEnabled ? 0.55 : 1.0;
 
       // --- Survival ---
       // Thirst drains with activity; statuses tick once per accumulated second
-      // and hand back any pulse damage (bleeding, sickness fever).
-      tickThirst(dt, {
-        moving: this.playerAnimState === "run" || this.playerAnimState === "walk",
-        laboring: this.interactionResource.gatheringTarget !== null,
-        raining: this.weatherResource.state.raining,
-      });
-      tickHunger(dt, {
-        moving: this.playerAnimState === "run" || this.playerAnimState === "walk",
-        laboring: this.interactionResource.gatheringTarget !== null,
-      });
+      // and hand back any pulse damage (bleeding, sickness fever). Vigilance slows
+      // decay: the multiplier is the effective decay stat over its base.
+      const survivalStats = getPlayerStats().survival;
+      const moving = this.playerAnimState === "run" || this.playerAnimState === "walk";
+      const laboring = this.interactionResource.gatheringTarget !== null;
+      tickThirst(
+        dt,
+        { moving, laboring, raining: this.weatherResource.state.raining },
+        survivalStats.thirstDecayPerMinute / BASE_SURVIVAL_STATS.thirstDecayPerMinute,
+      );
+      tickHunger(
+        dt,
+        { moving, laboring },
+        survivalStats.hungerDecayPerMinute / BASE_SURVIVAL_STATS.hungerDecayPerMinute,
+      );
 
       weatherTickSystem(
         world,
@@ -983,6 +1104,14 @@ export class GameEngine {
 
         if (env.temperature <= 0) {
           applyStatusEffect(StatusId.Hypothermia, 5, "environment");
+          // Vigilance hardens against the cold: +5 XP per 10s of continuous exposure.
+          this.coldXpTimer += dt;
+          if (this.coldXpTimer >= 10) {
+            this.coldXpTimer -= 10;
+            awardSkillXp(SkillKey.Vigilance, 5, this.vfxResource, this.playerEntity.position!, this.entityLayer);
+          }
+        } else {
+          this.coldXpTimer = 0;
         }
       }
 
@@ -1002,7 +1131,11 @@ export class GameEngine {
 
       if (playerHealth.current <= 0) this.respawnPlayer();
       this.syncPlayerHp();
-      flushRpgFeedbackEvents();
+      flushRpgFeedbackEvents({
+        vfx: this.vfxResource,
+        playerPos: this.playerEntity.position!,
+        entityLayer: this.entityLayer,
+      });
 
       // Regenerate stamina when not sprinting (slower while in combat,
       // slower still while sick/exhausted). Pool size and the status regen
@@ -1142,7 +1275,7 @@ export class GameEngine {
           this.buildingChannel = null;
           this.setPlayerAnim("idle");
 
-          channel.onComplete().then((success) => {
+          this.completeBuildingChannel(channel).then((success) => {
             if (success) {
               playSound("build.place");
               if (building && building.position) {
@@ -1165,10 +1298,38 @@ export class GameEngine {
       const anyActionActive = !!(
         this.buildingChannel ||
         this.interactionResource.activeWorldAction ||
+        this.interactionResource.activeCraftProcesses.size > 0 ||
         this.interactionResource.gatheringTarget
       );
       const precisionTap = anyActionActive && this.inputResource.focusedGatherTriggered;
       if (precisionTap) this.inputResource.focusedGatherTriggered = false;
+      const CRAFT_MINIGAME_WINDOW_SEC = 1.5;
+
+      // A player can only physically attend one station's minigame at a
+      // time — pick whichever active, not-yet-completed craft they're
+      // currently closest to and within minigame range of (or none). Other
+      // simultaneously-running crafts still tick, just unattended, exactly
+      // matching pre-per-station semantics scoped down to one entry.
+      let attendedCraft: { runtime: CraftProcessRuntime; center: { x: number; y: number } } | null = null;
+      {
+        let nearestDist = Infinity;
+        for (const runtime of this.interactionResource.activeCraftProcesses.values()) {
+          if (runtime.completed) continue;
+          const stationEnt = world.entities.find((e) => e.id === runtime.targetStationEntityId);
+          if (!stationEnt?.position || !this.playerEntity.position) continue;
+          const dx = (stationEnt.position.x - this.playerEntity.position.x) / TILE;
+          const dy = (stationEnt.position.y - this.playerEntity.position.y) / TILE;
+          const maxDist = runtime.stationId === "campfire" ? getCampfireHeatRadiusTiles(stationEnt) : 2.5;
+          const dist = Math.hypot(dx, dy);
+          if (dist <= maxDist && dist < nearestDist) {
+            nearestDist = dist;
+            attendedCraft = {
+              runtime,
+              center: { x: stationEnt.position.x + TILE / 2, y: stationEnt.position.y + TILE * 0.6 },
+            };
+          }
+        }
+      }
 
       if (this.buildingChannel) {
         const buildingEnt = world.entities.find((e) => e.id === this.buildingChannel!.buildingId);
@@ -1183,6 +1344,7 @@ export class GameEngine {
           : null;
         this.vfxResource.tremorLine.visible = false;
         this.vfxResource.strikeRing.visible = false;
+        this.vfxResource.craftSequenceMarks.visible = false;
         if (buildCenter) {
           const progress = this.buildingChannel.timer / this.buildingChannel.duration;
           const snap = updatePlacementCompass(
@@ -1202,6 +1364,7 @@ export class GameEngine {
           : null;
         this.vfxResource.placementCompass.visible = false;
         this.vfxResource.strikeRing.visible = false;
+        this.vfxResource.craftSequenceMarks.visible = false;
         if (carcassCenter) {
           const actionProgress = runtime.elapsedSec / runtime.durationSec;
           const hit = updateTremorLine(
@@ -1215,9 +1378,43 @@ export class GameEngine {
         } else {
           this.vfxResource.tremorLine.visible = false;
         }
+      } else if (attendedCraft) {
+        const { runtime, center: craftCenter } = attendedCraft;
+        this.vfxResource.placementCompass.visible = false;
+
+        {
+          const actionProgress = runtime.durationSec > 0 ? Math.min(0.999, runtime.elapsedSec / runtime.durationSec) : 0;
+          let hit = false;
+          if (runtime.minigameKind === "strike") {
+            this.vfxResource.tremorLine.visible = false;
+            this.vfxResource.craftSequenceMarks.visible = false;
+            const cycleProgress = (runtime.elapsedSec % CRAFT_MINIGAME_WINDOW_SEC) / CRAFT_MINIGAME_WINDOW_SEC;
+            hit = updateStrikeRing(this.vfxResource.strikeRing, craftCenter, cycleProgress, "none", precisionTap);
+          } else if (runtime.minigameKind === "tension") {
+            this.vfxResource.strikeRing.visible = false;
+            this.vfxResource.craftSequenceMarks.visible = false;
+            hit = updateTremorLine(this.vfxResource.tremorLine, craftCenter, runtime.elapsedSec, actionProgress, precisionTap);
+          } else {
+            this.vfxResource.strikeRing.visible = false;
+            this.vfxResource.tremorLine.visible = false;
+            hit = updateSequenceMarks(this.vfxResource.craftSequenceMarks, craftCenter, runtime.elapsedSec, actionProgress, precisionTap);
+          }
+
+          if (hit) this.craftMinigameWindowHit = true;
+          this.craftMinigameWindowElapsed += dt;
+          if (this.craftMinigameWindowElapsed >= CRAFT_MINIGAME_WINDOW_SEC) {
+            this.interactionResource.activeCraftProcesses.set(
+              runtime.targetStationEntityId,
+              recordMinigameWindow(runtime, this.craftMinigameWindowHit),
+            );
+            this.craftMinigameWindowElapsed = 0;
+            this.craftMinigameWindowHit = false;
+          }
+        }
       } else {
         this.vfxResource.placementCompass.visible = false;
         this.vfxResource.tremorLine.visible = false;
+        this.vfxResource.craftSequenceMarks.visible = false;
         this.interactionResource.activeWorldActionPrecision = false;
         const target = this.interactionResource.gatheringTarget;
         if (target?.position) {
@@ -1265,6 +1462,72 @@ export class GameEngine {
         }
       }
 
+      // Overall process/craft progress rings — independent of the minigame
+      // VFX above (which times button-presses, not overall duration).
+      // One ring per busy station, always visible regardless of range;
+      // color signals walk-away safety, and a pulse signals ready-for-pickup.
+      {
+        const statuses = this.getActiveStationCraftStatuses();
+        this.onActiveCraftUpdate?.(statuses);
+
+        const seenStationIds = new Set<string>();
+        for (const status of statuses) {
+          seenStationIds.add(status.stationEntityId);
+          let ring = this.vfxResource.processProgressRings.get(status.stationEntityId);
+          if (!ring) {
+            ring = new Graphics();
+            ring.visible = false;
+            this.entityLayer.addChild(ring);
+            this.vfxResource.processProgressRings.set(status.stationEntityId, ring);
+          }
+          const busyEnt = world.entities.find((e) => e.id === status.stationEntityId);
+          const busyCenter = busyEnt?.position
+            ? { x: busyEnt.position.x + TILE / 2, y: busyEnt.position.y + TILE * 0.3 }
+            : null;
+          if (busyCenter) {
+            updateProcessProgressRing(ring, busyCenter, status.progress, status.walkAwaySafe, status.readyForPickup);
+          } else {
+            ring.visible = false;
+          }
+        }
+
+        // Destroy pooled rings for stations that are no longer busy.
+        for (const [stationEntityId, ring] of this.vfxResource.processProgressRings) {
+          if (seenStationIds.has(stationEntityId)) continue;
+          this.entityLayer.removeChild(ring);
+          ring.destroy();
+          this.vfxResource.processProgressRings.delete(stationEntityId);
+        }
+      }
+
+      // Always-on campfire fuel rings — independent of busy state, since fuel
+      // matters even when nothing is cooking. One per lit campfire.
+      {
+        const seenCampfireIds = new Set<string>();
+        for (const entity of world.with("campfire", "position").entities) {
+          const campfire = entity.campfire;
+          if (!campfire.isLit || campfire.fuelRemainingMs <= 0) continue;
+          seenCampfireIds.add(entity.id);
+          let ring = this.vfxResource.campfireFuelRings.get(entity.id);
+          if (!ring) {
+            ring = new Graphics();
+            ring.visible = false;
+            this.entityLayer.addChild(ring);
+            this.vfxResource.campfireFuelRings.set(entity.id, ring);
+          }
+          const fuelFrac = campfire.fuelRemainingMs / (campfire.fuelCapacityMs ?? campfire.fuelRemainingMs);
+          const ringPos = { x: entity.position.x + TILE / 2, y: entity.position.y + TILE * 0.85 };
+          updateCampfireFuelRing(ring, ringPos, fuelFrac);
+        }
+
+        for (const [entityId, ring] of this.vfxResource.campfireFuelRings) {
+          if (seenCampfireIds.has(entityId)) continue;
+          this.entityLayer.removeChild(ring);
+          ring.destroy();
+          this.vfxResource.campfireFuelRings.delete(entityId);
+        }
+      }
+
       selectionRingUpdateSystem(
         this.vfxResource,
         dt,
@@ -1275,7 +1538,7 @@ export class GameEngine {
       // Cull offscreen viewport entities/tiles
       cullViewportSystem(
         this.mapResource,
-        this.playerEntity.position!,
+        this.cameraCenter,
         this.zoom,
         this.app.screen,
         this.entitySprites
@@ -1305,7 +1568,8 @@ export class GameEngine {
         }
       }
       this.fogSystem.tick(dt, this.weatherResource.state.timeOfDay, this.weatherResource.state.raining, campfirePositions);
-      if (this.playerEntity.position) {
+      this.visionSystem.layer.visible = !devFlags.spectatorEnabled;
+      if (this.playerEntity.position && !devFlags.spectatorEnabled) {
         this.visionSystem.tick(
           dt,
           { width: this.app.screen.width, height: this.app.screen.height },
@@ -1345,6 +1609,7 @@ export class GameEngine {
       }
 
       // Push coordinates and lookAt entity HUD update
+      this.saveWorldSnapshotIfChanged(dt);
       this.pushHudUpdate();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1359,6 +1624,7 @@ export class GameEngine {
 
   private spawnEntities(): void {
     const scenario = this.scenarioId ? getScenario(this.scenarioId) : null;
+    const worldSnapshot = !scenario ? loadWorldSnapshot() : null;
     // Scenarios are clean rooms by default: the base-world furniture (camp,
     // decorations, seeded enemies) is opt-in per scenario. The base world (no
     // scenario) keeps all of it, so this branch is invisible to normal play.
@@ -1390,6 +1656,8 @@ export class GameEngine {
       },
       knockback: { vx: 0, vy: 0, timer: 0 },
     };
+    this.cameraCenter.x = startX;
+    this.cameraCenter.y = startY + TILE;
     world.add(this.playerEntity);
 
     // Spawn shadow under player
@@ -1416,84 +1684,88 @@ export class GameEngine {
     this.entityLayer.addChild(this.playerSprite);
     this.entitySprites.set(EntityId.Player, this.playerSprite);
 
-    // Campfire + Commander Vane. Base world always; scenarios only when opted in.
-    if (wantCamp) {
-      const { campfireGlow, campfireSprite } = spawnCampSystem(
-        spawnX,
-        spawnY,
-        startX,
-        startY,
-        this.entityLayer,
-        this.entitySprites,
-        this.interactionResource,
-        this.mapResource,
-        this.renderResources.generatedTexture("campfireGlow"),
-        (gx, gy, fp) => this.setTileFootprint(gx, gy, fp)
-      );
-      const campfireEntity = world.with("campfire").entities.find((e) => e.id === EntityId.Campfire);
-      if (campfireEntity?.campfire) {
-        registerCampfireVisual(
-          this.visualPresentationResource,
-          EntityId.Campfire,
-          campfireSprite,
-          campfireGlow,
-          campfireEntity.campfire,
-        );
-      }
-    }
-
-    // Scatter resource nodes
-    catchUpRegeneration(this.mapResource.mapData.spawns, this.mapResource.forestMetadata.landmarks);
-    const gatheredPickups = gameState.rpg.profile?.gatheredPickups ?? [];
-    for (const spawn of this.mapResource.mapData.spawns) {
-      if (gatheredPickups.includes(spawn.id)) continue;
-      spawnResourceEntity(
-        spawn.id,
-        spawn.x,
-        spawn.y,
-        spawn.gatherableId,
-        this.entityLayer,
-        this.entitySprites,
-        this.mapResource,
-        this.runtimeRegistry,
-        this.collisionOverrides
-      );
-    }
-
-    // Restore constructed buildings â€” real world only. A scenario is a clean
-    // room and must not inherit the player's built structures.
-    if (!scenario && gameState.rpg.profile && Array.isArray(gameState.rpg.profile.buildings)) {
-      for (const b of gameState.rpg.profile.buildings) {
-        spawnBuildingSystem(
-          b.id,
-          b.type,
-          b.x,
-          b.y,
-          world,
-          this.mapResource,
+    if (worldSnapshot) {
+      this.restoreWorldSnapshot(worldSnapshot);
+    } else {
+      // Campfire + Commander Vane. Scenarios only when opted in.
+      if (wantCamp) {
+        const { campfireGlow, campfireSprite } = spawnCampSystem(
+          spawnX,
+          spawnY,
+          startX,
+          startY,
           this.entityLayer,
           this.entitySprites,
-          b.stage,
-          this.visualPresentationResource,
+          this.interactionResource,
+          this.mapResource,
+          this.renderResources.generatedTexture("campfireGlow"),
+          (gx, gy, fp) => this.setTileFootprint(gx, gy, fp)
+        );
+        const campfireEntity = world.with("campfire").entities.find((e) => e.id === EntityId.Campfire);
+        if (campfireEntity?.campfire) {
+          registerCampfireVisual(
+            this.visualPresentationResource,
+            EntityId.Campfire,
+            campfireSprite,
+            campfireGlow,
+            campfireEntity.campfire,
+          );
+        }
+      }
+
+      // Scatter resource nodes.
+      catchUpRegeneration(this.mapResource.mapData.spawns, this.mapResource.forestMetadata.landmarks);
+      const gatheredPickups = gameState.rpg.profile?.gatheredPickups ?? [];
+      for (const spawn of this.mapResource.mapData.spawns) {
+        if (gatheredPickups.includes(spawn.id)) continue;
+        spawnResourceEntity(
+          spawn.id,
+          spawn.x,
+          spawn.y,
+          spawn.gatherableId,
+          this.entityLayer,
+          this.entitySprites,
+          this.mapResource,
+          this.runtimeRegistry,
+          this.collisionOverrides
         );
       }
-    }
 
-    if (!scenario && gameState.rpg.profile && Array.isArray(gameState.rpg.profile.worldEntities)) {
-      const gatheredPickups = new Set(gameState.rpg.profile.gatheredPickups ?? []);
-      for (const entity of gameState.rpg.profile.worldEntities) {
-        if (gatheredPickups.has(entity.id)) continue;
-        if (entity.kind === "placed_item") {
-          spawnPlacedItemSystem(
-            entity.id,
-            entity.itemId,
-            entity.x,
-            entity.y,
+      // Restore legacy constructed buildings - real world only. A scenario is a clean
+      // room and must not inherit the player's built structures.
+      if (!scenario && gameState.rpg.profile && Array.isArray(gameState.rpg.profile.buildings)) {
+        for (const b of gameState.rpg.profile.buildings) {
+          spawnBuildingSystem(
+            b.id,
+            b.type,
+            b.x,
+            b.y,
             world,
+            this.mapResource,
             this.entityLayer,
             this.entitySprites,
-            entity.quantity,
+            b.stage,
+            this.visualPresentationResource,
           );
+        }
+      }
+
+      if (!scenario && gameState.rpg.profile && Array.isArray(gameState.rpg.profile.worldEntities)) {
+        const gatheredLegacyPickups = new Set(gameState.rpg.profile.gatheredPickups ?? []);
+        for (const entity of gameState.rpg.profile.worldEntities) {
+          if (gatheredLegacyPickups.has(entity.id)) continue;
+          if (entity.kind === "placed_item") {
+            spawnPlacedItemSystem(
+              entity.id,
+              entity.itemId,
+              entity.x,
+              entity.y,
+              world,
+              this.entityLayer,
+              this.entitySprites,
+              entity.quantity,
+            );
+          }
         }
       }
     }
@@ -1504,11 +1776,11 @@ export class GameEngine {
     }
 
     // Spawn forest landmarks — procedural metadata for base world, explicit list for scenarios.
-    if (!scenario) {
+    if (!scenario && !worldSnapshot) {
       for (const lm of this.mapResource.forestMetadata.landmarks) {
         spawnLandmark(lm.kind, lm.x, lm.y, this.entityLayer, this.entitySprites, this.mapResource);
       }
-    } else if (scenario.landmarks) {
+    } else if (scenario?.landmarks) {
       for (const lm of scenario.landmarks) {
         spawnLandmark(lm.kind, lm.gx, lm.gy, this.entityLayer, this.entitySprites, this.mapResource);
       }
@@ -1516,9 +1788,9 @@ export class GameEngine {
 
     // Wildlife: the base world uses First Camp animal zones; scenarios only get
     // their explicitly listed combat enemies.
-    if (!scenario) {
+    if (!scenario && !worldSnapshot) {
       this.animalSeq = spawnInitialAnimalsSystem(this.mapResource, this.entityLayer, this.entitySprites, this.animalSeq);
-    } else if (scenario.enemies) {
+    } else if (scenario?.enemies) {
       for (const e of scenario.enemies) {
         this.spawnEnemy(e.gx, e.gy);
       }
@@ -1537,6 +1809,12 @@ export class GameEngine {
     this.vfxResource.placementCompass.visible = false;
     this.entityLayer.addChild(this.vfxResource.placementCompass);
 
+    this.vfxResource.craftSequenceMarks = new Graphics();
+    this.vfxResource.craftSequenceMarks.visible = false;
+    this.entityLayer.addChild(this.vfxResource.craftSequenceMarks);
+
+    // processProgressRings is a pool, created lazily per busy station (see the per-frame VFX block).
+
     this.vfxResource.selectionRing = new Graphics();
     this.vfxResource.selectionRing.visible = false;
     this.entityLayer.addChild(this.vfxResource.selectionRing);
@@ -1548,6 +1826,222 @@ export class GameEngine {
     this.vfxResource.fourfoldRing = new Graphics();
     this.vfxResource.fourfoldRing.visible = false;
     this.entityLayer.addChild(this.vfxResource.fourfoldRing);
+  }
+
+  private worldResourcesSnapshot(): WorldResourcesSnapshot {
+    return {
+      interaction: {
+        activeProcesses: Array.from(this.interactionResource.activeProcesses.entries()).map(
+          ([stationEntityId, runtime]) => ({ stationEntityId, runtime: structuredClone(runtime) }),
+        ),
+        activeWorldAction: structuredClone(this.interactionResource.activeWorldAction),
+        activeWorldActionPrecision: this.interactionResource.activeWorldActionPrecision,
+      },
+      construction: this.buildingChannel ? structuredClone(this.buildingChannel) : null,
+    };
+  }
+
+  private createWorldSnapshot(): WorldSnapshot {
+    return serializeWorld(world, {
+      worldSeed: gameState.rpg.profile?.worldSeed ?? null,
+      scenarioId: this.scenarioId,
+      resources: this.worldResourcesSnapshot(),
+    });
+  }
+
+  private saveWorldSnapshotIfChanged(dt: number): void {
+    if (this.scenarioId) return;
+    this.worldSaveAccumulator += dt;
+    if (this.worldSaveAccumulator < this.worldSaveStepSec) return;
+    this.worldSaveAccumulator = 0;
+    this.flushWorldSnapshot(false);
+  }
+
+  private flushWorldSnapshot(force: boolean): void {
+    if (this.scenarioId) return;
+    const snapshot = this.createWorldSnapshot();
+    const nextJson = JSON.stringify(snapshot);
+    if (!force && nextJson === this.lastWorldSnapshotJson) return;
+    saveWorldSnapshot(snapshot);
+    this.lastWorldSnapshotJson = nextJson;
+  }
+
+  private restoreWorldSnapshot(snapshot: WorldSnapshot): void {
+    for (const entitySnapshot of snapshot.entities) {
+      this.restoreSnapshotEntity(entitySnapshot);
+    }
+
+    this.interactionResource.activeProcesses = new Map(
+      snapshot.resources.interaction.activeProcesses.map((entry) => [entry.stationEntityId, structuredClone(entry.runtime)]),
+    );
+    this.interactionResource.activeWorldAction = structuredClone(snapshot.resources.interaction.activeWorldAction);
+    this.interactionResource.activeWorldActionPrecision = snapshot.resources.interaction.activeWorldActionPrecision;
+    this.buildingChannel = snapshot.resources.construction ? structuredClone(snapshot.resources.construction) : null;
+    this.drawCollisionOverlay();
+    this.lastWorldSnapshotJson = JSON.stringify(this.createWorldSnapshot());
+  }
+
+  private applyPersistedEntity(target: Entity, snapshot: PersistedEntitySnapshot): void {
+    const hydrated = hydrateEntitySnapshot(snapshot);
+    for (const key of PERSISTED_ENTITY_COMPONENT_KEYS) {
+      delete (target as unknown as Record<string, unknown>)[key];
+    }
+    Object.assign(target, hydrated);
+    this.syncRestoredDerivedComponents(target);
+  }
+
+  private syncRestoredDerivedComponents(entity: Entity): void {
+    if (entity.campfire) {
+      entity.emitter = [];
+      syncCampfireEmitters(entity);
+      return;
+    }
+    if (entity.campStructure) {
+      entity.emitter = [];
+      syncShelterEmitter(entity);
+      return;
+    }
+    delete entity.emitter;
+  }
+
+  private restoreSnapshotEntity(snapshot: PersistedEntitySnapshot): void {
+    const restored = hydrateEntitySnapshot(snapshot);
+    const existing = world.entities.find((entity) => entity.id === restored.id);
+    if (existing) {
+      this.applyPersistedEntity(existing, snapshot);
+      if (existing.id === EntityId.Player) this.syncPlayerVisualToEntity();
+      if (existing.building) this.refreshRestoredBuildingVisual(existing);
+      return;
+    }
+
+    if (restored.building && restored.position) {
+      const gx = Math.round(restored.position.x / TILE);
+      const gy = Math.round(restored.position.y / TILE);
+      spawnBuildingSystem(
+        restored.id,
+        restored.building.type,
+        gx,
+        gy,
+        world,
+        this.mapResource,
+        this.entityLayer,
+        this.entitySprites,
+        restored.building.stage,
+        this.visualPresentationResource,
+      );
+      const spawned = world.entities.find((entity) => entity.id === restored.id);
+      if (spawned) {
+        this.applyPersistedEntity(spawned, snapshot);
+        this.refreshRestoredBuildingVisual(spawned);
+      }
+      return;
+    }
+
+    if (restored.resource?.gatherableId && restored.position) {
+      const gx = Math.round(restored.position.x / TILE);
+      const gy = Math.round(restored.position.y / TILE);
+      spawnResourceEntity(
+        restored.id,
+        gx,
+        gy,
+        restored.resource.gatherableId,
+        this.entityLayer,
+        this.entitySprites,
+        this.mapResource,
+        this.runtimeRegistry,
+        this.collisionOverrides,
+      );
+      const spawned = world.entities.find((entity) => entity.id === restored.id);
+      if (spawned) this.applyPersistedEntity(spawned, snapshot);
+      return;
+    }
+
+    if (restored.pickup && restored.position) {
+      const gx = Math.round(restored.position.x / TILE);
+      const gy = Math.round(restored.position.y / TILE);
+      spawnPlacedItemSystem(restored.id, restored.pickup.itemId, gx, gy, world, this.entityLayer, this.entitySprites, restored.pickup.qty);
+      const spawned = world.entities.find((entity) => entity.id === restored.id);
+      if (spawned) this.applyPersistedEntity(spawned, snapshot);
+      return;
+    }
+
+    if (restored.carcass && restored.position) {
+      world.add(restored);
+      this.syncRestoredDerivedComponents(restored);
+      const cx = restored.position.x + TILE / 2;
+      const cy = restored.position.y + TILE * 0.72;
+      const sprite = buildCarcassSprite(restored.carcass.speciesId, restored.carcass.state, cx, cy);
+      sprite.zIndex = computeRenderZ(cy);
+      this.entityLayer.addChild(sprite);
+      this.entitySprites.set(restored.id, sprite);
+      return;
+    }
+
+    if (restored.landmark && restored.position) {
+      const gx = Math.round(restored.position.x / TILE);
+      const gy = Math.round(restored.position.y / TILE);
+      spawnLandmark(restored.landmark.kind, gx, gy, this.entityLayer, this.entitySprites, this.mapResource, restored.id);
+      const spawned = world.entities.find((entity) => entity.id === restored.id);
+      if (spawned) this.applyPersistedEntity(spawned, snapshot);
+      return;
+    }
+
+    if (restored.animal && restored.position) {
+      world.add(restored);
+      const sprite = createAnimalSprite(restored.animal.speciesId, restored.position.x, restored.position.y);
+      this.entityLayer.addChild(sprite);
+      this.entitySprites.set(restored.id, sprite);
+      return;
+    }
+
+    if (restored.ai && restored.position) {
+      world.add(restored);
+      this.enemyColors.set(restored.id, "red");
+      const sprite = new AnimatedSprite(this.renderResources.actorFrames("wolf", (restored.ai.animState ?? "idle") as AnimState) as Texture[]);
+      sprite.animationSpeed = ENGINE_CONFIG.NPC_VISUALS.ANIM_SPEED;
+      sprite.play();
+      sprite.anchor.set(0.5, 1);
+      sprite.x = restored.position.x + TILE / 2;
+      sprite.y = restored.position.y + TILE;
+      sprite.zIndex = computeRenderZ(sprite.y);
+      sprite.scale.set((TILE * 1.3) / sprite.texture.height);
+      this.entityLayer.addChild(sprite);
+      this.entitySprites.set(restored.id, sprite);
+      return;
+    }
+
+    world.add(restored);
+    this.syncRestoredDerivedComponents(restored);
+  }
+
+  private syncPlayerVisualToEntity(): void {
+    const pos = this.playerEntity.position;
+    if (!pos) return;
+    this.playerSprite.x = pos.x + TILE / 2;
+    this.playerSprite.y = pos.y + TILE;
+    this.playerShadow.x = pos.x + TILE / 2;
+    this.playerShadow.y = pos.y + TILE;
+  }
+
+  private refreshRestoredBuildingVisual(entity: Entity): void {
+    if (!entity.building) return;
+    const container = this.entitySprites.get(entity.id);
+    if (!container || container.children.length < 2) return;
+    const interiorContainer = container.children[0] as Container;
+    const shellContainer = container.children[1] as Container;
+
+    if (entity.building.type === "campfire" && entity.campfire) {
+      const glow = shellContainer.children[0] as Sprite | undefined;
+      const fireSprite = shellContainer.children[1] as AnimatedSprite | undefined;
+      if (glow && fireSprite) {
+        registerCampfireVisual(this.visualPresentationResource, entity.id, fireSprite, glow, entity.campfire);
+      }
+      syncCampfireEmitters(entity);
+      return;
+    }
+
+    drawBuildingVisuals(entity.building.type, entity.building.stage, interiorContainer, shellContainer, entity);
+    this.syncRestoredDerivedComponents(entity);
   }
 
   private authoredFootprintFor(gatherableId: string): CollisionFootprint | null {
@@ -1650,6 +2144,8 @@ export class GameEngine {
     if (this.vfxResource.tremorLine) this.vfxResource.tremorLine.zIndex = 85_000;
     if (this.vfxResource.placementCompass) this.vfxResource.placementCompass.zIndex = 85_000;
     if (this.vfxResource.selectionRing) this.vfxResource.selectionRing.zIndex = 85_000;
+    for (const ring of this.vfxResource.processProgressRings.values()) ring.zIndex = 85_000;
+    for (const ring of this.vfxResource.campfireFuelRings.values()) ring.zIndex = 85_000;
   }
 
   private drawCollisionOverlay(): void {
@@ -1728,18 +2224,23 @@ export class GameEngine {
     const weaponTrait = equippedDef ? traitOf(equippedDef, "weapon") : undefined;
     const equippedToolKind =
       toolKind ??
-      (equippedItemId?.includes("knife") ? "knife" :
+      (weaponTrait?.weaponKind === "knife" || equippedItemId?.includes("knife") || equippedItemId?.includes("dagger") ? "knife" :
+       weaponTrait?.weaponKind === "axe" ? "axe" :
        weaponTrait?.weaponKind === "spear" ? "spear" :
        equippedDef?.category === Category.Container ? "container" : null);
-    const combatActive = this.combatResource.weaponAttack.active || (this.attackAnimLockTimer > 0 && this.playerAnimState === "attack");
+
+    const combatActive = this.combatResource.guard.active || this.combatResource.weaponAttack.active || (this.attackAnimLockTimer > 0 && this.playerAnimState === "attack");
+    const isGatheringState = this.attackAnimLockTimer > 0 && (this.playerAnimState === "gather" || this.playerAnimState === "gather_tired");
     const gathering = this.playerAnimationResource.gathering;
+    
     const action = combatActive
       ? "combat"
-      : gathering
+      : (gathering || isGatheringState)
         ? "gathering"
         : this.playerAnimationResource.movement.velocityPxPerSec > 1
           ? "moving"
           : "idle";
+
     const selection = runPlayerAnimationSystem({
       resource: this.playerAnimationResource,
       sprite: this.playerSprite,
@@ -1769,17 +2270,7 @@ export class GameEngine {
     const currentWeapon = gameState.rpg.profile?.loadout?.weapon;
     const currentWeaponId = currentWeapon ? (typeof currentWeapon === "string" ? currentWeapon : currentWeapon.itemId) : null;
     const weaponDef = currentWeaponId ? ITEM_DEFINITIONS[currentWeaponId] : undefined;
-    const weaponTrait = weaponDef ? traitOf(weaponDef, "weapon") : undefined;
     const weaponVisual = weaponDef ? traitOf(weaponDef, "equippable_visuals") : undefined;
-
-    let targetClip: string = state;
-    if (weaponTrait?.weaponKind === "spear") {
-      if (state === "attack") {
-        targetClip = "combat_attack_spear";
-      } else if (state === "idle") {
-        targetClip = "combat_stance_spear";
-      }
-    }
 
     let lockDuration = state === "gather_tired" ? 0.65 : (state === "gather" ? 0.35 : 0.28);
     if (state === "attack") {
@@ -1802,36 +2293,10 @@ export class GameEngine {
     if (state === "gather_tired") this.attackAnimLockTimer = lockDuration;
 
     if (this.playerAnimState === state && this.lastEquippedWeapon === currentWeaponId) {
-      if (state === "attack" || state === "gather" || state === "gather_tired") {
-        this.playerSprite.gotoAndPlay(0);
-      }
       return;
     }
     this.playerAnimState = state;
     this.lastEquippedWeapon = currentWeaponId;
-
-    const frames = this.renderResources.actorFrames("player", targetClip as any) as Texture[];
-    this.playerSprite.textures = frames;
-
-    if (state === "attack" || state === "gather" || state === "gather_tired") {
-      this.playerSprite.loop = false;
-      if (state === "attack") {
-        this.playerSprite.animationSpeed = (frames.length / lockDuration) / 60;
-      } else {
-        this.playerSprite.animationSpeed = state === "gather_tired" ? 0.08 : 0.18;
-      }
-      this.playerSprite.onComplete = () => {
-        if (this.playerAnimState === "attack" || this.playerAnimState === "gather" || this.playerAnimState === "gather_tired") {
-          this.setPlayerAnim("idle");
-        }
-      };
-    } else {
-      this.playerSprite.loop = true;
-      this.playerSprite.animationSpeed = 0.12;
-      this.playerSprite.onComplete = () => {};
-    }
-
-    this.playerSprite.play();
   }
 
   private updatePlayerVisualFeedback(dt: number): void {
@@ -1905,7 +2370,7 @@ export class GameEngine {
       const lockDuration = override?.lockDuration ?? 0.28;
       const t = 1 - Math.max(0, Math.min(1, this.attackAnimLockTimer / lockDuration));
       const strike = Math.sin(t * Math.PI);
-      xOffset = facing * strike * 5 * powerFactor;
+      xOffset = facing * strike * 6 * powerFactor;
       yOffset = -strike * 2 * powerFactor;
       scaleX = 1 + strike * 0.08 * powerFactor;
       scaleY = 1 - strike * 0.055 * powerFactor;
@@ -1955,9 +2420,12 @@ export class GameEngine {
 
     // --- Procedural Joint Anchor Positioning ---
     const clipId = this.playerAnimationResource.currentClipId;
-    const paths = (ASHENMOON_PLAYER_ANIMATION_PATHS as Record<string, readonly string[] | undefined>)[clipId];
-    const activePath = paths ? paths[this.playerSprite.currentFrame % paths.length] : undefined;
-    const anchors = getPlayerJointAnchors(activePath);
+    const anchors = getPlayerJointAnchors(
+      clipId,
+      this.playerAnimationResource.normalizedTime,
+      Array.from(animationModifiers),
+      this.playerAnimationResource.movement.sprinting
+    );
 
     const helmetSprite = this.attachmentSprites.get("helmet");
     if (helmetSprite) {
@@ -2295,9 +2763,6 @@ export class GameEngine {
     }
   }
 
-  public async execute(command: GameCommand, source: CommandSource = "player"): Promise<GameCommandResult> {
-    return executeGameCommand(createEngineCommandContext(this, source), command);
-  }
 
   public setCollisionOverlayVisible(enabled: boolean): string {
     debugConfig.showCollision = enabled;
@@ -2360,6 +2825,15 @@ export class GameEngine {
 
   private handleRightClickHold(screenX: number, screenY: number): void {
     const target = this.interactionResource.currentTarget;
+
+    // Stations/campfires converge right-click and E onto the same entry point
+    // (onStationInteract) so both open the medallion ring in one hop, instead
+    // of routing through the plain text context menu.
+    if (target?.station?.stationId && this.onStationInteract) {
+      this.onStationInteract(target);
+      return;
+    }
+
     const building = this.getBuildingAtCursor();
     const name = target?.interactable?.name ?? building?.type ?? "";
     const action = target?.interactable?.action ?? (building ? "destroy" : "");
@@ -2419,7 +2893,6 @@ export class GameEngine {
     buildingId: string,
     nextStage: number,
     cost: Record<string, number>,
-    onComplete: () => Promise<boolean>
   ): void {
     // Cancel gathering if any
     this.interactionResource.gatheringTarget = null;
@@ -2430,10 +2903,31 @@ export class GameEngine {
       timer: 0,
       duration: 1.8,
       cost,
-      onComplete,
     };
 
     playSound("ui.inventory.equip");
+  }
+
+  private async completeBuildingChannel(channel: ConstructionRuntimeSnapshot): Promise<boolean> {
+    try {
+      const result = await dispatchRpgCommand({
+        type: "upgradeBuilding",
+        buildingId: channel.buildingId,
+      });
+
+      if (!result.ok) {
+        console.error("Upgrade failed:", result.error);
+        return false;
+      }
+
+      applyRpgState(result.data.playerState);
+      this.upgradeBuilding(channel.buildingId, channel.nextStage);
+      this.flushWorldSnapshot(true);
+      return true;
+    } catch (err) {
+      console.error("Upgrade error:", err);
+      return false;
+    }
   }
 
   public upgradeBuilding(buildingId: string, stage: number): void {
@@ -2461,6 +2955,12 @@ export class GameEngine {
       const ey = entity.position!.y + TILE / 2;
       return Math.hypot(px - ex, py - ey) <= maxDistanceTiles * TILE;
     });
+  }
+
+  /** Projects a world-space point (e.g. a station entity's position) to screen pixels, for anchoring DOM UI to it. */
+  public worldToScreen(x: number, y: number): { x: number; y: number } {
+    const global = this.worldContainer.toGlobal({ x, y });
+    return { x: global.x, y: global.y };
   }
 
   public nearbyStationIds(maxDistanceTiles = 4.5): StationId[] {
@@ -2611,6 +3111,16 @@ export class GameEngine {
   }
 
   public startStationProcess(entityId: string, processId: string): void {
+    if (this.interactionResource.activeProcesses.has(entityId) || this.interactionResource.activeCraftProcesses.has(entityId)) {
+      spawnEnvFloatingText(
+        this.vfxResource,
+        "this station is already busy...",
+        Colors.ui.error,
+        this.playerEntity.position!,
+        this.entityLayer
+      );
+      return;
+    }
     const target = world.entities.find((e) => e.id === entityId);
     if (!target) return;
     const proc = STATION_PROCESSES.find((p) => p.id === processId);
@@ -2631,7 +3141,7 @@ export class GameEngine {
     if (!hasIngredients) return;
 
     // Start process
-    this.interactionResource.activeProcess = createStationProcessRuntime(proc, target.id);
+    this.interactionResource.activeProcesses.set(target.id, createStationProcessRuntime(proc, target.id));
 
     playSound("station.boil");
     const procName = stationProcessVerb(proc.processType);
@@ -2639,7 +3149,7 @@ export class GameEngine {
     
     spawnEnvFloatingText(
       this.vfxResource,
-      `${procName} ${resultName.toLowerCase()}...`,
+      `${procName} ${resultName.toLowerCase()}... (stay close, walking away cancels this)`,
       Colors.vfx.campfireMsg,
       this.playerEntity.position!,
       this.entityLayer
@@ -2693,9 +3203,9 @@ export class GameEngine {
     }
   }
 
-  public cancelStationProcess(): void {
-    if (this.interactionResource.activeProcess) {
-      this.interactionResource.activeProcess = null;
+  public cancelStationProcess(stationEntityId: string): void {
+    if (this.interactionResource.activeProcesses.has(stationEntityId)) {
+      this.interactionResource.activeProcesses.delete(stationEntityId);
       spawnEnvFloatingText(
         this.vfxResource,
         "process cancelled",
@@ -2704,6 +3214,141 @@ export class GameEngine {
         this.entityLayer
       );
     }
+  }
+
+  /**
+   * Starts a timed, attendable craft for a `tiered` recipe (see
+   * craft-process-runtime.ts / CraftingPanel's craftItem). Unlike
+   * `startStationProcess`, this never cancels on the player leaving range —
+   * it ticks to completion unattended; standing nearby only unlocks the
+   * optional quality-boosting minigame. Returns false if the craft can't
+   * legally start right now (mirrors checkCraft's own gating).
+   */
+  public startCraftProcess(recipeId: string): boolean {
+    const recipe = getRecipe(recipeId);
+    if (!recipe) return false;
+
+    const isNearCampfire = this.isNearCampfire();
+    const availableStations = this.nearbyStationIds();
+    const ctx: CraftContext = { isNearCampfire, availableStations };
+    const check = checkCraft(gameState.rpg.inventory?.slots ?? {}, recipeId, ctx);
+    if (!check.ok) {
+      spawnEnvFloatingText(this.vfxResource, "cannot craft that here.", Colors.ui.error, this.playerEntity.position!, this.entityLayer);
+      return false;
+    }
+
+    const requiredContext = recipe.requiredContext;
+    let targetStationEntityId: string | undefined;
+    let stationId: StationId | undefined;
+    if (requiredContext === "campfire") {
+      targetStationEntityId = EntityId.Campfire;
+    } else if (requiredContext && requiredContext !== "hand" && requiredContext !== "placement") {
+      stationId = requiredContext;
+      const pos = this.playerEntity.position;
+      if (pos) {
+        const px = pos.x + TILE / 2;
+        const py = pos.y + TILE / 2;
+        let nearestDist = Infinity;
+        for (const entity of world.with("station", "position").entities) {
+          if (entity.station?.stationId !== stationId) continue;
+          const ex = entity.position!.x + TILE / 2;
+          const ey = entity.position!.y + TILE / 2;
+          const dist = Math.hypot(px - ex, py - ey);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            targetStationEntityId = entity.id;
+          }
+        }
+      }
+    }
+    // checkCraft already confirmed a matching station/campfire is nearby, so this should
+    // always resolve — but stay defensive rather than crash on a stale/edge-case scan.
+    if (!targetStationEntityId) return false;
+
+    if (
+      this.interactionResource.activeProcesses.has(targetStationEntityId) ||
+      this.interactionResource.activeCraftProcesses.has(targetStationEntityId)
+    ) {
+      spawnEnvFloatingText(
+        this.vfxResource,
+        "this station is already busy...",
+        Colors.ui.error,
+        this.playerEntity.position!,
+        this.entityLayer
+      );
+      return false;
+    }
+
+    const craftsmanshipLevel = gameState.rpg.skills?.craftsmanship?.level ?? 1;
+    this.craftMinigameWindowElapsed = 0;
+    this.craftMinigameWindowHit = false;
+    this.interactionResource.activeCraftProcesses.set(targetStationEntityId, createCraftProcessRuntime(
+      recipe,
+      craftsmanshipLevel,
+      targetStationEntityId,
+      { isNearCampfire, ...(stationId !== undefined ? { stationId } : {}) },
+    ));
+
+    spawnEnvFloatingText(
+      this.vfxResource,
+      `crafting ${recipe.name.toLowerCase()}... (safe to walk away)`,
+      Colors.vfx.campfireMsg,
+      this.playerEntity.position!,
+      this.entityLayer,
+    );
+    return true;
+  }
+
+  public cancelCraftProcess(stationEntityId: string): void {
+    if (this.interactionResource.activeCraftProcesses.has(stationEntityId)) {
+      this.interactionResource.activeCraftProcesses.delete(stationEntityId);
+      spawnEnvFloatingText(
+        this.vfxResource,
+        "craft cancelled",
+        Colors.ui.muted,
+        this.playerEntity.position!,
+        this.entityLayer
+      );
+    }
+  }
+
+  /**
+   * Resolves a completed, parked craft at `stationEntityId` into inventory.
+   * No-op (returns false) if that station has nothing collectible right now.
+   */
+  public collectCraftProcess(stationEntityId: string): boolean {
+    return collectCraftProcess(this.interactionResource, stationEntityId, triggerQuestEvent, this.eventQueue);
+  }
+
+  /** Every currently-active station process/craft, one entry per busy station — stations run fully independently. */
+  public getActiveStationCraftStatuses(): ActiveStationCraftStatus[] {
+    const statuses: ActiveStationCraftStatus[] = [];
+
+    for (const activeProc of this.interactionResource.activeProcesses.values()) {
+      const progress = activeProc.durationSec > 0 ? Math.min(1, activeProc.elapsedSec / activeProc.durationSec) : 0;
+      statuses.push({
+        stationEntityId: activeProc.targetEntityId,
+        label: getItemDef(activeProc.outputItemId)?.name ?? activeProc.outputItemId,
+        iconItemId: activeProc.outputItemId,
+        progress,
+        walkAwaySafe: false,
+        readyForPickup: false,
+      });
+    }
+
+    for (const activeCraft of this.interactionResource.activeCraftProcesses.values()) {
+      const progress = activeCraft.durationSec > 0 ? Math.min(1, activeCraft.elapsedSec / activeCraft.durationSec) : 0;
+      statuses.push({
+        stationEntityId: activeCraft.targetStationEntityId,
+        label: activeCraft.recipe.name,
+        iconItemId: activeCraft.recipe.output.itemId,
+        progress,
+        walkAwaySafe: true,
+        readyForPickup: activeCraft.completed,
+      });
+    }
+
+    return statuses;
   }
 
   public spawnEnvFloatingText(text: string, color: number = Colors.ui.info): void {
@@ -2829,6 +3474,15 @@ export class GameEngine {
     return `cleared ${n} enemies`;
   }
 
+  /** Despawns a single entity by id. Backs `world.enemies[i].kill()` in the dev facade. */
+  public devDespawnEntity(id: string): string {
+    const e = world.entities.find((entity) => entity.id === id);
+    if (!e) return `no entity ${id}`;
+    this.enemyColors.delete(id);
+    despawnEntity(world, e, this.entityLayer, this.entitySprites, this.vfxResource);
+    return `despawned ${id}`;
+  }
+
   /**
    * Despawns all resource and pickup entities, resets gathered state, then
    * re-spawns every node from the current map's spawn list. Intended for the
@@ -2893,6 +3547,18 @@ export class GameEngine {
   public devToggleNoclip(): string {
     this.movementResource.noclip = !this.movementResource.noclip;
     return `noclip ${this.movementResource.noclip ? "on" : "off"}`;
+  }
+
+  public devSetSpectator(on: boolean): void {
+    devFlags.spectatorEnabled = on;
+    if (on) {
+      this.cameraCenter.x = this.playerEntity.position!.x;
+      this.cameraCenter.y = this.playerEntity.position!.y;
+      
+      const h = this.playerEntity.health!;
+      h.current = h.max;
+      this.syncPlayerHp();
+    }
   }
 
   public devResetCooldowns(): string {

@@ -143,6 +143,7 @@ export function drawBuildingVisuals(
   stage: number,
   interiorContainer: Container,
   shellContainer: Container,
+  entity?: Entity,
 ): void {
   // Clear previous children
   interiorContainer.removeChildren().forEach((c) => c.destroy());
@@ -309,7 +310,10 @@ export function drawBuildingVisuals(
     shellContainer.addChild(txt);
   } else {
     // Stage 5: Completed
-    const structureKey = getAshenmoonStructureKeyForBuildingType(type);
+    let structureKey = getAshenmoonStructureKeyForBuildingType(type);
+    if (type === "snap_trap" && entity?.trap?.state === "sprung") {
+      structureKey = "snapTrapSprung";
+    }
     const tex = getAshenmoonStructureTexture(structureKey ?? "legacyHouse");
 
     const sprite = new Sprite(tex);
@@ -384,22 +388,35 @@ export function spawnBuildingSystem(
   }
 
   // Add structural RPG components on completion (stage 5)
+  const isTrap = type === "snap_trap" || type === "caltrops" || type === "bait_decoy";
+  const trap = currentStage === 5 && isTrap
+    ? {
+        type: type === "snap_trap" ? ("snap" as const) : type === "caltrops" ? ("caltrops" as const) : ("decoy" as const),
+        state: "set" as const,
+        ...(type === "caltrops" ? { usesRemaining: 3 } : {}),
+      }
+    : undefined;
+  const trapInteractable = currentStage === 5 && type === "snap_trap"
+    ? { name: "disarm snap trap", action: "process" as const }
+    : undefined;
+
   const station = spec.stationId && currentStage === 5 ? { stationId: spec.stationId } : undefined;
   const campfire = spec.stationId === "campfire" && currentStage === 5 ? createCampfireState({ isLit: false }) : undefined;
-  const campStructure = currentStage === 5 ? campStructureFor(type) : undefined;
+  const campStructure = currentStage === 5 && !isTrap ? campStructureFor(type) : undefined;
   const maxStages = spec.constructionStages?.length ?? 5;
-  const interactable = isMultiStage && currentStage < 5
+  const interactable = trapInteractable || (isMultiStage && currentStage < 5
     ? { name: `build ${spec.displayName} (stage ${currentStage}/${maxStages})`, action: "process" as const }
     : spec.stationId
       ? { name: spec.displayName, action: "process" as const }
       : getBuildableBehavior(type)
         ? { name: spec.displayName, action: "process" as const }
-        : undefined;
+        : undefined);
 
   const entity = world.add({
     id,
     position: { x: ex, y: ey, targetX: ex, targetY: ey },
-    collider: { isSolid: currentStage >= 2 },
+    collider: { isSolid: currentStage >= 2 && !isTrap },
+    ...(trap ? { trap } : {}),
     ...(station ? { station } : {}),
     ...(campfire ? { campfire } : {}),
     ...(campStructure ? { campStructure } : {}),
@@ -411,7 +428,7 @@ export function spawnBuildingSystem(
   if (campStructure) syncShelterEmitter(entity);
 
   // Only block movement if building stage is at least 2 (Columns)
-  if (currentStage >= 2) {
+  if (currentStage >= 2 && !isTrap) {
     if (spec.solidCells) {
       for (const cell of spec.solidCells) {
         const cx = gx + cell.x;
@@ -451,7 +468,7 @@ export function spawnBuildingSystem(
       registerCampfireVisual(visualPresentationResource, id, refs.sprite, refs.glow, entity.campfire);
     }
   } else {
-    drawBuildingVisuals(type, currentStage, interiorContainer, shellContainer);
+    drawBuildingVisuals(type, currentStage, interiorContainer, shellContainer, entity);
   }
 
   entityLayer.addChild(container);
@@ -488,12 +505,14 @@ export function upgradeBuildingSystem(
         registerCampfireVisual(visualPresentationResource, id, refs.sprite, refs.glow, entity.campfire);
       }
     } else {
-      drawBuildingVisuals(type, stage, interiorContainer, shellContainer);
+      drawBuildingVisuals(type, stage, interiorContainer, shellContainer, entity);
     }
   }
 
+  const isTrap = type === "snap_trap" || type === "caltrops" || type === "bait_decoy";
+
   // Upgrade collision if transitioning to stage 2 (Columns) or above
-  if (stage >= 2) {
+  if (stage >= 2 && !isTrap) {
     entity.collider = { isSolid: true };
     
     // Resolve building coordinates
@@ -521,19 +540,33 @@ export function upgradeBuildingSystem(
         }
       }
     }
+  } else if (isTrap) {
+    entity.collider = { isSolid: false };
   }
 
   // Update gameplay components on completion
   if (stage === 5) {
+    const trap = isTrap
+      ? {
+          type: type === "snap_trap" ? ("snap" as const) : type === "caltrops" ? ("caltrops" as const) : ("decoy" as const),
+          state: "set" as const,
+          ...(type === "caltrops" ? { usesRemaining: 3 } : {}),
+        }
+      : undefined;
+    const trapInteractable = type === "snap_trap"
+      ? { name: "disarm snap trap", action: "process" as const }
+      : undefined;
+
     const station = spec.stationId ? { stationId: spec.stationId } : undefined;
     const campfire = spec.stationId === "campfire" ? createCampfireState({ isLit: false }) : undefined;
-    const campStructure = campStructureFor(type);
-    const interactable = spec.stationId
+    const campStructure = isTrap ? undefined : campStructureFor(type);
+    const interactable = trapInteractable || (spec.stationId
       ? { name: spec.displayName, action: "process" as const }
       : getBuildableBehavior(type)
         ? { name: spec.displayName, action: "process" as const }
-        : undefined;
+        : undefined);
 
+    if (trap) entity.trap = trap;
     if (station) entity.station = station;
     if (campfire) entity.campfire = campfire;
     if (campStructure) {

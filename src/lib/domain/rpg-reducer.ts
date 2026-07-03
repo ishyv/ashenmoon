@@ -1,11 +1,13 @@
 import { getBuildingSpec, BUILDING_SPECS } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { CRAFT_TIER_ORDER } from "$lib/domain/crafting/tier-types";
 import { getGatherableBySyncLocation, resolveGatherSkillKey } from "$lib/domain/gathering/gatherables";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import { resolveStudyBlueprint } from "$lib/domain/systems/study-system";
 import { gatherActivityStats } from "$lib/domain/stats/skill-growth";
 import type {
+  RpgDurableEquipment,
   RpgEnvironmentTickResult,
   RpgInventorySlot,
   RpgPlayerState,
@@ -87,6 +89,46 @@ function removeQty(slots: RpgPlayerState["inventory"]["slots"], itemId: string, 
 
 function isKnownBuildable(type: string): boolean {
   return Object.prototype.hasOwnProperty.call(BUILDING_SPECS, type);
+}
+
+function tierRank(tier: string | undefined): number {
+  return tier ? CRAFT_TIER_ORDER.indexOf(tier as (typeof CRAFT_TIER_ORDER)[number]) : -1;
+}
+
+/**
+ * Pulls one equippable unit of `itemId` out of the inventory to equip: the
+ * highest-tier instance when the slot is instance-tracked, or a fabricated
+ * standalone instance (with a qty deduction) when it's a flat, untiered stack.
+ * This is the single place that decides which physical item becomes "the"
+ * equipped one, so tier/curse/rolledStats data survives equipping.
+ */
+function takeBestInstance(
+  slots: RpgPlayerState["inventory"]["slots"],
+  itemId: string,
+  now: () => number,
+): RpgDurableEquipment {
+  const slot = slots[itemId];
+  if (slot && "instances" in slot && slot.instances.length > 0) {
+    let bestIndex = 0;
+    for (let i = 1; i < slot.instances.length; i++) {
+      if (tierRank(slot.instances[i]?.tier) > tierRank(slot.instances[bestIndex]?.tier)) bestIndex = i;
+    }
+    const chosen = slot.instances[bestIndex]!;
+    const remaining = slot.instances.filter((_, i) => i !== bestIndex);
+    if (remaining.length > 0) slots[itemId] = { instances: remaining };
+    else delete slots[itemId];
+    return { ...chosen, itemId };
+  }
+  removeQty(slots, itemId, 1);
+  return { instanceId: `standalone_${itemId}_${now()}`, itemId, durability: 100 };
+}
+
+/** The inverse of {@link takeBestInstance}: returns a full equipped instance to the inventory's instances array. */
+function returnEquipmentToInventory(slots: RpgPlayerState["inventory"]["slots"], equipment: RpgDurableEquipment): void {
+  const { itemId, ...instanceData } = equipment;
+  const slot = slots[itemId];
+  const existingInstances = slot && "instances" in slot ? slot.instances : [];
+  slots[itemId] = { instances: [...existingInstances, instanceData] };
 }
 
 function pickup(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "pickup" }>): GatherSync {
@@ -189,8 +231,15 @@ function equipTool(
   options: RpgReducerOptions,
 ): { playerState: RpgPlayerState } {
   const playerState = clonePlayerState(state);
+  const now = options.now ?? Date.now;
+
+  const currentWeapon = playerState.profile.loadout.weapon;
+  if (currentWeapon && typeof currentWeapon === "object") {
+    returnEquipmentToInventory(playerState.inventory.slots, currentWeapon);
+  }
+  playerState.profile.loadout.weapon = null;
+
   if (!command.itemId) {
-    playerState.profile.loadout.weapon = null;
     return { playerState };
   }
   const slot = playerState.inventory.slots[command.itemId];
@@ -204,17 +253,16 @@ function equipTool(
   if (visual && visual.handUsage === "two-handed") {
     const shield = playerState.profile.loadout.shield;
     if (shield) {
-      const shieldItemId = typeof shield === "string" ? shield : shield.itemId;
-      addQty(playerState.inventory.slots, shieldItemId, 1);
+      if (typeof shield === "object") {
+        returnEquipmentToInventory(playerState.inventory.slots, shield);
+      } else {
+        addQty(playerState.inventory.slots, shield, 1);
+      }
       playerState.profile.loadout.shield = null;
     }
   }
 
-  playerState.profile.loadout.weapon = {
-    instanceId: `standalone_${command.itemId}_${options.now?.() ?? Date.now()}`,
-    itemId: command.itemId,
-    durability: 100,
-  };
+  playerState.profile.loadout.weapon = takeBestInstance(playerState.inventory.slots, command.itemId, now);
   return { playerState };
 }
 
@@ -237,12 +285,16 @@ function equipGear(
 ): { playerState: RpgPlayerState } {
   const playerState = clonePlayerState(state);
   const slotKey = command.slot;
+  const now = options.now ?? Date.now;
 
   // 1. Unequip current gear if present
   const current = playerState.profile.loadout[slotKey];
   if (current) {
-    const currentItemId = typeof current === "string" ? current : current.itemId;
-    addQty(playerState.inventory.slots, currentItemId, 1);
+    if (typeof current === "object") {
+      returnEquipmentToInventory(playerState.inventory.slots, current);
+    } else {
+      addQty(playerState.inventory.slots, current, 1);
+    }
     playerState.profile.loadout[slotKey] = null;
   }
 
@@ -279,7 +331,11 @@ function equipGear(
       const weaponDef = ITEM_DEFINITIONS[weaponId];
       const weaponVisual = weaponDef ? traitOf(weaponDef, "equippable_visuals") : undefined;
       if (weaponVisual && weaponVisual.handUsage === "two-handed") {
-        addQty(playerState.inventory.slots, weaponId, 1);
+        if (typeof equippedWeapon === "object") {
+          returnEquipmentToInventory(playerState.inventory.slots, equippedWeapon);
+        } else {
+          addQty(playerState.inventory.slots, weaponId, 1);
+        }
         playerState.profile.loadout.weapon = null; // Unequip weapon
       }
     }
@@ -305,23 +361,18 @@ function equipGear(
       if (coveredSlot === slotKey) continue;
       const itemInCoveredSlot = playerState.profile.loadout[coveredSlot];
       if (itemInCoveredSlot) {
-        const coveredItemId = typeof itemInCoveredSlot === "string" ? itemInCoveredSlot : itemInCoveredSlot.itemId;
-        addQty(playerState.inventory.slots, coveredItemId, 1);
+        if (typeof itemInCoveredSlot === "object") {
+          returnEquipmentToInventory(playerState.inventory.slots, itemInCoveredSlot);
+        } else {
+          addQty(playerState.inventory.slots, itemInCoveredSlot, 1);
+        }
         playerState.profile.loadout[coveredSlot] = null;
       }
     }
   }
   // ------------------------------------------------------
 
-  // Deduct from inventory
-  removeQty(playerState.inventory.slots, itemId, 1);
-
-  // Set loadout
-  playerState.profile.loadout[slotKey] = {
-    instanceId: `gear_${itemId}_${options.now?.() ?? Date.now()}`,
-    itemId,
-    durability: 100,
-  };
+  playerState.profile.loadout[slotKey] = takeBestInstance(playerState.inventory.slots, itemId, now);
 
   return { playerState };
 }
@@ -430,7 +481,8 @@ function destroyBuilding(
 
 function craft(state: RpgPlayerState, command: Extract<RpgReducerCommand, { type: "craft" }>): { playerState: RpgPlayerState } {
   const playerState = clonePlayerState(state);
-  const result = resolveCraft(playerState.inventory.slots, command.recipeId, command.context);
+  const ctx: CraftContext = { ...command.context, craftsmanshipLevel: playerState.skills.craftsmanship?.level ?? 1 };
+  const result = resolveCraft(playerState.inventory.slots, command.recipeId, ctx);
   if (!result.ok) throw new Error(result.reason);
   playerState.inventory = { slots: result.slots };
   return { playerState };

@@ -177,34 +177,12 @@ export const STATION_PROCESSES: readonly StationProcess[] = [
     outputItemId: "dried_herb",
     outputQty: 1,
   },
-  // Primitive work surface processes
-  {
-    id: "assemble_crude_knife",
-    stationId: "primitive_work_surface",
-    inputs: { stick: 1, flint_shard: 1, grass_fiber: 1 },
-    processType: "assemble",
-    durationSec: 5,
-    outputItemId: "crude_knife",
-    outputQty: 1,
-  },
-  {
-    id: "assemble_flint_axe",
-    stationId: "primitive_work_surface",
-    inputs: { stick: 1, flint_shard: 1, grass_fiber: 1 },
-    processType: "assemble",
-    durationSec: 5,
-    outputItemId: "flint_axe",
-    outputQty: 1,
-  },
-  {
-    id: "assemble_flint_pickaxe",
-    stationId: "primitive_work_surface",
-    inputs: { stick: 1, flint_shard: 1, grass_fiber: 1 },
-    processType: "assemble",
-    durationSec: 5,
-    outputItemId: "flint_pickaxe",
-    outputQty: 1,
-  },
+  // Note: crude_knife/flint_axe/flint_pickaxe are NOT listed here. They used to have a
+  // duplicate, non-tiered "assemble_*" process entry at this station — a second pathway
+  // to the same 3 items that bypassed the Phase 1 quality-tier/curse roll entirely. That
+  // was a bug (players could dodge the tier system just by using the station panel
+  // instead of the recipe panel), fixed by deleting the duplicates: these 3 are now
+  // reachable exclusively through their `CraftRecipe`s in definitions/recipes/tools.ts.
   // Meat smoking rack processes
   {
     id: "smoke_meat",

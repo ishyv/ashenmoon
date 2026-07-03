@@ -2,10 +2,11 @@
 import { onMount, onDestroy } from "svelte";
 import { GameEngine, type HudState } from "$lib/core/engine";
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
-import type { WorldContextMenuTarget } from "$lib/core/types";
+import type { WorldContextMenuTarget, ActiveStationCraftStatus } from "$lib/core/types";
 import { isWorldContextMenuOutOfRange } from "$lib/core/input/world-context-menu";
-import { registerDevCommands } from "$lib/ui/debug/dev-commands";
+import { registerDevRuntime } from "$lib/ui/debug/dev-commands";
 import DevConsole from "$lib/ui/debug/DevConsole.svelte";
+import SpectatorOverlay from "$lib/ui/debug/SpectatorOverlay.svelte";
 import { devConsole } from "$lib/ui/debug/dev-console";
 import GameHud from "$lib/ui/hud/GameHud.svelte";
 import SettingsMenu, { type Bindings } from "$lib/ui/panels/SettingsMenu.svelte";
@@ -23,12 +24,11 @@ import IntroOverlay from "$lib/ui/elements/IntroOverlay.svelte";
 import { activeEnvironment } from "$lib/state/environment-state.svelte";
 import { uiPreferences, loadUiPreferences } from "$lib/state/runtime-ui-state.svelte";
 import { applyRpgState } from "$lib/state/rpg-actions.svelte";
-import { loadGameState } from "$lib/state/game-state.svelte";
+import { gameState, loadGameState } from "$lib/state/game-state.svelte";
 import { dispatchRpgCommand } from "$lib/state/rpg-controller.svelte";
 import { overlayStack, OverlayId } from "$lib/state/overlay-stack.svelte";
 import { menuController, type MenuControllerItem } from "$lib/state/menu-controller.svelte";
 import { dialogueState, activeQuests } from "$lib/state/rpg/quests.svelte";
-import StationPanel from "$lib/ui/panels/StationPanel.svelte";
 import CarcassPanel from "$lib/ui/panels/CarcassPanel.svelte";
 import ScenarioPanel from "$lib/ui/panels/ScenarioPanel.svelte";
 import TreatmentPanel from "$lib/ui/panels/TreatmentPanel.svelte";
@@ -37,6 +37,9 @@ import { StorageKeys } from "$lib/domain/game-events";
 import { uiInputController } from "$lib/core/input/input-controller.svelte";
 import { loadPanelPositions } from "$lib/state/panel-positions.svelte";
 import TopHudActions from "$lib/ui/hud/TopHudActions.svelte";
+import { getStationDefinition, type StationId } from "$lib/domain/stations";
+import { stationMenuOptions, DESTROY_CATEGORY, type StationMenuOption } from "$lib/domain/interaction-wheel";
+import StationMenu from "$lib/ui/elements/StationMenu.svelte";
 
 let shellEl    = $state<HTMLDivElement | null>(null);
 let containerEl = $state<HTMLDivElement | null>(null);
@@ -51,7 +54,6 @@ const showSettings  = $derived(overlayStack.has(OverlayId.Settings));
 const showInventory = $derived(overlayStack.has(OverlayId.Inventory));
 const showSkills    = $derived(overlayStack.has(OverlayId.Skills));
 const showScenario  = $derived(overlayStack.has(OverlayId.Scenario));
-const showStation   = $derived(overlayStack.has(OverlayId.Station));
 const showCarcass   = $derived(overlayStack.has(OverlayId.Carcass));
 const showMedicine  = $derived(overlayStack.has(OverlayId.Medicine));
 const showConstruction = $derived(overlayStack.has(OverlayId.Construction));
@@ -62,6 +64,19 @@ const showDevHud = $derived(activeScenarioId !== null);
 let activeStationEntity = $state<Entity | null>(null);
 let carcassPanelTargetId = $state<string | null>(null);
 let contextMenu   = $state<WorldContextMenuTarget | null>(null);
+
+interface StationMenuState {
+  entityId: string;
+  name: string;
+  screenX: number;
+  screenY: number;
+  gx: number;
+  gy: number;
+  options: readonly StationMenuOption[];
+}
+let stationMenu = $state<StationMenuState | null>(null);
+/** One entry per currently-busy station — stations run independently, see engine.getActiveStationCraftStatuses. */
+let activeCraftStatuses = $state<ActiveStationCraftStatus[]>([]);
 let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 let envInterval: ReturnType<typeof setInterval> | null = null;
 let uiUnsubs: (() => void)[] = [];
@@ -107,6 +122,106 @@ function handleContextMenu(target: WorldContextMenuTarget) {
 
 function closeContextMenu() {
   contextMenu = null;
+  menuController.clear();
+}
+
+/**
+ * The affordable crafting/process/refuel options for a station, plus a
+ * "destroy" option folded in when the station is also a player-placed
+ * building — right-click and E both converge on this, so destroying a
+ * built campfire stays reachable now that it opens the ring in one hop
+ * instead of the old two-item text context menu.
+ */
+function buildStationMenuOptions(stationId: StationId, buildingId: string | undefined): readonly StationMenuOption[] {
+  const slots = gameState.rpg.inventory?.slots ?? {};
+  const ctx = stationId === "campfire"
+    ? { isNearCampfire: true }
+    : { isNearCampfire: false, stationId, availableStations: [stationId] };
+  const options = stationMenuOptions(stationId, slots, ctx);
+  if (!buildingId) return options;
+  return [...options, { id: "destroy", kind: "destroy", label: "destroy", category: DESTROY_CATEGORY }];
+}
+
+/**
+ * If `target` has a finished craft waiting, collects it directly — matching
+ * the instant, no-menu "pickup" feel (per the roadmap's own scope note) —
+ * and returns true so the caller skips opening the menu entirely.
+ */
+function collectIfReady(target: Entity): boolean {
+  if (!engine) return false;
+  const status = activeCraftStatuses.find((s) => s.stationEntityId === target.id);
+  if (!status?.readyForPickup) return false;
+  engine.collectCraftProcess(target.id);
+  return true;
+}
+
+/**
+ * Opens the anchored station quick-menu (StationMenu.svelte) — a ring of
+ * icon medallions replacing the old full-screen StationPanel checklist and,
+ * before that, the plain text context-menu list. Shows only currently-
+ * affordable options, positioned at the station via engine.worldToScreen.
+ * Both E (via onStationInteract) and right-click (engine.ts redirects
+ * station right-clicks into onStationInteract too) call this same function.
+ */
+function openStationMenu(target: Entity) {
+  if (!engine || !target.position) return;
+  const stationId: StationId | null =
+    target.station?.stationId ?? (target.id === "campfire" ? "campfire" : null);
+  if (!stationId) return;
+
+  const busyHere = activeCraftStatuses.some((s) => s.stationEntityId === target.id);
+  const buildingId = gameState.rpg.profile?.buildings?.some((b) => b.id === target.id) ? target.id : undefined;
+  const options = busyHere ? [] : buildStationMenuOptions(stationId, buildingId);
+  if (!busyHere && options.length === 0) {
+    showNotify("nothing to do here right now.");
+    return;
+  }
+
+  const stationName = getStationDefinition(stationId)?.name ?? "station";
+  const fuelSuffix = target.campfire?.isLit
+    ? `, ${Math.round((target.campfire.fuelRemainingMs / (target.campfire.fuelCapacityMs ?? target.campfire.fuelRemainingMs)) * 100)}% fuel`
+    : "";
+
+  const screen = engine.worldToScreen(target.position.x + 32, target.position.y + 16);
+  stationMenu = {
+    entityId: target.id,
+    name: `${stationName}${fuelSuffix}`,
+    screenX: screen.x,
+    screenY: screen.y,
+    gx: Math.floor((target.position.x + 32) / 64),
+    gy: Math.floor((target.position.y + 32) / 64),
+    options,
+  };
+}
+
+function selectStationMenuOption(option: StationMenuOption) {
+  if (!stationMenu || !engine) return;
+  const entityId = stationMenu.entityId;
+  if (option.kind === "process") {
+    engine.startStationProcess(entityId, option.id);
+  } else if (option.kind === "recipe") {
+    engine.startCraftProcess(option.id);
+  } else if (option.kind === "refuel") {
+    void engine.refuelCampfire(entityId);
+  } else if (option.kind === "destroy") {
+    engine.destroyBuilding(entityId);
+  }
+  closeStationMenu();
+}
+
+function cancelActiveStationCraft() {
+  if (!engine || !stationMenu) return;
+  const status = activeCraftStatuses.find((s) => s.stationEntityId === stationMenu!.entityId);
+  if (!status) return;
+  if (status.walkAwaySafe) {
+    engine.cancelCraftProcess(status.stationEntityId);
+  } else {
+    engine.cancelStationProcess(status.stationEntityId);
+  }
+}
+
+function closeStationMenu() {
+  stationMenu = null;
   menuController.clear();
 }
 
@@ -170,18 +285,10 @@ $effect(() => {
   }
 });
 
-// --- Station Panel â†” stack sync ------------------------------------------
-// --- Station & Construction Panel ↔ stack sync ----------------------------
+// --- Construction Panel ↔ stack sync ---------------------------------------
 $effect(() => {
-  const hasStation = overlayStack.has(OverlayId.Station);
   const hasConstruction = overlayStack.has(OverlayId.Construction);
-  console.log("[DEBUG SVELTE EFFECT] Station/Construction Stack sync:", {
-    hasStation,
-    hasConstruction,
-    activeStationEntityId: activeStationEntity?.id ?? null
-  });
-  if (!hasStation && !hasConstruction && activeStationEntity) {
-    console.log("[DEBUG SVELTE EFFECT] Clearing activeStationEntity");
+  if (!hasConstruction && activeStationEntity) {
     activeStationEntity = null;
   }
 });
@@ -218,7 +325,7 @@ $effect(() => {
   }
 });
 
-// Auto-close station panel if player walks too far
+// Auto-close the construction overlay if player walks too far
 $effect(() => {
   if (activeStationEntity && coords) {
     const px = Math.floor((activeStationEntity.position!.x + 32) / 64);
@@ -226,7 +333,6 @@ $effect(() => {
     const dx = coords.gx - px;
     const dy = coords.gy - py;
     if (Math.hypot(dx, dy) > 4.5) {
-      overlayStack.close(OverlayId.Station);
       overlayStack.close(OverlayId.Construction);
       activeStationEntity = null;
     }
@@ -237,6 +343,16 @@ $effect(() => {
   if (!contextMenu || !coords) return;
   if (isWorldContextMenuOutOfRange(coords, contextMenu)) {
     closeContextMenu();
+  }
+});
+
+// Auto-close the station quick-menu if player walks too far
+$effect(() => {
+  if (!stationMenu || !coords) return;
+  const dx = coords.gx - stationMenu.gx;
+  const dy = coords.gy - stationMenu.gy;
+  if (Math.hypot(dx, dy) > 4.5) {
+    closeStationMenu();
   }
 });
 
@@ -276,27 +392,28 @@ onMount(async () => {
     onContextMenu: handleContextMenu,
     ...(activeScenarioId ? { scenarioId: activeScenarioId } : {}),
     onStationInteract: (target) => {
-      console.log("[DEBUG SVELTE] onStationInteract called with target:", { id: target.id, building: target.building });
-      activeStationEntity = target;
       if (target.building && target.building.stage < 5) {
-        console.log("[DEBUG SVELTE] Pushing Construction overlay");
+        activeStationEntity = target;
         overlayStack.push(OverlayId.Construction);
-      } else {
-        console.log("[DEBUG SVELTE] Pushing Station overlay");
-        overlayStack.push(OverlayId.Station);
+        return;
       }
+      if (collectIfReady(target)) return;
+      openStationMenu(target);
     },
     onOpenCarcassPanel: (id) => {
       console.log("[DEBUG SVELTE] onOpenCarcassPanel called with id:", id);
       carcassPanelTargetId = id;
       overlayStack.push(OverlayId.Carcass);
     },
+    onActiveCraftUpdate: (statuses) => {
+      activeCraftStatuses = statuses;
+    },
   });
   await engine.init();
   if (!activeQuests.currentQuestId) {
     activeQuests.currentQuestId = "lost_in_woods";
   }
-  registerDevCommands(engine);
+  registerDevRuntime(engine);
 
   // Register all UI keyboard bindings through the controller. Unsubscribed in onDestroy.
   let lastEscapeTime = 0;
@@ -334,6 +451,7 @@ onMount(async () => {
         // Let InputResource handle escape during building/item placement
         if (engine?.isInPlacementMode()) return false;
         if (contextMenu) { closeContextMenu(); e.preventDefault(); return true; }
+        if (stationMenu) { closeStationMenu(); e.preventDefault(); return true; }
         if (overlayStack.isEmpty) return false;
         const now = performance.now();
         if (now - lastEscapeTime < 300) {
@@ -381,7 +499,9 @@ onMount(async () => {
   uiInputController.validateAgainst(engine.inputResource.bindings);
 
   document.addEventListener('fullscreenchange', onFullscreenChange);
-  shellEl?.addEventListener('pointerdown', enterFullscreenOnce);
+  if (uiPreferences.autoFullscreen) {
+    shellEl?.addEventListener('pointerdown', enterFullscreenOnce);
+  }
 
   // Start 5-second backend env tick loop
   envInterval = setInterval(async () => {
@@ -457,7 +577,11 @@ onDestroy(() => {
 </svelte:head>
 
 <svelte:window
-  onmousedown={(e) => { if (contextMenu && !(e.target as HTMLElement).closest('.ctx-menu')) closeContextMenu(); }}
+  onmousedown={(e) => {
+    const clickTarget = e.target as HTMLElement;
+    if (contextMenu && !clickTarget.closest('.ctx-menu')) closeContextMenu();
+    if (stationMenu && !clickTarget.closest('.station-menu')) closeStationMenu();
+  }}
   onkeydown={uiInputController.dispatch}
   onclick={(e) => { if (e.shiftKey) e.preventDefault(); }}
 />
@@ -521,25 +645,6 @@ onDestroy(() => {
     <InventoryGrid engine={engine} initialTab={inventoryTab} onClose={() => overlayStack.close(OverlayId.Inventory)} />
   {/if}
 
-  {#if showStation && activeStationEntity}
-    <StationPanel
-      entity={activeStationEntity}
-      {engine}
-      onClose={() => {
-        overlayStack.close(OverlayId.Station);
-        activeStationEntity = null;
-      }}
-      onOpenCrafting={() => {
-        overlayStack.close(OverlayId.Station);
-        activeStationEntity = null;
-        inventoryTab = "crafting";
-        if (!overlayStack.has(OverlayId.Inventory)) {
-          overlayStack.push(OverlayId.Inventory);
-        }
-      }}
-    />
-  {/if}
-
   {#if showConstruction && activeStationEntity}
     <ConstructionOverlay
       entity={activeStationEntity}
@@ -575,6 +680,7 @@ onDestroy(() => {
     <GameHud />
   </div>
 
+  <SpectatorOverlay />
   <DevConsole />
 
   {#if showSettings}
@@ -631,6 +737,19 @@ onDestroy(() => {
         onclick={closeContextMenu}
       >close</button>
     </div>
+  {/if}
+
+  {#if stationMenu}
+    {@const stationMenuEntityId = stationMenu.entityId}
+    <StationMenu
+      options={stationMenu.options}
+      anchorScreen={{ x: stationMenu.screenX, y: stationMenu.screenY }}
+      stationName={stationMenu.name}
+      busyStatus={activeCraftStatuses.find((s) => s.stationEntityId === stationMenuEntityId) ?? null}
+      onSelect={selectStationMenuOption}
+      onClose={closeStationMenu}
+      onCancelBusy={cancelActiveStationCraft}
+    />
   {/if}
 
   {#if showScenario}

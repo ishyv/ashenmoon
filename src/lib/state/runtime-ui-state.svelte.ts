@@ -5,6 +5,7 @@ export interface UiPreferences {
   minimalHud: boolean;
   dynamicEnvironment: boolean;
   equipOnlyWithStash: boolean;
+  autoFullscreen: boolean;
 }
 
 const DEFAULT_COOLDOWNS = {
@@ -60,6 +61,7 @@ export const uiPreferences = $state<UiPreferences>({
   minimalHud: true,
   dynamicEnvironment: true,
   equipOnlyWithStash: false,
+  autoFullscreen: false,
 });
 
 export function loadUiPreferences(): void {
@@ -70,6 +72,9 @@ export function loadUiPreferences(): void {
   }
   if (typeof stored.equipOnlyWithStash === "boolean") {
     uiPreferences.equipOnlyWithStash = stored.equipOnlyWithStash;
+  }
+  if (typeof stored.autoFullscreen === "boolean") {
+    uiPreferences.autoFullscreen = stored.autoFullscreen;
   }
 }
 

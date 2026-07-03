@@ -7,6 +7,7 @@ import { play } from '$lib/audio/audio-engine';
 import { getItemDef } from '$lib/domain/items';
 import { getAshenmoonItemIconPath } from '$lib/core/assets/render-resource-cache';
 import ItemIcon from '$lib/ui/components/ItemIcon.svelte';
+import { CRAFT_TIER_ORDER, type CraftTier } from '$lib/domain/crafting/tier-types';
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -43,6 +44,20 @@ function getStackQty(itemId: string): number | null {
   return invSlot.qty;
 }
 
+// Highest-tier instance backing this hotbar-bound item, for the same tier-border
+// treatment ItemGrid uses. Undefined for flat qty stacks or untiered items.
+function bestInstanceTier(itemId: string): CraftTier | undefined {
+  const invSlot = gameState.rpg.inventory?.slots[itemId];
+  if (!invSlot || !('instances' in invSlot) || invSlot.instances.length === 0) return undefined;
+  let best = invSlot.instances[0]!;
+  for (const inst of invSlot.instances) {
+    const rank = inst.tier ? CRAFT_TIER_ORDER.indexOf(inst.tier) : -1;
+    const bestRank = best.tier ? CRAFT_TIER_ORDER.indexOf(best.tier) : -1;
+    if (rank > bestRank) best = inst;
+  }
+  return best.tier;
+}
+
 // True when item has no count in inventory and is not equipped (stale bind).
 function isItemMissing(itemId: string): boolean {
   // check equipped loadout first — gear items leave inventory when equipped
@@ -76,8 +91,9 @@ let dragOver = $state<number | null>(null);
     {@const def = slot ? getItemDef(slot.itemId) : undefined}
     {@const qty = slot ? getStackQty(slot.itemId) : null}
     {@const missing = slot ? isItemMissing(slot.itemId) : false}
+    {@const tier = slot ? bestInstanceTier(slot.itemId) : undefined}
     <div
-      class="slot"
+      class="slot {tier ? `tier-${tier}` : ''}"
       class:slot--filled={slot !== null}
       class:slot--active={hotbarState.flashSlot === i}
       class:slot--shake={hotbarState.shakeSlot === i}
@@ -167,6 +183,14 @@ let dragOver = $state<number | null>(null);
   .slot--dragover {
     border-color: var(--accent);
     background: oklch(from var(--bg-base) l c h / 0.5);
+  }
+
+  .slot.tier-pristine { border-color: oklch(from var(--accent) l c h / 0.55); }
+  .slot.tier-masterwork { border-color: var(--accent); }
+  .slot.tier-fable { border-color: var(--signal); }
+  .slot.tier-divine {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), inset 0 0 0 2px var(--signal);
   }
 
   .key-num {

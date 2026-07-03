@@ -61,7 +61,6 @@ export const OverlayId = {
   Skills:    "skills",
   Settings:  "settings",
   Scenario:  "scenario",
-  Station:   "station",
   ObjectActions: "object-actions",
   Carcass:   "carcass",
   Medicine:  "medicine",

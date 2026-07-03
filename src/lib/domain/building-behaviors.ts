@@ -43,6 +43,10 @@ export type BuildableBehavior =
       readonly buildableId: "crude_shelter";
       readonly coldResistanceBonus: number;
       readonly rainProtection: number;
+    }
+  | {
+      readonly kind: "trap";
+      readonly buildableId: "snap_trap" | "caltrops" | "bait_decoy";
     };
 
 export const BUILDABLE_BEHAVIORS: Readonly<Record<M3BuildableId, BuildableBehavior>> = {
@@ -88,6 +92,18 @@ export const BUILDABLE_BEHAVIORS: Readonly<Record<M3BuildableId, BuildableBehavi
     buildableId: "crude_shelter",
     coldResistanceBonus: 0.45,
     rainProtection: 0.5,
+  },
+  snap_trap: {
+    kind: "trap",
+    buildableId: "snap_trap",
+  },
+  caltrops: {
+    kind: "trap",
+    buildableId: "caltrops",
+  },
+  bait_decoy: {
+    kind: "trap",
+    buildableId: "bait_decoy",
   },
 };
 

@@ -199,4 +199,21 @@ export const foodRecipes: readonly RecipeInput[] = [
     process: "smoke",
     durationSec: 120,
   },
+  {
+    id: "smoked_meat_pemmican",
+    name: "Smoked Pemmican",
+    description: "You pound smoked meat, berries, and rendered fat together into dense trail rations.",
+    category: "food",
+    requiredContext: "hand",
+    discoverable: true,
+    discoveryText: "The mixture binds into dense, high-energy cakes.",
+    costs: [
+      { itemId: "smoked_meat", name: "smoked meat", required: 1, substitutes: [{ itemId: "cooked_meat", name: "cooked meat", required: 1 }, { itemId: "dried_meat", name: "dried meat", required: 1 }] },
+      { itemId: "berries", name: "berries", required: 2 },
+      { itemId: "rendered_fat", name: "rendered fat", required: 1 },
+    ],
+    output: { itemId: "smoked_meat_pemmican", qty: 1 },
+    process: "assemble",
+    durationSec: 10,
+  },
 ];

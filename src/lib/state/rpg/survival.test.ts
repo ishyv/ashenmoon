@@ -19,6 +19,12 @@ describe("survival hunger state ticking", () => {
     expect(gameState.survival.hunger).toBeCloseTo(100 - expectedDrain);
   });
 
+  it("scales drain by the decay multiplier (Vigilance)", () => {
+    tickHunger(60, { moving: false, laboring: false }, 0.5);
+    const expectedDrain = hungerConfig.baseDrainPerSec * 60 * 0.5;
+    expect(gameState.survival.hunger).toBeCloseTo(100 - expectedDrain);
+  });
+
   it("applies Starving status when hunger reaches 0", () => {
     setHunger(0);
     expect(gameState.survival.hunger).toBe(0);

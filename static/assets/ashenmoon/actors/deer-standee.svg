@@ -1,6 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="140" viewBox="0 0 160 140">
-  <ellipse cx="80" cy="124" rx="50" ry="9" fill="#070707" opacity=".45"/>
-  <path d="M24 86l22-35 50 3 29 26-10 31H43z" fill="#4b3524" stroke="#0a0806" stroke-width="7" stroke-linejoin="round"/>
-  <path d="M101 54l15-35M112 59l29-24M97 56L82 24" stroke="#a4845a" stroke-width="5" stroke-linecap="round"/>
-  <path d="M53 111l-4 19h17l4-19zM97 109l8 21h17l-8-24z" fill="#18110c"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <!-- Ground soft shadow -->
+  <ellipse cx="80" cy="150" rx="44" ry="8" fill="#070707" opacity="0.45"/>
+
+  <g id="deer-standee" stroke="#080706" stroke-linecap="round" stroke-linejoin="round" stroke-width="5">
+    
+    <!-- Left Back Leg (Background) -->
+    <path d="M50 100l-6 40h8l6-40z" fill="#302b27"/>
+    
+    <!-- Right Back Leg (Background) -->
+    <path d="M78 100l6 40h8l-6-40z" fill="#302b27"/>
+
+    <!-- Slender, Ribbed Body -->
+    <path d="M32 94c0-12 12-24 28-26s32 0 42 12l2 24H38z" fill="#524a43"/>
+    
+    <!-- Ribcage shadows -->
+    <line x1="52" y1="80" x2="52" y2="98" stroke="#332d29" stroke-width="3"/>
+    <line x1="60" y1="80" x2="60" y2="98" stroke="#332d29" stroke-width="3"/>
+    <line x1="68" y1="82" x2="68" y2="96" stroke="#332d29" stroke-width="3"/>
+
+    <!-- Slender Neck & Graceful but Grim Head -->
+    <path d="M84 80l16-44c2-4 8-6 12-4l8 8-14 36z" fill="#524a43"/>
+    <path d="M106 38l18 4c4 1 6 6 4 10l-12 8z" fill="#524a43"/> <!-- Head snout -->
+    <path d="M96 36l4-12 6 12z" fill="#3d3732"/> <!-- Ear -->
+
+    <!-- Branching, Thorny Antlers (Decaying Forest Motif) -->
+    <path d="M104 36c-2-8-8-20-22-26" fill="none" stroke="#251f1b" stroke-width="6"/> <!-- Left Antler Main -->
+    <path d="M96 28c-4-4-10-6-14-4" fill="none" stroke="#251f1b" stroke-width="4"/> <!-- Prong 1 -->
+    <path d="M92 20c-4-6-12-8-12-8" fill="none" stroke="#251f1b" stroke-width="4"/> <!-- Prong 2 -->
+
+    <path d="M110 34c2-10 12-24 6-30" fill="none" stroke="#251f1b" stroke-width="6"/> <!-- Right Antler Main -->
+    <path d="M112 24c4-4 12-2 16 0" fill="none" stroke="#251f1b" stroke-width="4"/> <!-- Prong 1 -->
+    <path d="M111 14c4-6 10-6 10-6" fill="none" stroke="#251f1b" stroke-width="4"/> <!-- Prong 2 -->
+
+    <!-- Pale White Eye -->
+    <circle cx="114" cy="42" r="2.5" fill="#f5f0e1"/>
+
+    <!-- Left Front Leg (Foreground) -->
+    <path d="M42 102l-10 38 4 6h8l8-44z" fill="#665d54"/>
+    <path d="M32 144c-1 2-2 4-2 6h10v-6z" fill="#302b27"/>
+
+    <!-- Right Front Leg (Foreground) -->
+    <path d="M84 102l10 38-4 6h8l-10-44z" fill="#665d54"/>
+    <path d="M94 144c1 2 2 4 2 6H86v-6z" fill="#302b27"/>
+
+  </g>
 </svg>

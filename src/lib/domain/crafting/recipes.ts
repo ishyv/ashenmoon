@@ -5,7 +5,7 @@
  *
  * Pure data + validation. No Svelte, no Pixi, no network.
  */
-import { ITEM_DEFINITIONS } from "$lib/domain/items";
+import { Category, ITEM_DEFINITIONS } from "$lib/domain/items";
 import { allRecipes } from "$lib/domain/definitions/recipes";
 import type { ValidItemId } from "$lib/domain/definitions/items";
 import type {
@@ -24,14 +24,32 @@ export type {
   RecipeCost,
 };
 
+/**
+ * Output item categories that default to quality-tier crafting. A recipe's
+ * `tiered` is derived from this unless explicitly set — so a new weapon or
+ * tool recipe automatically gets Phase 1's quality-tier + curse roll without
+ * anyone having to remember to flag it. Extend as new tiered categories are
+ * designed; a recipe can always override with an explicit `tiered` either
+ * direction (e.g. a simple utility tool that shouldn't feel like gear).
+ */
+const TIERED_CATEGORY_ALLOWLIST: ReadonlySet<Category> = new Set([Category.Weapon, Category.Tool]);
+
+function deriveTiered(recipe: RecipeInput, output: { itemId: ValidItemId; qty: number }): boolean {
+  if (recipe.tiered !== undefined) return recipe.tiered;
+  const outputDef = ITEM_DEFINITIONS[output.itemId];
+  return !!outputDef && TIERED_CATEGORY_ALLOWLIST.has(outputDef.category);
+}
+
 function withDefaults(recipe: RecipeInput): CraftRecipe {
+  const output = recipe.output ?? { itemId: recipe.id as ValidItemId, qty: 1 };
   return {
     ...recipe,
     category: recipe.category ?? "material_processing",
     requiredContext: recipe.requiredContext ?? (recipe.requiresCampfire ? "campfire" : "hand"),
     discoverable: recipe.discoverable ?? true,
     feedbackTags: recipe.feedbackTags ?? [],
-    output: recipe.output ?? { itemId: recipe.id as ValidItemId, qty: 1 },
+    output,
+    tiered: deriveTiered(recipe, output),
   };
 }
 
@@ -83,6 +101,14 @@ export function validateCraftRecipes(
     }
     if (!knownItemIds.has(recipe.output.itemId)) {
       problems.push(`recipe ${recipe.id} output references unknown item: ${recipe.output.itemId}`);
+    }
+
+    // A hand-craftable recipe is always instant — there's no attended minigame to play,
+    // so a tiered recipe left on "hand" can never reach Fable/Divine, permanently.
+    if (recipe.tiered && recipe.requiredContext === "hand") {
+      problems.push(
+        `recipe ${recipe.id} is tiered but requiredContext is "hand" — Fable/Divine are permanently unreachable; move it to a station or set tiered: false`,
+      );
     }
   }
 

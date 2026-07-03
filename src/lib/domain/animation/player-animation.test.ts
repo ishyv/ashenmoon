@@ -5,9 +5,11 @@ import { GATHERABLE_DEFINITIONS } from "$lib/domain/gathering/gatherables";
 import { StatusId } from "$lib/domain/systems/status-types";
 import {
   PLAYER_ANIMATION_CLIPS,
+  PLAYER_ANIMATION_PROFILE_CLIPS,
   PLAYER_ANIMATION_VARIANTS,
   animationEventsBetween,
   gatherTargetKindForDefinition,
+  playerAnimationProfileForWeaponAnimation,
   selectPlayerAnimation,
   type PlayerAnimationContext,
 } from "./player-animation";
@@ -45,6 +47,36 @@ describe("player animation definitions", () => {
       }
     }
   });
+
+  it("maps weapon animation profiles to first-class player animation profiles", () => {
+    expect(playerAnimationProfileForWeaponAnimation("quick_stab")).toBe("knife");
+    expect(playerAnimationProfileForWeaponAnimation("small_slash")).toBe("knife");
+    expect(playerAnimationProfileForWeaponAnimation("straight_thrust")).toBe("spear");
+    expect(playerAnimationProfileForWeaponAnimation("guarded_poke")).toBe("spear");
+    expect(playerAnimationProfileForWeaponAnimation("heavy_chop")).toBe("axe");
+    expect(playerAnimationProfileForWeaponAnimation("overhead_slam")).toBe("axe");
+    expect(playerAnimationProfileForWeaponAnimation("unknown_profile")).toBe("unarmed");
+  });
+
+  it("declares required combat clips for every player animation profile", () => {
+    expect(PLAYER_ANIMATION_PROFILE_CLIPS.unarmed).toMatchObject({
+      guard: "combat_guard_unarmed",
+      quick_attack: "combat_attack_unarmed",
+    });
+    expect(PLAYER_ANIMATION_PROFILE_CLIPS.knife).toMatchObject({
+      guard: "combat_guard_knife",
+      quick_attack: "combat_attack_knife",
+    });
+    expect(PLAYER_ANIMATION_PROFILE_CLIPS.spear).toMatchObject({
+      guard: "combat_guard_spear",
+      quick_attack: "combat_attack_spear",
+    });
+    expect(PLAYER_ANIMATION_PROFILE_CLIPS.axe).toMatchObject({
+      guard: "combat_guard_axe",
+      quick_attack: "combat_attack_axe",
+      heavy_attack: "combat_attack_axe_heavy",
+    });
+  });
 });
 
 describe("player animation priority conflicts", () => {
@@ -78,7 +110,33 @@ describe("player animation priority conflicts", () => {
       equippedToolKind: "axe",
     }));
 
-    expect(selected.clipId).toBe("combat_active");
+    expect(selected.clipId).toBe("combat_attack_axe");
+  });
+
+  it("selects weapon-specific combat clips instead of a generic active placeholder", () => {
+    expect(selectPlayerAnimation(movingContext({
+      action: "combat",
+      combatActive: true,
+      equippedToolKind: null,
+    })).clipId).toBe("combat_attack_unarmed");
+
+    expect(selectPlayerAnimation(movingContext({
+      action: "combat",
+      combatActive: true,
+      equippedToolKind: "knife",
+    })).clipId).toBe("combat_attack_knife");
+
+    expect(selectPlayerAnimation(movingContext({
+      action: "combat",
+      combatActive: true,
+      equippedToolKind: "spear",
+    })).clipId).toBe("combat_attack_spear");
+
+    expect(selectPlayerAnimation(movingContext({
+      action: "combat",
+      combatActive: true,
+      equippedToolKind: "axe",
+    })).clipId).toBe("combat_attack_axe");
   });
 
   it("keeps wetness as a modifier when encumbrance wins", () => {

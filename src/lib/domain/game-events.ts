@@ -93,4 +93,5 @@ export const StorageKeys = {
   audio: "ashenmoor_audio",
   panelPositions: "ashenmoor_panel_positions",
   itemSources: "ashenmoor_item_sources",
+  world: "ashenmoor_world",
 } as const;

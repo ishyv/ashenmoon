@@ -101,6 +101,8 @@ export const FIRST_CAMP_RELATIVE_LAYOUT = {
     { kind: "wolf_den",          label: "wolf den",       dx:  18, dy: -14 },
     { kind: "river_crossing",    label: "river crossing", dx:  9,  dy:  0 },
     { kind: "deer_grazing_area", label: "grazing ground", dx:  8,  dy:  8 },
+    { kind: "rabbit_burrow",     label: "rabbit burrow",  dx:  5,  dy:  9 },
+    { kind: "deer_bedding",      label: "deer bedding",   dx:  10, dy:  6 },
   ],
   campCandidates: [
     { dx: 4, dy: 5, radiusTiles: 3 },

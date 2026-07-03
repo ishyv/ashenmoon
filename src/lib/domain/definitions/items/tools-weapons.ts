@@ -253,4 +253,56 @@ export const toolWeaponItems = {
       visualAsset: { textureKey: "crudeTorch", layer: "over", anchorX: 0.3, anchorY: 0.7 }
     })
   ),
+  copper_lantern: Item({
+    id: itemId("copper_lantern"),
+    name: "Copper Lantern",
+    description: "A polished copper lantern fueled by rendered fat. Burns much cleaner and longer than a torch.",
+    rarity: Rarity.Rare,
+    category: Category.Tool,
+    icon: "🪔",
+    physical: { carryClass: "pack", weight: 1.2, stackLimit: 2 },
+  }).with(
+    Tool({ toolKind: "light", power: 2 }),
+    EquippableVisuals({
+      slots: ["weapon"],
+      handUsage: "one-handed",
+      visualAsset: { textureKey: "crudeTorch", layer: "over", anchorX: 0.3, anchorY: 0.7 }
+    })
+  ),
+  copper_spear: Item({
+    id: itemId("copper_spear"),
+    name: "Copper Spear",
+    description: "A copper-headed spear bound to a straight ash shaft. Reaches far and cuts clean.",
+    rarity: Rarity.Rare,
+    category: Category.Weapon,
+    icon: "🔱",
+    physical: { carryClass: "haul", weight: 2.4, stackLimit: 1 },
+    visual: { ground: { heightTiles: 1.05 }, equipped: { heightTiles: 1.45 } },
+  }).with(
+    Weapon({ weaponKind: "spear", damage: 18, damageType: "pierce", bleedChancePct: 15, weaponDefId: "weapon.wooden_spear" }),
+    ReachWeapon(1),
+    EquippableVisuals({
+      slots: ["weapon"],
+      handUsage: "two-handed",
+      visualAsset: { textureKey: "hardenedSpear", layer: "over", anchorX: 0.2, anchorY: 0.8 }
+    })
+  ),
+  bone_dagger: Item({
+    id: itemId("bone_dagger"),
+    name: "Bone Dagger",
+    description: "A predator fang bound to an antler handle. Fast, lightweight, and vicious.",
+    rarity: Rarity.Uncommon,
+    category: Category.Tool,
+    icon: "🗡️",
+    physical: { carryClass: "pocket", weight: 0.4, stackLimit: 1 },
+    visual: { ground: { heightTiles: 0.48 }, equipped: { heightTiles: 0.78 } },
+  }).with(
+    Tool({ toolKind: "cutting", power: 3 }),
+    Weapon({ weaponKind: "knife", damage: 14, damageType: "pierce", bleedChancePct: 20, weaponDefId: "weapon.crude_knife" }),
+    EquippableVisuals({
+      slots: ["weapon"],
+      handUsage: "one-handed",
+      visualAsset: { textureKey: "crudeKnife", layer: "over", anchorX: 0.3, anchorY: 0.7 }
+    })
+  ),
 };

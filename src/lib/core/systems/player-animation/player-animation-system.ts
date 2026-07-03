@@ -78,17 +78,16 @@ export function runPlayerAnimationSystem(input: PlayerAnimationSystemInput): Pla
   resource.currentClipId = selection.clipId;
   resource.selection = selection;
 
-  if (selection.clipId !== "combat_active") {
-    const frames = input.renderResources.actorFrames("player", selection.clipId);
-    if (input.sprite.textures !== frames) {
-      input.sprite.textures = frames as Texture[];
-      input.sprite.gotoAndPlay(0);
-    }
-    input.sprite.loop = clip.loop;
-    input.sprite.animationSpeed = Math.max(0.04, 0.12 * selection.speedMultiplier);
-    input.sprite.onComplete = () => {};
-    input.sprite.play();
+  // Bind the correct texture frames (procedurally driven)
+  const frames = input.renderResources.actorFrames("player", selection.clipId);
+  if (input.sprite.textures !== frames && frames.length > 0) {
+    input.sprite.textures = frames as Texture[];
+    input.sprite.gotoAndPlay(0);
   }
+  input.sprite.loop = clip.loop;
+  input.sprite.animationSpeed = Math.max(0.04, 0.12 * selection.speedMultiplier);
+  input.sprite.onComplete = () => {};
+  input.sprite.play();
 
   const durationSec = clip.loop ? 0.72 : 0.5;
   const currentTime = clip.loop
@@ -120,8 +119,8 @@ export function runPlayerAnimationSystem(input: PlayerAnimationSystemInput): Pla
 }
 
 export function legacyAnimStateForClip(clipId: PlayerAnimationClipId): AnimState {
-  if (clipId === "combat_active" || clipId === "combat_attack_spear") return "attack";
-  if (clipId === "combat_stance_spear") return "idle";
+  if (clipId.startsWith("combat_attack_")) return "attack";
+  if (clipId.startsWith("combat_guard_")) return "idle";
   if (clipId.startsWith("gather_")) return "gather";
   if (clipId === "run" || clipId === "strained_run" || clipId === "encumbered_run") return "run";
   if (clipId === "idle") return "idle";

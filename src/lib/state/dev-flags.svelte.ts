@@ -1,1 +1,5 @@
-export const devFlags = $state({ freeBuildingEnabled: false });
+export const devFlags = $state({
+  freeBuildingEnabled: false,
+  spectatorEnabled: false,
+});
+

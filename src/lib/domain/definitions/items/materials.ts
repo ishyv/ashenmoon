@@ -537,4 +537,13 @@ export const materialItems = {
     category: Category.Mineral,
     physical: { carryClass: "pack", weight: 0.1, stackLimit: 30 },
   }),
+  rendered_fat: Item({
+    id: itemId("rendered_fat"),
+    name: "Rendered Fat",
+    description: "Rendered animal fat, clean and greasy. Useful for fuel, medicine, and food preservation.",
+    rarity: Rarity.Common,
+    category: Category.Component,
+    icon: "🕯️",
+    physical: { carryClass: "pocket", weight: 0.1, stackLimit: 30 },
+  }),
 };

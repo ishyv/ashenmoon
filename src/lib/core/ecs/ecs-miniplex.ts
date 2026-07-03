@@ -101,6 +101,9 @@ export interface Entity {
     boarCombat?: BoarCombatRuntime;
     /** Wolf-specific pressure loop runtime. Domain owns commitment; core owns locomotion and hit application. */
     wolfCombat?: WolfCombatRuntime;
+    /** Trap slow state. */
+    slowTimerSec?: number;
+    slowMultiplier?: number;
   };
 
   /**
@@ -112,6 +115,89 @@ export interface Entity {
     state: CarcassState;
     ageSec: number;
     processedActions: CarcassProcessAction[];
+  };
+
+  /**
+   * Biological Needs Component
+   * Tracks internal parameters governing animal survival and behaviors.
+   */
+  needs?: {
+    hunger: number;
+    thirst: number;
+    energy: number;
+    ageSec: number;
+    lifeStage: "juvenile" | "adult" | "elder";
+    gestationTimerSec?: number | undefined;
+  };
+
+  /**
+   * Sensory/Perception Component
+   * Caches perceived objects in the vicinity, avoiding redundant distance calculations.
+   */
+  senses?: {
+    lastScanSec: number;
+    perceivedEntities: Array<{
+      id: string;
+      speciesId?: AnimalSpeciesId | undefined;
+      type: "threat" | "prey" | "mate" | "water" | "food" | "shelter";
+      x: number;
+      y: number;
+      distPx: number;
+    }>;
+  };
+
+  /**
+   * Animal Home / Nest Component
+   * Binds an animal to its birth den or territory origin.
+   */
+  home?: {
+    x: number;
+    y: number;
+    leashRadiusPx: number;
+    nestId?: string;
+  };
+
+  /**
+   * Nest / Den Landmark Component
+   * Placed on burrow/den landmark entities to act as spawning/sleeping anchors.
+   */
+  nest?: {
+    speciesId: AnimalSpeciesId;
+    capacity: number;
+    occupantIds: string[];
+    spawnCooldownSec: number;
+  };
+
+  /**
+   * Herd / Pack Coordination Component
+   * Synchronizes flock/pack movement vectors and target sharing.
+   */
+  pack?: {
+    packId: string;
+    isLeader: boolean;
+    leaderId?: string;
+    membersIds: string[];
+    sharedTargetId?: string;
+  };
+
+  /**
+   * Follower Component
+   * Placed on juveniles to keep them tethered to their parent/mother.
+   */
+  follower?: {
+    targetEntityId: string;
+    maxSeparationPx: number;
+  };
+
+  /**
+   * Wallowing Mud Coat Component
+   * Tracks protective armor or toxic status gained from mud-bathing.
+   */
+  mudCoat?: {
+    durationSec: number;
+    type: "mud" | "toxic_sludge" | "volcanic_ash";
+    armorBonus: number;
+    fireResistBonus: number;
   };
 
   // --- Combat components -----------------------------------------------------
@@ -192,6 +278,13 @@ export interface Entity {
   building?: {
     type: string;
     stage: number;
+  };
+
+  /** Trap definition + current state */
+  trap?: {
+    type: "snap" | "caltrops" | "decoy";
+    state: "set" | "sprung";
+    usesRemaining?: number;
   };
 
   /**

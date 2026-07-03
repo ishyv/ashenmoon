@@ -7,7 +7,9 @@
 import { type CraftRecipe, getRecipe, type CraftingContextId } from "./recipes";
 import type { RecipeCost } from "./recipe-types";
 import type { StationId } from "$lib/domain/stations";
-import type { RpgInventorySlot } from "$lib/domain/rpg-types";
+import type { RpgInventorySlot, RpgItemInstance } from "$lib/domain/rpg-types";
+import { rollCraftOutcome, type CraftAttendance } from "./tier-roll";
+import type { CraftOutcomeRoll } from "./tier-types";
 
 /** A stackable inventory slot. Equipment-style instance slots are ignored by crafting. */
 type StackSlot = { readonly qty: number };
@@ -21,6 +23,21 @@ export interface CraftContext {
   readonly isNearCampfire: boolean;
   readonly stationId?: StationId;
   readonly availableStations?: readonly StationId[];
+  /** Current Craftsmanship skill level; drives the quality-tier roll for `tiered` recipes. Defaults to 1 (untrained). */
+  readonly craftsmanshipLevel?: number;
+  /** Injected RNG for the tier/curse roll, defaulting to Math.random. Tests supply a deterministic one. */
+  readonly rng?: () => number;
+  /** Injected clock for instance id generation, defaulting to Date.now. */
+  readonly now?: () => number;
+  /**
+   * Whether the player was attending an optional station-crafting minigame
+   * (see craft-process-runtime.ts) and how well they played it. Omitted
+   * entirely for hand-crafts and unattended station crafts — that path
+   * reproduces the original unattended tier-roll odds exactly, never worse.
+   */
+  readonly attended?: boolean;
+  readonly played?: boolean;
+  readonly minigamePerformance?: number;
 }
 
 export type CraftFailureReason =
@@ -119,10 +136,41 @@ export function canCraft(slots: CraftSlots, recipeId: string, ctx: CraftContext)
   return checkCraft(slots, recipeId, ctx).ok;
 }
 
+/** Builds one rolled instance of a tiered craft's output from a single {@link CraftOutcomeRoll}. */
+function buildTierInstance(
+  itemId: string,
+  outcome: CraftOutcomeRoll,
+  now: () => number,
+  rng: () => number,
+): RpgItemInstance {
+  const instance: RpgItemInstance = {
+    instanceId: `${itemId}_${outcome.tier}_${now()}_${Math.floor(rng() * 1_000_000)}`,
+    durability: 100,
+    tier: outcome.tier,
+  };
+  if (outcome.possession.cursed) {
+    instance.cursed = true;
+    instance.curseLevel = outcome.possession.curseLevel;
+    instance.curseEffectIds = outcome.possession.curseEffectIds;
+  }
+  if (outcome.tier === "divine" && outcome.divineOutcome) {
+    instance.divineId = outcome.divineOutcome.id;
+    instance.rolledStats = outcome.divineOutcome.statOverrides;
+  } else if (outcome.rolledStats) {
+    instance.rolledStats = outcome.rolledStats;
+  }
+  return instance;
+}
+
 /**
  * Resolve a craft into a new slot map: deduct costs, add the output. Pure, the
  * input `slots` is never mutated. Returns the same structured failure as
  * {@link checkCraft} when the craft is not possible.
+ *
+ * `tiered` recipes roll a quality tier (and possibly a curse) per output unit
+ * via {@link rollCraftOutcome} and land as `instances`, never a flat `qty`
+ * stack. Non-tiered recipes are unaffected — same flat-stack behavior as
+ * before this feature existed.
  */
 export function resolveCraft(
   slots: CraftSlots,
@@ -140,6 +188,24 @@ export function resolveCraft(
     const remaining = resolved.have - resolved.required;
     if (remaining <= 0) delete next[resolved.itemId];
     else next[resolved.itemId] = { qty: remaining };
+  }
+
+  if (recipe.tiered) {
+    const rng = ctx.rng ?? Math.random;
+    const now = ctx.now ?? Date.now;
+    const attendance: CraftAttendance | undefined =
+      ctx.attended !== undefined
+        ? { attended: ctx.attended, played: ctx.played ?? false, minigamePerformance: ctx.minigamePerformance ?? 0 }
+        : undefined;
+    const existingSlot = next[recipe.output.itemId];
+    const existingInstances = existingSlot && "instances" in existingSlot ? existingSlot.instances : [];
+    const rolled: RpgItemInstance[] = [];
+    for (let i = 0; i < recipe.output.qty; i++) {
+      const outcome = rollCraftOutcome(recipe, next, ctx.craftsmanshipLevel ?? 1, rng, attendance);
+      rolled.push(buildTierInstance(recipe.output.itemId, outcome, now, rng));
+    }
+    next[recipe.output.itemId] = { instances: [...existingInstances, ...rolled] };
+    return { ok: true, slots: next, recipe };
   }
 
   const currentOutput = getMaterialQty(next, recipe.output.itemId);

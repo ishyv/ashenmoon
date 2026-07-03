@@ -85,6 +85,16 @@ export type QueuedGameEvent =
       readonly qty: number;
     }
   | {
+      /**
+       * The player consumed one unit of an item (drink/eat/apply). Routed by the
+       * feedback router to grant Vigilance skill XP; carries no VFX itself, since
+       * the award needs the engine's VFX context supplied at flush time.
+       */
+      readonly type: "item_consumed";
+      readonly actorId: string;
+      readonly itemId: string;
+    }
+  | {
       readonly type: "craft_failed";
       readonly actorId: string;
       readonly recipeId?: string;

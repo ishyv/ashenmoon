@@ -1,15 +1,19 @@
 import { BUILDING_SPECS, getBuildingSpec } from "$lib/domain/building-specs";
 import { chooseFuelOption, fuelInventoryFromSlots } from "$lib/domain/camp/fuel";
 import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { CRAFT_TIER_ORDER } from "$lib/domain/crafting/tier-types";
 import { HOTBAR_SIZE } from "$lib/domain/hotbar-types";
 import { StorageKeys } from "$lib/domain/game-events";
 import { getGatherableBySyncLocation } from "$lib/domain/gathering/gatherables";
 import { ITEM_DEFINITIONS, traitOf } from "$lib/domain/items";
 import type {
+  CraftTier,
+  RpgDurableEquipment,
   RpgEnvironmentTickResult,
   RpgEquipmentSlot,
   RpgGatherResult,
   RpgInventorySlot,
+  RpgItemInstance,
   RpgPlayerState,
   RpgReactionTriggered,
   RpgWorldEntity,
@@ -50,8 +54,80 @@ function isKnownBuildable(type: string): boolean {
   return Object.prototype.hasOwnProperty.call(BUILDING_SPECS, type);
 }
 
+function tierRank(tier: string | undefined): number {
+  return tier ? CRAFT_TIER_ORDER.indexOf(tier as (typeof CRAFT_TIER_ORDER)[number]) : -1;
+}
+
+/**
+ * Pulls one equippable unit of `itemId` out of the inventory to equip: the
+ * highest-tier instance when the slot is instance-tracked, or a fabricated
+ * standalone instance (with a qty deduction) when it's a flat, untiered stack.
+ * Mirrors the reducer's identical helper — see rpg-reducer.ts for rationale.
+ */
+function takeBestInstance(
+  slots: RpgPlayerState["inventory"]["slots"],
+  itemId: string,
+  now: () => number,
+): RpgDurableEquipment {
+  const slot = slots[itemId];
+  if (slot && "instances" in slot && slot.instances.length > 0) {
+    let bestIndex = 0;
+    for (let i = 1; i < slot.instances.length; i++) {
+      if (tierRank(slot.instances[i]?.tier) > tierRank(slot.instances[bestIndex]?.tier)) bestIndex = i;
+    }
+    const chosen = slot.instances[bestIndex]!;
+    const remaining = slot.instances.filter((_, i) => i !== bestIndex);
+    if (remaining.length > 0) slots[itemId] = { instances: remaining };
+    else delete slots[itemId];
+    return { ...chosen, itemId };
+  }
+  removeQty(slots, itemId, 1);
+  return { instanceId: `standalone_${itemId}_${now()}`, itemId, durability: 100 };
+}
+
+/** The inverse of {@link takeBestInstance}: returns a full equipped instance to the inventory's instances array. */
+function returnEquipmentToInventory(slots: RpgPlayerState["inventory"]["slots"], equipment: RpgDurableEquipment): void {
+  const { itemId, ...instanceData } = equipment;
+  const slot = slots[itemId];
+  const existingInstances = slot && "instances" in slot ? slot.instances : [];
+  slots[itemId] = { instances: [...existingInstances, instanceData] };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+const CRAFT_TIERS: readonly string[] = CRAFT_TIER_ORDER;
+
+function isRecordArray(value: unknown): value is Record<string, unknown>[] {
+  return Array.isArray(value) && value.every(isRecord);
+}
+
+/** Normalizes the optional tier/curse fields carried by a saved instance, dropping anything malformed. */
+function normalizeInstanceTierData(instance: Record<string, unknown>): Partial<RpgItemInstance> {
+  const data: Partial<RpgItemInstance> = {};
+  if (typeof instance.tier === "string" && CRAFT_TIERS.includes(instance.tier)) {
+    data.tier = instance.tier as CraftTier;
+  }
+  if (isRecord(instance.rolledStats)) {
+    const rolledStats: Record<string, number> = {};
+    for (const [stat, val] of Object.entries(instance.rolledStats)) {
+      if (typeof val === "number" && Number.isFinite(val)) rolledStats[stat] = val;
+    }
+    if (Object.keys(rolledStats).length > 0) data.rolledStats = rolledStats;
+  }
+  if (instance.cursed === true) data.cursed = true;
+  if (typeof instance.curseLevel === "number" && Number.isFinite(instance.curseLevel)) {
+    data.curseLevel = instance.curseLevel;
+  }
+  if (Array.isArray(instance.curseEffectIds)) {
+    const ids = instance.curseEffectIds.filter((id): id is string => typeof id === "string");
+    if (ids.length > 0) data.curseEffectIds = ids;
+  }
+  if (typeof instance.divineId === "string" && instance.divineId.length > 0) {
+    data.divineId = instance.divineId;
+  }
+  return data;
 }
 
 function normalizeSlots(value: unknown): RpgPlayerState["inventory"]["slots"] {
@@ -65,12 +141,12 @@ function normalizeSlots(value: unknown): RpgPlayerState["inventory"]["slots"] {
       continue;
     }
     const instances = slot.instances;
-    if (Array.isArray(instances)) {
+    if (isRecordArray(instances)) {
       const normalizedInstances = instances
-        .filter(isRecord)
         .map((instance) => ({
           instanceId: typeof instance.instanceId === "string" ? instance.instanceId : "",
           durability: typeof instance.durability === "number" ? instance.durability : 100,
+          ...normalizeInstanceTierData(instance),
         }))
         .filter((instance) => instance.instanceId.length > 0);
       if (normalizedInstances.length > 0) {
@@ -118,6 +194,7 @@ function normalizeWeapon(value: unknown): RpgPlayerState["profile"]["loadout"]["
     instanceId: typeof value.instanceId === "string" ? value.instanceId : `repaired_${value.itemId}`,
     itemId: value.itemId,
     durability: typeof value.durability === "number" && Number.isFinite(value.durability) ? value.durability : 100,
+    ...normalizeInstanceTierData(value),
   };
 }
 
@@ -129,6 +206,7 @@ function normalizeEquipmentSlot(value: unknown): RpgEquipmentSlot {
     instanceId: typeof value.instanceId === "string" ? value.instanceId : `repaired_${value.itemId}`,
     itemId: value.itemId,
     durability: typeof value.durability === "number" && Number.isFinite(value.durability) ? value.durability : 100,
+    ...normalizeInstanceTierData(value),
   };
 }
 
@@ -367,8 +445,13 @@ function gather(action: "mine" | "forest", locationId: string): GatherSync {
 
 function equipTool(itemId: string | null): RpgPlayerState {
   return mutateAndSave((state) => {
+    const currentWeapon = state.profile.loadout.weapon;
+    if (currentWeapon && typeof currentWeapon === "object") {
+      returnEquipmentToInventory(state.inventory.slots, currentWeapon);
+    }
+    state.profile.loadout.weapon = null;
+
     if (!itemId) {
-      state.profile.loadout.weapon = null;
       return;
     }
     const slot = state.inventory.slots[itemId];
@@ -376,11 +459,7 @@ function equipTool(itemId: string | null): RpgPlayerState {
     if (!exists) {
       throw new Error("Item not in inventory");
     }
-    state.profile.loadout.weapon = {
-      instanceId: `standalone_${itemId}_${Date.now()}`,
-      itemId,
-      durability: 100,
-    };
+    state.profile.loadout.weapon = takeBestInstance(state.inventory.slots, itemId, Date.now);
   });
 }
 
@@ -399,8 +478,11 @@ function equipGear(
     // 1. Unequip current gear if present
     const current = state.profile.loadout[slot];
     if (current) {
-      const currentItemId = typeof current === "string" ? current : current.itemId;
-      addQty(state.inventory.slots, currentItemId, 1);
+      if (typeof current === "object") {
+        returnEquipmentToInventory(state.inventory.slots, current);
+      } else {
+        addQty(state.inventory.slots, current, 1);
+      }
       state.profile.loadout[slot] = null;
     }
 
@@ -425,15 +507,7 @@ function equipGear(
       throw new Error(`Item ${itemId} cannot be equipped in slot ${slot}`);
     }
 
-    // Deduct from inventory
-    removeQty(state.inventory.slots, itemId, 1);
-
-    // Set loadout
-    state.profile.loadout[slot] = {
-      instanceId: `gear_${itemId}_${Date.now()}`,
-      itemId,
-      durability: 100,
-    };
+    state.profile.loadout[slot] = takeBestInstance(state.inventory.slots, itemId, Date.now);
   });
 }
 
@@ -504,7 +578,8 @@ function destroyBuilding(buildingId: string): RpgPlayerState {
 
 function craft(recipeId: string, ctx: CraftContext): RpgPlayerState {
   return mutateAndSave((state) => {
-    const result = resolveCraft(state.inventory.slots, recipeId, ctx);
+    const mergedCtx: CraftContext = { ...ctx, craftsmanshipLevel: state.skills.craftsmanship?.level ?? 1 };
+    const result = resolveCraft(state.inventory.slots, recipeId, mergedCtx);
     if (!result.ok) {
       throw new Error(result.reason);
     }

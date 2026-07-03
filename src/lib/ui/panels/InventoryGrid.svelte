@@ -18,6 +18,7 @@ import {
   type InventoryItemActionView,
 } from "$lib/domain/inventory-item-action";
 import type { RpgInventorySlot } from "$lib/domain/rpg-types";
+import { CRAFT_TIER_ORDER } from "$lib/domain/crafting/tier-types";
 import { canConsume, consumeItem, getConsumeVerb } from "$lib/state/rpg/consume-actions";
 import ItemGrid from "./inventory/ItemGrid.svelte";
 import ItemInspectPanel from "./inventory/ItemInspectPanel.svelte";
@@ -114,6 +115,21 @@ function getMaterialQty(itemId: string): number {
 
 function slotQty(slot: RpgInventorySlot): number {
   return "qty" in slot ? slot.qty : slot.instances.length;
+}
+
+/** The highest-tier instance's tier/curse state for display, or nothing for a flat qty stack. */
+function slotTierView(slot: RpgInventorySlot): Pick<InventoryItemView, "tier" | "cursed" | "curseLevel"> {
+  if ("qty" in slot || slot.instances.length === 0) return {};
+  let best = slot.instances[0]!;
+  for (const instance of slot.instances) {
+    const rank = instance.tier ? CRAFT_TIER_ORDER.indexOf(instance.tier) : -1;
+    const bestRank = best.tier ? CRAFT_TIER_ORDER.indexOf(best.tier) : -1;
+    if (rank > bestRank) best = instance;
+  }
+  return {
+    ...(best.tier ? { tier: best.tier } : {}),
+    ...(best.cursed ? { cursed: true, curseLevel: best.curseLevel ?? 1 } : {}),
+  };
 }
 
 function gearSlotForItem(itemId: string): GearLoadoutSlot | null {
@@ -247,7 +263,7 @@ function isEquipped(itemId: string): boolean {
 
 const itemsList = $derived<InventoryItemView[]>(
   Object.entries((gameState.rpg.inventory?.slots ?? {}) as Record<string, RpgInventorySlot>)
-    .map(([itemId, slot]) => ({ itemId, qty: slotQty(slot) }))
+    .map(([itemId, slot]) => ({ itemId, qty: slotQty(slot), ...slotTierView(slot) }))
     .filter((item) => item.qty > 0),
 );
 
@@ -296,6 +312,18 @@ function canBuild(recipe: BuildRecipeView): boolean {
 
 async function craftItem(recipe: CraftRecipe): Promise<void> {
   if (!canCraft(recipe)) return;
+
+  // Tiered, station-gated, timed recipes become a background craft process instead of
+  // an instant one. The minigame it can unlock is drawn in world-space Pixi Graphics
+  // tied to the engine tick loop, which can't render under this DOM panel — so starting
+  // one closes the panel immediately, mirroring how startBuildingPlacement already does.
+  if (recipe.tiered && recipe.requiredContext !== "hand" && recipe.durationSec) {
+    if (engine?.startCraftProcess?.(recipe.id)) {
+      onClose();
+    }
+    return;
+  }
+
   try {
     const result = await dispatchRpgCommand({ type: "craft", recipeId: recipe.id, context: {
       isNearCampfire: engine?.isNearCampfire() ?? false,
@@ -457,6 +485,17 @@ async function studyBlueprint(itemId: string): Promise<void> {
     --inv-radius-sm: 4px;
     --inv-space: 1rem;
     --inv-space-lg: 1.1rem;
+
+    /* Crafting quality tiers, worst to best. Sloppy/robust stay near-invisible (nothing
+       special); pristine+ ramp up accent intensity; fable breaks to the signal hue;
+       divine gets a static double-ring rather than motion (see motion budget law). */
+    --inv-tier-sloppy: var(--inv-border-muted);
+    --inv-tier-robust: color-mix(in srgb, var(--color-text, white) 30%, transparent);
+    --inv-tier-pristine: color-mix(in srgb, var(--color-accent, wheat) 55%, transparent);
+    --inv-tier-masterwork: var(--color-accent, wheat);
+    --inv-tier-fable: var(--color-signal, teal);
+    --inv-tier-divine: var(--color-accent, wheat);
+    --inv-cursed-tell: color-mix(in srgb, var(--color-danger, tomato) 70%, transparent);
 
     position: fixed;
     top: 5rem;

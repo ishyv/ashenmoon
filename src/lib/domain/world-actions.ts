@@ -178,4 +178,6 @@ export function actionsForPlacedStructure(input: {
     case "shelter":
       return [];
   }
+
+  return [];
 }

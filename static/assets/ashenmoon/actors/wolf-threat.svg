@@ -1,10 +1,56 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="180" height="150" viewBox="0 0 180 150">
-  <ellipse cx="93" cy="132" rx="62" ry="10" fill="#070707" opacity=".58"/>
-  <path d="M18 95l24-42 32 14 31-38 48 26 12 45-24 28H55z" fill="#151918" stroke="#080909" stroke-width="8" stroke-linejoin="round"/>
-  <path d="M38 92l16-27 24 12 29-31 34 20 9 30-18 20H60z" fill="#303932"/>
-  <path d="M101 47l13 33 32-12z" fill="#5e6658"/>
-  <path d="M42 54l12-26 13 34zM126 56l23-21 4 31z" fill="#161918" stroke="#080909" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M50 90h89" stroke="#0b0c0b" stroke-width="5" opacity=".45"/>
-  <circle cx="129" cy="75" r="4" fill="#d9b36b"/>
-  <path d="M132 90l28 6-26 8z" fill="#d7c4a4"/>
+  <!-- Ground soft shadow -->
+  <ellipse cx="90" cy="138" rx="66" ry="11" fill="#050505" opacity="0.65"/>
+  
+  <g id="wolf-threat" stroke="#080706" stroke-linecap="round" stroke-linejoin="round" stroke-width="5">
+    
+    <!-- Left Back Leg (Background) -->
+    <path d="M52 90l-12 36-8 10h12l10-42z" fill="#121615"/>
+    
+    <!-- Right Back Leg (Background) -->
+    <path d="M120 90l8 36 6 10h-14l-8-42z" fill="#121615"/>
+
+    <!-- Main Jagged Body & Matted Fur -->
+    <path d="M22 102c4-20 18-42 34-48 10-4 28-2 38-2s20-8 32-16c8-5 18-10 28-8l12 18-4 18-12 10-18 8-46 22H32z" fill="#1b201f"/>
+    
+    <!-- Fur Highlights & Ridges (Spines) -->
+    <path d="M56 50c12 2 34 6 42 12s22 4 30 16l-8 8c-10-8-22-12-32-14s-26-8-32-22z" fill="#2d3331"/>
+    
+    <!-- Matted spikes along the back -->
+    <path d="M28 92l-8-6 12-4-2-8 10 2-4-8 14 6" fill="#1b201f"/>
+    <path d="M48 64l-6-10 12 2-2-12 14 8" fill="#1b201f"/>
+    <path d="M82 50L78 38l12 6-2-10 10 8" fill="#1b201f"/>
+
+    <!-- Menacing Head & Drooping Neck (Decayed Grandeur) -->
+    <path d="M110 40c8-8 18-12 28-12 8 0 12 6 14 12v12l-12 16-24-4z" fill="#1b201f"/>
+    <!-- Jagged Jaws (Snout & Snarl) -->
+    <path d="M136 50l26-4c4 0 6 4 4 8l-22 14-8-18z" fill="#1b201f"/> <!-- Upper Jaw -->
+    <path d="M134 58l18 8c3 1 2 5-1 5l-17-4z" fill="#121615"/> <!-- Lower Jaw -->
+    <!-- Fangs (Bone White) -->
+    <polygon points="152 50, 154 56, 150 54" fill="#d9ceb6"/>
+    <polygon points="156 49, 158 53, 155 52" fill="#d9ceb6"/>
+    <polygon points="144 60, 146 64, 143 62" fill="#d9ceb6"/>
+
+    <!-- Tattered Ears (Pointed and scarred) -->
+    <path d="M118 36l2-20 8 16z" fill="#121615"/>
+    <path d="M128 34l8-16 2 18z" fill="#121615"/>
+    <!-- Torn ear cut -->
+    <polygon points="120 24, 122 28, 119 27" fill="#080706" stroke="none"/>
+
+    <!-- Ribcage Shadows (Emaciated realism) -->
+    <path d="M54 78c3 10 12 18 12 22M68 76c3 10 10 16 10 20M82 74c2 8 8 14 8 18" fill="none" stroke="#0f1211" stroke-width="4"/>
+
+    <!-- Left Front Leg (Foreground) -->
+    <path d="M42 96l-18 38 4 10h16l14-42z" fill="#232928"/>
+    <path d="M26 140c-2 2-4 4-4 6h14v-6z" fill="#121615"/>
+
+    <!-- Right Front Leg (Foreground) -->
+    <path d="M102 96l18 38-4 10H100l-14-42z" fill="#232928"/>
+    <path d="M118 140c2 2 4 4 4 6H108v-6z" fill="#121615"/>
+
+    <!-- Glowing Ashen Eyes (Crimson Ember) -->
+    <circle cx="143" cy="42" r="7" fill="#ff3333" opacity="0.3" stroke="none"/>
+    <circle cx="143" cy="42" r="3.5" fill="#ff6666" stroke="none"/>
+
+  </g>
 </svg>

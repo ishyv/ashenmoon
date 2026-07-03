@@ -128,7 +128,9 @@ describe("RPG reducer", () => {
     });
 
     expect(unequipped.playerState.profile.loadout.chest).toBeNull();
-    expect(unequipped.playerState.inventory.slots.hide_cloak).toEqual({ qty: 1 });
+    // Unequipping now returns the full instance (not a flat qty), preserving any tier/curse data it carries.
+    const returnedSlot = unequipped.playerState.inventory.slots.hide_cloak;
+    expect(returnedSlot && "instances" in returnedSlot ? returnedSlot.instances.length : 0).toBe(1);
   });
 
   it("handles swapping equipped gear correctly", () => {
@@ -152,7 +154,8 @@ describe("RPG reducer", () => {
 
     const chestSlot = step2.playerState.profile.loadout.chest;
     expect(chestSlot && typeof chestSlot === "object" ? chestSlot.itemId : null).toBe("fur_lined_wrap");
-    expect(step2.playerState.inventory.slots.hide_cloak).toEqual({ qty: 1 });
+    const returnedSlot = step2.playerState.inventory.slots.hide_cloak;
+    expect(returnedSlot && "instances" in returnedSlot ? returnedSlot.instances.length : 0).toBe(1);
     expect(step2.playerState.inventory.slots.fur_lined_wrap).toBeUndefined();
   });
 
@@ -216,7 +219,8 @@ describe("RPG reducer", () => {
     step = reduceRpgCommand(step.playerState, { type: "equipTool", itemId: "mock_two_handed_pick" });
     expect(getSlotItemId(step.playerState.profile.loadout.weapon)).toBe("mock_two_handed_pick");
     expect(step.playerState.profile.loadout.shield).toBeNull();
-    expect(step.playerState.inventory.slots.mock_shield).toEqual({ qty: 1 });
+    const returnedShieldSlot = step.playerState.inventory.slots.mock_shield;
+    expect(returnedShieldSlot && "instances" in returnedShieldSlot ? returnedShieldSlot.instances.length : 0).toBe(1);
 
     // 3. Equip shield back -> should unequip weapon
     step = reduceRpgCommand(step.playerState, { type: "equipGear", itemId: "mock_shield", slot: "shield" });
@@ -265,7 +269,8 @@ describe("RPG reducer", () => {
     step = reduceRpgCommand(step.playerState, { type: "equipGear", itemId: "mock_robe", slot: "chest" });
     expect(getSlotItemId(step.playerState.profile.loadout.chest)).toBe("mock_robe");
     expect(step.playerState.profile.loadout.pants).toBeNull();
-    expect(step.playerState.inventory.slots.mock_pants).toEqual({ qty: 1 });
+    const returnedPantsSlot = step.playerState.inventory.slots.mock_pants;
+    expect(returnedPantsSlot && "instances" in returnedPantsSlot ? returnedPantsSlot.instances.length : 0).toBe(1);
 
     // 3. Try to equip pants while robe is active -> should fail because pants slot is covered by robe
     expect(() =>

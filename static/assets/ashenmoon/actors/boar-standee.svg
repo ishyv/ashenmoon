@@ -1,7 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120">
-  <ellipse cx="80" cy="105" rx="52" ry="9" fill="#070707" opacity=".48"/>
-  <path d="M19 72l22-35 62-7 38 29-9 32H43z" fill="#30231c" stroke="#090706" stroke-width="7" stroke-linejoin="round"/>
-  <path d="M42 49l58-6 28 20-9 17H50z" fill="#5a4436"/>
-  <path d="M122 70l24-4-21 14z" fill="#d6c5a5"/>
-  <path d="M50 91l-4 20h18l4-20zM96 88l8 23h18l-8-25z" fill="#17110d"/>
+  <!-- Ground soft shadow -->
+  <ellipse cx="80" cy="110" rx="58" ry="9" fill="#070707" opacity="0.55"/>
+
+  <g id="boar-standee" stroke="#080706" stroke-linecap="round" stroke-linejoin="round" stroke-width="5">
+    
+    <!-- Left Back Leg (Background) -->
+    <path d="M46 80l-6 26h12l4-26z" fill="#1b1410"/>
+    
+    <!-- Right Back Leg (Background) -->
+    <path d="M88 80l8 26h12l-6-26z" fill="#1b1410"/>
+
+    <!-- Bulky, Arching Torso & Bristly Hide -->
+    <path d="M18 76c4-22 22-38 48-42s34-2 44 14l26 12 10 22-12 18H36z" fill="#3a2b22"/>
+    
+    <!-- Bristles along the spine -->
+    <path d="M22 66L14 58l12 2-2-10 12 6M44 40L38 28l12 6L46 20l14 14M76 34L72 22l12 6-2-10 10 12" fill="#3a2b22"/>
+    
+    <!-- Dirt & Mud Overlays (Gritty detailing) -->
+    <path d="M38 66c10 8 36 6 52 0l4 18c-8 6-44 8-56-18z" fill="#231b15" opacity="0.6"/>
+
+    <!-- Massive Head & Snout -->
+    <path d="M110 52c10 0 18 10 24 16v18c-6 4-18 4-24-4l-8-22z" fill="#3a2b22"/>
+    <path d="M128 72h10v8h-10z" fill="#1e1510"/> <!-- Snout end -->
+
+    <!-- Curving Bone Tusks -->
+    <path d="M128 78c6-2 16-16 16-16l-8-4c-2 6-6 16-12 18l4 2z" fill="#e8dfcb"/> <!-- Main Upper Tusk -->
+    <path d="M124 81c4 0 10-6 10-6l-6-2c-2 2-4 6-6 6z" fill="#d9ceb4"/> <!-- Smaller Lower Tusk -->
+
+    <!-- Small Glinting Red Eye -->
+    <circle cx="112" cy="58" r="2.5" fill="#ff4444"/>
+
+    <!-- Left Front Leg (Foreground) -->
+    <path d="M36 82l-8 26 4 6h16l6-32z" fill="#4d3b2f"/>
+    <path d="M28 108c-2 2-4 4-4 6h14v-6z" fill="#1b1410"/>
+
+    <!-- Right Front Leg (Foreground) -->
+    <path d="M96 82l10 26-4 6h16l-10-32z" fill="#4d3b2f"/>
+    <path d="M106 108c2 2 4 4 4 6H96v-6z" fill="#1b1410"/>
+
+  </g>
 </svg>

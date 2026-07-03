@@ -37,6 +37,9 @@ export const M3_BUILDABLE_IDS = [
   "storage_pile",
   "marker_sign",
   "crude_shelter",
+  "snap_trap",
+  "caltrops",
+  "bait_decoy",
 ] as const;
 
 export type M3BuildableId = (typeof M3_BUILDABLE_IDS)[number];
@@ -176,6 +179,27 @@ export const BUILDING_SPECS: Record<string, BuildingSpec> = {
     footprint: { w: 1, h: 1 },
     sprite: { w: 1, h: 1 },
     cost: { dried_hide: 1, green_leaves: 8, grass_cord: 6, moss: 4 },
+  },
+  snap_trap: {
+    displayName: "snap trap",
+    description: "a spring-loaded metal jaw trap that snares and wounds.",
+    footprint: { w: 1, h: 1 },
+    sprite: { w: 1, h: 1 },
+    cost: { stick: 4, grass_cord: 2, small_bone: 2 },
+  },
+  caltrops: {
+    displayName: "caltrops",
+    description: "jagged spikes scattered on the ground to slow and bleed enemies.",
+    footprint: { w: 1, h: 1 },
+    sprite: { w: 1, h: 1 },
+    cost: { flint_shard: 2, stick: 2, grass_cord: 1 },
+  },
+  bait_decoy: {
+    displayName: "bait decoy",
+    description: "fresh raw meat bound to a stick to lure hungry predators.",
+    footprint: { w: 1, h: 1 },
+    sprite: { w: 1, h: 1 },
+    cost: { raw_meat: 1, stick: 2, grass_cord: 1 },
   },
 };
 

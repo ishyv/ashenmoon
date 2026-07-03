@@ -68,7 +68,7 @@ describe("rpg controller", () => {
     const result = await dispatchRpgCommand({
       type: "craft",
       recipeId: "flint_axe",
-      context: { isNearCampfire: false },
+      context: { isNearCampfire: false, stationId: "primitive_work_surface" },
     });
 
     expect(result.ok).toBe(true);
@@ -93,7 +93,7 @@ describe("rpg controller", () => {
     const result = await dispatchRpgCommand({
       type: "craft",
       recipeId: "flint_axe",
-      context: { isNearCampfire: false },
+      context: { isNearCampfire: false, stationId: "primitive_work_surface" },
     });
 
     expect(result.ok).toBe(false);

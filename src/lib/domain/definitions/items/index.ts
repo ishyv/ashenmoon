@@ -6,6 +6,7 @@ import { toolWeaponItems } from "./tools-weapons";
 import { clothingItems } from "./clothing";
 import { structureItems } from "./structures";
 import { blueprintItems } from "./blueprints";
+import { trapItems } from "./traps";
 
 export const allItemDefinitions = {
   ...materialItems,
@@ -15,6 +16,7 @@ export const allItemDefinitions = {
   ...clothingItems,
   ...structureItems,
   ...blueprintItems,
+  ...trapItems,
 } satisfies Record<string, ItemDefinition>;
 
 export type ValidItemId = keyof typeof allItemDefinitions;

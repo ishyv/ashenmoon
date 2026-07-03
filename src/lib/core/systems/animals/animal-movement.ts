@@ -1,4 +1,5 @@
 import type { Entity } from "$lib/core/ecs/ecs-miniplex";
+import type { World } from "miniplex";
 import { ANIMAL_DEFINITIONS } from "$lib/domain/animals/animal-behavior";
 import { collidesWithSolid } from "$lib/core/systems/movement/movement";
 import type { MapResource } from "$lib/core/systems/map/map";
@@ -30,7 +31,12 @@ export function moveAnimalToward(
     entity.animal.facingX = dx < 0 ? -1 : 1;
   }
 
-  const step = speed * dt;
+  let finalSpeed = speed;
+  if (entity.animal?.slowTimerSec && entity.animal.slowTimerSec > 0) {
+    finalSpeed *= (entity.animal.slowMultiplier ?? 1.0);
+  }
+
+  const step = finalSpeed * dt;
   const cx = pos.x + TILE / 2;
   const cy = pos.y + ANIMAL_ECOLOGY_CONFIG.bodyCenterYOffsetPx;
   const mx = dx * step;
@@ -95,4 +101,33 @@ export function updateWanderOrGraze(
   if (target && Math.hypot(pos.x - target.x, pos.y - target.y) > TILE * 0.4) {
     moveAnimalToward(entity, map, target.x, target.y, def.moveSpeed * 0.45, dt);
   }
+}
+
+/**
+ * Steers follower kits toward their mother if they exceed max separation range.
+ */
+export function updateFollowerSteering(
+  entity: Entity,
+  ecsWorld: World<Entity>,
+  map: MapResource,
+  dt: number,
+): boolean {
+  if (!entity.follower || !entity.position || !entity.animal) return false;
+  const targetId = entity.follower.targetEntityId;
+  const targetMother = ecsWorld.entities.find((e) => e.id === targetId);
+  if (!targetMother || !targetMother.position) return false;
+
+  const ax = entity.position.x;
+  const ay = entity.position.y;
+  const tx = targetMother.position.x;
+  const ty = targetMother.position.y;
+
+  const dist = Math.hypot(tx - ax, ty - ay);
+  if (dist > entity.follower.maxSeparationPx) {
+    const def = ANIMAL_DEFINITIONS[entity.animal.speciesId];
+    moveAnimalToward(entity, map, tx, ty, def.moveSpeed, dt);
+    return true;
+  }
+
+  return false;
 }

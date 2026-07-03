@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="snap trap sprung">
+  <!-- Shadow -->
+  <ellipse cx="64" cy="112" rx="42" ry="8" fill="#080706" opacity=".42"/>
+  
+  <!-- Base Plate and Springs -->
+  <rect x="28" y="98" width="72" height="14" rx="4" fill="#323436" stroke="#080706" stroke-width="4"/>
+  <circle cx="36" cy="105" r="8" fill="#1b1c1d" stroke="#080706" stroke-width="3"/>
+  <circle cx="92" cy="105" r="8" fill="#1b1c1d" stroke="#080706" stroke-width="3"/>
+
+  <!-- Left Sprung Jaw (rotated upwards) -->
+  <path d="M 38 102 C 34 50, 60 46, 60 102 Z" fill="#4d5054" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+  
+  <!-- Right Sprung Jaw (rotated upwards, overlapping) -->
+  <path d="M 90 102 C 94 50, 68 46, 68 102 Z" fill="#3e4042" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- Clamped teeth interlocking in the middle -->
+  <path d="M 64 52 L 60 58 L 68 64 L 60 70 L 68 76 L 60 82 L 68 88 L 64 94" fill="none" stroke="#080706" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Sprung Trigger (dangling/flattened) -->
+  <ellipse cx="64" cy="105" rx="8" ry="4" fill="#2d2f31" stroke="#080706" stroke-width="2.5"/>
+</svg>

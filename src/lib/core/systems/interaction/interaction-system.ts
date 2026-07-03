@@ -15,6 +15,7 @@ import { Cell, type AnimState } from "$lib/core/types";
 import { playSound } from "$lib/audio/audio-engine";
 import { gatherSoundId } from "$lib/audio/sound-manifest";
 import { gameState } from "$lib/state/game-state.svelte";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 import { applyRpgState, setRpgInventory, equipLocalWeapon } from "$lib/state/rpg-actions.svelte";
 import { getItemDef } from "$lib/domain/items";
 import { Colors } from "$lib/utils/colors";
@@ -28,6 +29,7 @@ import { syncGather, syncPickup, syncRefuel } from "$lib/state/persistence/remot
 import { transformStackQty } from "$lib/domain/systems/inventory-system";
 import { findProcessableItem, resolveProcessingCompletion } from "$lib/domain/systems/processing-system";
 import { getStationDefinition, type StationId } from "$lib/domain/stations";
+import { drawBuildingVisuals } from "$lib/core/systems/building/building-system";
 import { checkGatherTool, gatherInterval, requiredToolKind } from "$lib/domain/gathering/gather-system";
 import { getGatherableDefinition, resolveGatherSkillKey, rollGatherRisk } from "$lib/domain/gathering/gatherables";
 import { gatherActivityStats } from "$lib/domain/stats/skill-growth";
@@ -56,6 +58,14 @@ import {
   type StationProcessRuntime,
   type StationProcessTickContext,
 } from "$lib/domain/systems/station-process";
+import {
+  tickCraftProcessRuntime,
+  minigamePerformanceOf,
+  hasPlayedMinigame,
+  type CraftProcessRuntime,
+} from "$lib/domain/crafting/craft-process-runtime";
+import { resolveCraft, type CraftContext } from "$lib/domain/crafting/crafting-system";
+import { rpgEventQueue, playerRpgEntityId } from "$lib/state/rpg/rpg-feedback-router";
 import { InteractionDispatcher } from "$lib/core/runtime/interactions";
 import type { RuntimeResourceMap } from "$lib/core/runtime/runtime";
 import { INTERACT_RANGE } from "$lib/core/systems/interaction/targeting-system";
@@ -201,6 +211,39 @@ const immediateInteractionDispatcher = new InteractionDispatcher<ImmediateIntera
         hasOnOpenCarcassPanel: !!onOpenCarcassPanel,
         hasOnStationInteract: !!onStationInteract
       });
+      if (target.trap && target.trap.type === "snap") {
+        const { vfx, entityLayer, entitySprites } = resources.deps;
+        if (target.trap.state === "sprung") {
+          target.trap.state = "set";
+          if (target.interactable) {
+            target.interactable.name = "disarm snap trap";
+          }
+          playSound("craft");
+          spawnEnvFloatingText(vfx, "✔ Trap Reset ✔", Colors.resource.gold, getPlayerEntity().position!, entityLayer);
+          
+          const container = entitySprites.get(target.id);
+          if (container && container.children.length >= 2) {
+            const interiorContainer = container.children[0] as Container;
+            const shellContainer = container.children[1] as Container;
+            drawBuildingVisuals("snap_trap", 5, interiorContainer, shellContainer, target);
+          }
+        } else {
+          target.trap.state = "sprung";
+          if (target.interactable) {
+            target.interactable.name = "reset snap trap";
+          }
+          playSound("craft");
+          spawnEnvFloatingText(vfx, "✔ Trap Disarmed ✔", Colors.resource.gold, getPlayerEntity().position!, entityLayer);
+          
+          const container = entitySprites.get(target.id);
+          if (container && container.children.length >= 2) {
+            const interiorContainer = container.children[0] as Container;
+            const shellContainer = container.children[1] as Container;
+            drawBuildingVisuals("snap_trap", 5, interiorContainer, shellContainer, target);
+          }
+        }
+        return;
+      }
       if (target.carcass) {
         // Open the dedicated CarcassPanel so the player can choose which action to run.
         console.log("[DEBUG ENGINE] Calling onOpenCarcassPanel");
@@ -271,12 +314,22 @@ export class InteractionResource {
   public refuelConfirmTimer = 0;
   /** Set by campfire handler to open the crafting overlay; consumed by engine. */
   public requestCrafting = false;
-  /** Active item process (boiling, smelting); null when nothing is processing. */
-  public activeProcess: StationProcessRuntime | null = null;
+  /** Active item processes (boiling, smelting), keyed by station entity id — each station runs independently. */
+  public activeProcesses: Map<string, StationProcessRuntime> = new Map();
   /** Active timed world-object action; null when no object action is running. */
   public activeWorldAction: WorldActionRuntime | null = null;
   /** True when a precision tap was registered during the current activeWorldAction cycle. */
   public activeWorldActionPrecision = false;
+  /**
+   * Active timed, attendable station crafts, keyed by station entity id.
+   * Unlike `activeProcesses`/`activeWorldAction`, leaving range never
+   * cancels an entry — it only stops the current tick from counting as
+   * "attended." A craft also does not auto-resolve into inventory once its
+   * timer completes (see `tickActiveCraftProcess`); it stays parked here,
+   * `completed: true`, until the player interacts with that station again
+   * to collect it (see `engine.collectCraftProcess`).
+   */
+  public activeCraftProcesses: Map<string, CraftProcessRuntime> = new Map();
 }
 
 /**
@@ -398,72 +451,103 @@ export function runInteractionSystem(
   playerAnimation?: PlayerAnimationResource,
 ): void {
   const tickActiveProcess = (): void => {
-    if (!interaction.activeProcess) return;
     const playerEntity = getPlayerEntity();
-    const proc = interaction.activeProcess;
-    const stationEntity = world.with("position").entities.find((e) => e.id === (proc.targetEntityId || EntityId.Campfire));
+    for (const [stationEntityId, proc] of interaction.activeProcesses) {
+      const stationEntity = world.with("position").entities.find((e) => e.id === stationEntityId);
 
-    let inRange = true;
-    if (stationEntity?.position && playerEntity.position) {
-      const dx = (stationEntity.position.x - playerEntity.position.x) / TILE;
-      const dy = (stationEntity.position.y - playerEntity.position.y) / TILE;
-      const maxDist = proc.stationId === "campfire" ? getCampfireHeatRadiusTiles(stationEntity) : 2.5;
-      inRange = Math.hypot(dx, dy) <= maxDist;
-    }
-
-    if (!inRange) {
-      eventQueue?.push({ type: "feedback_requested", channel: "ui", message: "process interrupted.", tone: "info" });
-      interaction.activeProcess = null;
-      return;
-    }
-
-    const tickedProc = tickStationProcessRuntime(proc, dt, stationTickContext);
-    interaction.activeProcess = tickedProc;
-
-    if (tickedProc.bubbleTimer <= 0 && stationEntity?.position) {
-      interaction.activeProcess = { ...tickedProc, bubbleTimer: 0.8 };
-      if (proc.stationId === "campfire") {
-        spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", stationEntity.position, entityLayer);
-        playSound("station.boil");
-      } else if (proc.stationId === "primitive_work_surface") {
-        playSound("craft");
-      } else {
-        playSound("pickup");
+      let inRange = true;
+      if (stationEntity?.position && playerEntity.position) {
+        const dx = (stationEntity.position.x - playerEntity.position.x) / TILE;
+        const dy = (stationEntity.position.y - playerEntity.position.y) / TILE;
+        const maxDist = proc.stationId === "campfire" ? getCampfireHeatRadiusTiles(stationEntity) : 2.5;
+        inRange = devFlags.spectatorEnabled || Math.hypot(dx, dy) <= maxDist;
       }
-    }
 
-    if (tickedProc.remainingSec <= 0) {
-      if (gameState.rpg.inventory) {
-        const result = resolveStationProcessCompletion({ inventory: gameState.rpg.inventory, process: proc });
-        if (result.ok) {
-          setRpgInventory(result.inventory);
-          const outId = result.outputItemId;
-          const resultName = getItemDef(outId)?.name ?? outId;
-          enqueueStationProcessCompletedEvents({
-            queue: eventQueue,
-            actorId: playerEntity.id,
-            targetId: proc.targetEntityId,
-            processId: proc.processId,
-            outputItemId: outId,
-            outputQty: result.outputQty,
-          });
-          const completionFeedback = outId === "clean_water" ? getActionFeedback("water_cleanse") : undefined;
-          eventQueue?.push({
-            type: "feedback_requested",
-            channel: "ui",
-            message: completionFeedback?.toast ?? `process complete: ${resultName.toLowerCase()}`,
-            tone: "success",
-          });
-          // Sound and craft quest handled by FeedbackRouter on interaction_completed.
-          for (const knowledge of result.knowledge) learnAbout(knowledge.itemId, knowledge.trait);
-          if (result.recipeToLearn) learnRecipe(result.recipeToLearn);
-          triggerQuestEvent(GameEvent.Boil, outId);
-          triggerQuestEvent("craft", outId);
+      if (!inRange) {
+        eventQueue?.push({ type: "feedback_requested", channel: "ui", message: "process interrupted.", tone: "info" });
+        interaction.activeProcesses.delete(stationEntityId);
+        continue;
+      }
+
+      let tickedProc = tickStationProcessRuntime(proc, dt, stationTickContext);
+      interaction.activeProcesses.set(stationEntityId, tickedProc);
+
+      if (tickedProc.bubbleTimer <= 0 && stationEntity?.position) {
+        tickedProc = { ...tickedProc, bubbleTimer: 0.8 };
+        interaction.activeProcesses.set(stationEntityId, tickedProc);
+        if (proc.stationId === "campfire") {
+          spawnEnvParticles(vfx, Colors.vfx.smoke, 4, "smoke", stationEntity.position, entityLayer);
+          playSound("station.boil");
+        } else if (proc.stationId === "primitive_work_surface") {
+          playSound("craft");
         } else {
-          eventQueue?.push({ type: "feedback_requested", channel: "ui", message: "missing ingredients.", tone: "info" });
+          playSound("pickup");
         }
       }
-      interaction.activeProcess = null;
+
+      if (tickedProc.remainingSec <= 0) {
+        if (gameState.rpg.inventory) {
+          const result = resolveStationProcessCompletion({ inventory: gameState.rpg.inventory, process: proc });
+          if (result.ok) {
+            setRpgInventory(result.inventory);
+            const outId = result.outputItemId;
+            const resultName = getItemDef(outId)?.name ?? outId;
+            enqueueStationProcessCompletedEvents({
+              queue: eventQueue,
+              actorId: playerEntity.id,
+              targetId: proc.targetEntityId,
+              processId: proc.processId,
+              outputItemId: outId,
+              outputQty: result.outputQty,
+            });
+            const completionFeedback = outId === "clean_water" ? getActionFeedback("water_cleanse") : undefined;
+            eventQueue?.push({
+              type: "feedback_requested",
+              channel: "ui",
+              message: completionFeedback?.toast ?? `${resultName.toLowerCase()} ready, added to inventory.`,
+              tone: "success",
+            });
+            // Sound and craft quest handled by FeedbackRouter on interaction_completed.
+            for (const knowledge of result.knowledge) learnAbout(knowledge.itemId, knowledge.trait);
+            if (result.recipeToLearn) learnRecipe(result.recipeToLearn);
+            triggerQuestEvent(GameEvent.Boil, outId);
+            triggerQuestEvent("craft", outId);
+          } else {
+            eventQueue?.push({ type: "feedback_requested", channel: "ui", message: "missing ingredients.", tone: "info" });
+          }
+        }
+        interaction.activeProcesses.delete(stationEntityId);
+      }
+    }
+  };
+
+  /**
+   * Ticks every active timed station craft. Unlike `tickActiveProcess` and
+   * `tickWorldAction`, leaving range never cancels a craft — range only
+   * decides whether this tick counts as "attended" for the optional
+   * minigame. A craft ticks to `completed: true` on its own schedule
+   * regardless of the player's presence (`tickCraftProcessRuntime` freezes
+   * itself once completed), but does NOT auto-resolve into inventory here —
+   * it stays parked, completed, until the player physically returns and
+   * collects it via `engine.collectCraftProcess` (see
+   * `+page.svelte`'s `onStationInteract`).
+   */
+  const tickActiveCraftProcess = (): void => {
+    const playerEntity = getPlayerEntity();
+    for (const [stationEntityId, runtime] of interaction.activeCraftProcesses) {
+      if (runtime.completed) continue;
+      const stationEntity = world.with("position").entities.find((e) => e.id === runtime.targetStationEntityId);
+
+      let inRange = false;
+      if (stationEntity?.position && playerEntity.position) {
+        const dx = (stationEntity.position.x - playerEntity.position.x) / TILE;
+        const dy = (stationEntity.position.y - playerEntity.position.y) / TILE;
+        const maxDist = runtime.stationId === "campfire" ? getCampfireHeatRadiusTiles(stationEntity) : 2.5;
+        inRange = Math.hypot(dx, dy) <= maxDist;
+      }
+
+      const tickedRuntime = tickCraftProcessRuntime(runtime, dt, inRange);
+      interaction.activeCraftProcesses.set(stationEntityId, tickedRuntime);
     }
   };
 
@@ -476,7 +560,7 @@ export function runInteractionSystem(
 
     const dx = target?.position && playerEntity.position ? Math.abs(target.position.x - playerEntity.position.x) / TILE : 999;
     const dy = target?.position && playerEntity.position ? Math.abs(target.position.y - playerEntity.position.y) / TILE : 999;
-    const inRange = dx <= INTERACT_RANGE && dy <= INTERACT_RANGE;
+    const inRange = devFlags.spectatorEnabled || (dx <= INTERACT_RANGE && dy <= INTERACT_RANGE);
 
     if (!target || !inRange) {
       if (playerEntity.position) spawnEnvFloatingText(vfx, "action interrupted.", Colors.ui.muted, playerEntity.position, entityLayer);
@@ -771,9 +855,65 @@ export function runInteractionSystem(
   };
 
   tickActiveProcess();
+  tickActiveCraftProcess();
   if (tickWorldAction()) return;
   handleRefuelConfirmation();
   tickGatherLoop();
+}
+
+/**
+ * Resolves a completed, parked craft into inventory — the player-triggered
+ * counterpart to `tickActiveCraftProcess` no longer auto-resolving crafts on
+ * its own. Called from `engine.collectCraftProcess` when the player
+ * interacts with a station whose craft has finished. Returns true if a
+ * craft was actually collected (false if there was nothing to collect, or
+ * it hasn't finished yet).
+ */
+export function collectCraftProcess(
+  interaction: InteractionResource,
+  stationEntityId: string,
+  triggerQuestEvent: (evt: string, arg?: string, arg2?: number) => void,
+  eventQueue?: GameEventQueue,
+): boolean {
+  const runtime = interaction.activeCraftProcesses.get(stationEntityId);
+  if (!runtime || !runtime.completed) return false;
+  interaction.activeCraftProcesses.delete(stationEntityId);
+  if (!gameState.rpg.inventory) return false;
+
+  const recipe = runtime.recipe;
+  const ctx: CraftContext = {
+    isNearCampfire: runtime.isNearCampfire,
+    ...(runtime.stationId !== undefined ? { stationId: runtime.stationId } : {}),
+    craftsmanshipLevel: runtime.craftsmanshipLevel,
+    attended: runtime.attended,
+    played: hasPlayedMinigame(runtime),
+    minigamePerformance: minigamePerformanceOf(runtime),
+  };
+
+  const result = resolveCraft(gameState.rpg.inventory.slots, recipe.id, ctx);
+  if (result.ok) {
+    setRpgInventory({ slots: result.slots });
+    const resultName = getItemDef(recipe.output.itemId)?.name ?? recipe.output.itemId;
+    eventQueue?.push({
+      type: "feedback_requested",
+      channel: "ui",
+      message: `${resultName.toLowerCase()} collected.`,
+      tone: "success",
+    });
+    // Craftsmanship XP / sound / eureka feedback all route off this event — see rpg-feedback-router.ts.
+    rpgEventQueue.push({
+      type: "item_crafted",
+      actorId: playerRpgEntityId(),
+      recipeId: recipe.id,
+      itemId: recipe.output.itemId,
+      qty: recipe.output.qty,
+    });
+    triggerQuestEvent(GameEvent.Craft, recipe.id);
+  } else {
+    eventQueue?.push({ type: "feedback_requested", channel: "ui", message: "missing ingredients.", tone: "info" });
+    rpgEventQueue.push({ type: "craft_failed", actorId: playerRpgEntityId(), recipeId: recipe.id, reason: result.reason });
+  }
+  return true;
 }
 
 

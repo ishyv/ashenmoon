@@ -1,10 +1,12 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { getItemDef, traitOf } from "$lib/domain/items";
 import ItemIcon from "$lib/ui/components/ItemIcon.svelte";
 import { playSound } from "$lib/audio/audio-engine";
 import type { InventoryItemView } from "./types";
 import { dragState } from "$lib/state/drag.svelte";
 import type { ItemId } from "$lib/domain/items";
+import { ambientTellChance } from "$lib/domain/crafting/curse-effects";
 
 let {
   items,
@@ -23,6 +25,25 @@ let {
   onHover: (itemId: string | null) => void;
   onDblClick?: (itemId: string) => void;
 } = $props();
+
+// Cosmetic-only, mechanically-inert tell for Possessed items: an occasional glitch,
+// deliberately unreliable (never a clean "this is cursed" signal). Checked on a slow
+// interval per cursed cell rather than a CSS loop, since it must stay rare, not ambient motion.
+let glitching = $state<Set<string>>(new Set());
+const tellInterval = setInterval(() => {
+  for (const item of items) {
+    if (!item.cursed) continue;
+    if (Math.random() < ambientTellChance(item.curseLevel ?? 1)) {
+      glitching = new Set(glitching).add(item.itemId);
+      setTimeout(() => {
+        const next = new Set(glitching);
+        next.delete(item.itemId);
+        glitching = next;
+      }, 160);
+    }
+  }
+}, 1000);
+onDestroy(() => clearInterval(tellInterval));
 </script>
 
 <div class="grid-scroll">
@@ -30,11 +51,12 @@ let {
     <div class="empty-state">nothing gathered yet.</div>
   {:else}
     <div class="grid">
-      {#each items as { itemId, qty } (itemId)}
+      {#each items as { itemId, qty, tier } (itemId)}
         {@const meta = getItemDef(itemId)}
+        {@const isGlitching = glitching.has(itemId)}
         <button
           type="button"
-          class="item-cell {selectedItem === itemId ? 'selected' : ''} {isEquipped(itemId) ? 'equipped' : ''}"
+          class="item-cell {selectedItem === itemId ? 'selected' : ''} {isEquipped(itemId) ? 'equipped' : ''} {tier ? `tier-${tier}` : ''} {isGlitching ? 'glitching' : ''}"
           style="opacity: {dragState.active?.source === 'inventory' && dragState.active?.itemId === itemId ? 0.4 : 1}"
           draggable="true"
           onmouseenter={() => onHover(itemId)}
@@ -114,6 +136,22 @@ let {
 
   .item-cell.equipped {
     box-shadow: inset 0 0 0 1px var(--inv-accent);
+  }
+
+  .item-cell.tier-sloppy { border-color: var(--inv-tier-sloppy); }
+  .item-cell.tier-robust { border-color: var(--inv-tier-robust); }
+  .item-cell.tier-pristine { border-color: var(--inv-tier-pristine); }
+  .item-cell.tier-masterwork { border-color: var(--inv-tier-masterwork); }
+  .item-cell.tier-fable { border-color: var(--inv-tier-fable); }
+  .item-cell.tier-divine {
+    border-color: var(--inv-tier-divine);
+    box-shadow: 0 0 0 1px var(--inv-tier-divine), inset 0 0 0 2px var(--inv-tier-fable);
+  }
+
+  /* Cosmetic-only Possessed tell: a brief, unreliable glitch. No confirmation, no label. */
+  .item-cell.glitching {
+    border-color: var(--inv-cursed-tell);
+    filter: contrast(1.4) brightness(0.85);
   }
 
   .item-visual {

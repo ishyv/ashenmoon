@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="caltrops">
+  <!-- Shadows for individual clusters -->
+  <ellipse cx="44" cy="110" rx="20" ry="5" fill="#080706" opacity=".42"/>
+  <ellipse cx="84" cy="112" rx="22" ry="6" fill="#080706" opacity=".42"/>
+  <ellipse cx="64" cy="100" rx="16" ry="4" fill="#080706" opacity=".42"/>
+
+  <!-- Center cluster of caltrop spikes -->
+  <path d="M 64 74 L 54 98 L 74 98 Z" fill="#3a3c3e" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 64 74 L 64 94" stroke="#080706" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 50 86 L 78 86" stroke="#080706" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Left cluster of caltrop spikes -->
+  <path d="M 44 80 L 30 106 L 56 106 Z" fill="#4d5054" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 44 80 L 40 102 M 34 94 L 52 92" stroke="#080706" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Right cluster of caltrop spikes -->
+  <path d="M 84 76 L 70 108 L 98 108 Z" fill="#4d5054" stroke="#080706" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 84 76 L 86 104 M 74 94 L 94 92" stroke="#080706" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Additional small flint shards scattered around -->
+  <path d="M 28 112 L 32 108 L 36 112 Z" fill="#323436" stroke="#080706" stroke-width="2"/>
+  <path d="M 100 110 L 106 106 L 104 112 Z" fill="#323436" stroke="#080706" stroke-width="2"/>
+</svg>

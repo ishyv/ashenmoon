@@ -156,6 +156,9 @@ export type SoundId =
   | "boar.charge"
   | "rabbit.flee"
   | "deer.alert"
+  | "animal.graze"
+  | "animal.drink"
+  | "animal.thump"
   | "skill.ready"
   | "hotbar.bind"
   | "hotbar.reorder"
@@ -457,6 +460,9 @@ export const SOUNDS: Record<SoundId, SoundDef> = {
   "boar.charge": { bus: "entities", recipe: "boarCharge", spatial: true, throttleMs: 1600, pitchJitter: 75, gainJitter: 0.1, gain: 1.0, tags: ["entity", "boar", "danger"] },
   "rabbit.flee": { bus: "entities", recipe: "animalFlee", spatial: true, throttleMs: 1200, pitchJitter: 140, gainJitter: 0.1, gain: 0.65, tags: ["entity", "rabbit"] },
   "deer.alert": { bus: "entities", recipe: "animalFlee", spatial: true, throttleMs: 1800, pitchJitter: 80, gainJitter: 0.08, gain: 0.75, tags: ["entity", "deer"] },
+  "animal.graze": { bus: "entities", recipe: "fiberPull", spatial: true, throttleMs: 800, pitchJitter: 120, gainJitter: 0.1, gain: 0.7, tags: ["entity", "graze"] },
+  "animal.drink": { bus: "entities", recipe: "waterCollect", spatial: true, throttleMs: 800, pitchJitter: 100, gainJitter: 0.1, gain: 0.7, tags: ["entity", "drink"] },
+  "animal.thump": { bus: "entities", recipe: "woodBody", spatial: true, throttleMs: 1200, pitchJitter: 90, gainJitter: 0.08, gain: 0.85, tags: ["entity", "rabbit", "warning"] },
   // Played when a skill cooldown expires; recipe is closest available to a quiet settle.
   "skill.ready": { bus: "ui", recipe: "discovery", gain: 0.35, pitchJitter: 80, gainJitter: 0.1, throttleMs: 500, tags: ["hotbar", "skill"] },
   "hotbar.bind": { bus: "ui", recipe: "pickup", gain: 0.4, pitchJitter: 80, gainJitter: 0.1, throttleMs: 60, tags: ["hotbar"] },

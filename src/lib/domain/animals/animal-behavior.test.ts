@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   ANIMAL_DEFINITIONS,
   chooseAnimalBehavior,
+  isCalmNearby,
   resolveAnimalConflict,
   shouldAvoidFire,
+  stealthDetectionMult,
   type AnimalRuntime,
 } from "./animal-behavior";
 
@@ -98,5 +100,46 @@ describe("animal behavior", () => {
 
   it("does not define direct loot drops for animals", () => {
     expect(Object.values(ANIMAL_DEFINITIONS).every((definition) => !("drops" in definition))).toBe(true);
+  });
+
+  it("makes hungry wolves target nearby bait decoy before hunting prey", () => {
+    const result = chooseAnimalBehavior({ ...animal("wolf", "wolf"), hunger: 80 }, {
+      player: { x: 120, y: 0 },
+      litCampfires: [],
+      nearbyAnimals: [animal("rabbit", "rabbit", 40, 0)],
+      timeOfDay: "dusk",
+      isRaining: false,
+      nearbyDecoys: [{ id: "meat_decoy", x: 20, y: 0 }],
+    });
+
+    expect(result.behavior).toBe("hunt");
+    expect(result.targetId).toBe("meat_decoy");
+  });
+});
+
+describe("stealth detection", () => {
+  it("maps stealth to a detection multiplier with a floor", () => {
+    expect(stealthDetectionMult(0)).toBe(1);
+    expect(stealthDetectionMult(28.5)).toBeCloseTo(0.715);
+    expect(stealthDetectionMult(100)).toBe(0.4); // floored, never fully blind
+  });
+
+  it("lets a stealthy player approach closer before a rabbit alerts", () => {
+    // Player at 130px is just inside a rabbit's 140px alert ring.
+    const loud = chooseAnimalBehavior(animal("rabbit", "rabbit"), {
+      player: { x: 130, y: 0 }, litCampfires: [], nearbyAnimals: [], timeOfDay: "day", isRaining: false,
+    });
+    const stealthy = chooseAnimalBehavior(animal("rabbit", "rabbit"), {
+      player: { x: 130, y: 0 }, litCampfires: [], nearbyAnimals: [], timeOfDay: "day", isRaining: false, detectionMult: 0.5,
+    });
+    expect(loud.behavior).toBe("alert");
+    expect(stealthy.behavior).toBe("graze");
+  });
+
+  it("flags calm nearby wildlife but not alerted or distant animals", () => {
+    const rabbit = animal("rabbit", "rabbit", 0, 0); // curious ring = 140 * 1.5 = 210px
+    expect(isCalmNearby(rabbit, { x: 100, y: 0 })).toBe(true);
+    expect(isCalmNearby({ ...rabbit, awarenessLevel: "alert" }, { x: 100, y: 0 })).toBe(false);
+    expect(isCalmNearby(rabbit, { x: 300, y: 0 })).toBe(false);
   });
 });

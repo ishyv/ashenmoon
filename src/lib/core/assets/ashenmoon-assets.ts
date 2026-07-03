@@ -192,7 +192,11 @@ export type AshenmoonStructureKey =
   | "legacyHouse"
   | "legacyTower"
   | "legacyBarracks"
-  | "leanTo";
+  | "leanTo"
+  | "snapTrapSet"
+  | "snapTrapSprung"
+  | "caltrops"
+  | "baitDecoy";
 export type AshenmoonLandmarkKey =
   | "burnedCart"
   | "ruinedWatchPost"
@@ -320,12 +324,37 @@ export const ASHENMOON_PLAYER_ANIMATION_PATHS = {
     `${BASE}/actors/player/player-gather-scavenge-1.svg`,
     `${BASE}/actors/player/player-gather-scavenge-2.svg`,
   ],
-  combat_stance_spear: [
+  combat_guard_spear: [
     `${BASE}/actors/player/player-combat-spear-idle.svg`,
   ],
   combat_attack_spear: [
     `${BASE}/actors/player/player-combat-spear-thrust-1.svg`,
     `${BASE}/actors/player/player-combat-spear-thrust-2.svg`,
+  ],
+  combat_guard_unarmed: [
+    `${BASE}/actors/player/player-combat-unarmed-guard.svg`,
+  ],
+  combat_attack_unarmed: [
+    `${BASE}/actors/player/player-combat-unarmed-jab-1.svg`,
+    `${BASE}/actors/player/player-combat-unarmed-jab-2.svg`,
+  ],
+  combat_guard_knife: [
+    `${BASE}/actors/player/player-combat-knife-guard.svg`,
+  ],
+  combat_attack_knife: [
+    `${BASE}/actors/player/player-combat-knife-slash-1.svg`,
+    `${BASE}/actors/player/player-combat-knife-slash-2.svg`,
+  ],
+  combat_guard_axe: [
+    `${BASE}/actors/player/player-combat-axe-guard.svg`,
+  ],
+  combat_attack_axe: [
+    `${BASE}/actors/player/player-combat-axe-chop-1.svg`,
+    `${BASE}/actors/player/player-combat-axe-chop-2.svg`,
+  ],
+  combat_attack_axe_heavy: [
+    `${BASE}/actors/player/player-combat-axe-heavy-1.svg`,
+    `${BASE}/actors/player/player-combat-axe-heavy-2.svg`,
   ],
 } as const satisfies Partial<Record<PlayerAnimationClipId, readonly string[]>>;
 
@@ -520,6 +549,10 @@ export const ASHENMOON_STRUCTURE_PATHS = {
   legacyTower: `${BASE}/structures/legacy-tower.svg`,
   legacyBarracks: `${BASE}/structures/legacy-barracks.svg`,
   leanTo: `${BASE}/structures/lean-to.svg`,
+  snapTrapSet: `${BASE}/structures/snap-trap-set.svg`,
+  snapTrapSprung: `${BASE}/structures/snap-trap-sprung.svg`,
+  caltrops: `${BASE}/structures/caltrops.svg`,
+  baitDecoy: `${BASE}/structures/bait-decoy.svg`,
 } as const satisfies Partial<Record<AshenmoonStructureKey, string>>;
 
 export const ASHENMOON_LANDMARK_PATHS = {
@@ -738,6 +771,17 @@ export function getAshenmoonItemIconKeyForItemId(itemId: string): AshenmoonItemI
     case "dried_herb": return "driedHerb";
     case "ghost_lily": return "ghostLily";
     case "debug_panacea": return "debugPanacea";
+    case "rendered_fat": return "animalFat";
+    case "smoked_meat_pemmican": return "smokedMeat";
+    case "essence_poultice": return "yarrowPoultice";
+    case "copper_lantern": return "crudeTorch";
+    case "copper_spear": return "hardenedSpear";
+    case "bone_dagger": return "crudeKnife";
+    case "boar_leather_coat": return "hideCloak";
+    case "stalker_mask": return "furLinedWrap";
+    case "snap_trap_kit":
+    case "caltrops_kit":
+    case "bait_decoy_kit": return "campfireKit";
     default: return null;
   }
 }
@@ -823,6 +867,8 @@ const ASHENMOON_LANDMARK_BY_KIND = {
   skeleton_remains: "skeletonRemains",
   cursed_monolith: "cursedMonolith",
   bone_pile: "bonePile",
+  rabbit_burrow: "wolfDen",
+  deer_bedding: "deerGrazingArea",
 } as const satisfies Record<string, AshenmoonLandmarkRuntimeKey>;
 
 export function getAshenmoonLandmarkKeyForKind(kind: string): AshenmoonLandmarkRuntimeKey | null {

@@ -247,4 +247,16 @@ export const foodWaterItems = {
   }).with(
     Consumable({ verb: "drink", onConsume: [RestoreHp(8), RestoreThirst(15), RestoreHunger(20)] })
   ),
+  smoked_meat_pemmican: Item({
+    id: itemId("smoked_meat_pemmican"),
+    name: "Smoked Pemmican",
+    description: "Pounded smoked meat mixed with berries and rendered fat. Dense, compact trail food that lasts a long time.",
+    rarity: Rarity.Uncommon,
+    category: Category.Food,
+    icon: "🥩",
+    physical: { carryClass: "pocket", weight: 0.15, stackLimit: 20 },
+  }).with(
+    Consumable({ verb: "eat", onConsume: [RestoreHp(8), RestoreHunger(40)] }),
+    Decayable({ lifespanSec: 1200, effect: TransformInto(itemId("spoiled_meat")) })
+  ),
 };

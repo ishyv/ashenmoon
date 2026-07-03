@@ -6,6 +6,7 @@ import { medicineRecipes } from "./medicine";
 import { toolRecipes } from "./tools";
 import { clothingRecipes } from "./clothing";
 import { structureRecipes } from "./structures";
+import { trapRecipes } from "./traps";
 
 export const allRecipes: readonly RecipeInput[] = [
   ...processingRecipes,
@@ -15,4 +16,5 @@ export const allRecipes: readonly RecipeInput[] = [
   ...toolRecipes,
   ...clothingRecipes,
   ...structureRecipes,
+  ...trapRecipes,
 ];

@@ -5,6 +5,7 @@ import type { Entity } from "$lib/core/ecs/ecs-miniplex";
 import type { InputResource } from "$lib/core/input/input";
 import { TILE, type MapResource } from "$lib/core/systems/map/map";
 import { Colors } from "$lib/utils/colors";
+import { devFlags } from "$lib/state/dev-flags.svelte";
 
 export const INTERACT_RANGE = 2;
 
@@ -62,7 +63,7 @@ export function updateTargetSystem(
   const my = Math.floor(inputs.mouseWorld.y / TILE);
   const px = Math.floor(playerCx / TILE);
   const py = Math.floor(playerCy / TILE);
-  const inRange = Math.max(Math.abs(mx - px), Math.abs(my - py)) <= INTERACT_RANGE;
+  const inRange = devFlags.spectatorEnabled || Math.max(Math.abs(mx - px), Math.abs(my - py)) <= INTERACT_RANGE;
 
   let target: Entity | null = null;
   if (inRange) {

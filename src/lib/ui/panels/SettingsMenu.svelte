@@ -335,6 +335,14 @@ function handleVolumeChange(key: VolumeKey, value: number) {
             </div>
             <input type="checkbox" bind:checked={uiPreferences.equipOnlyWithStash} onchange={saveUiPreferences} />
           </label>
+
+          <label class="preference-row">
+            <div class="preference-info">
+              <span class="preference-name">auto fullscreen</span>
+              <span class="preference-desc">enter fullscreen automatically on your first click in the game</span>
+            </div>
+            <input type="checkbox" bind:checked={uiPreferences.autoFullscreen} onchange={saveUiPreferences} />
+          </label>
         </div>
       {:else if activeTab === "audio"}
         <p class="description">

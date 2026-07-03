@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 vi.mock("pixi.js", () => ({
@@ -15,6 +15,7 @@ import {
   ASHENMOON_GATHERABLE_PATHS,
   ASHENMOON_ITEM_ICON_PATHS,
   ASHENMOON_LANDMARK_PATHS,
+  ASHENMOON_PLAYER_ANIMATION_PATHS,
   ASHENMOON_PROP_PATHS,
   ASHENMOON_STRUCTURE_PATHS,
   ASHENMOON_UI_PATHS,
@@ -33,6 +34,7 @@ import {
   getAshenmoonItemIconCoverage,
   type AshenmoonAssetCoverage,
 } from "$lib/core/assets/ashenmoon-asset-coverage";
+import { PLAYER_ANIMATION_CLIPS } from "$lib/domain/animation/player-animation";
 import { ANIMAL_DEFINITIONS } from "$lib/domain/animals/animal-behavior";
 import { M3_CARCASS_DEFINITIONS } from "$lib/domain/animals/carcass-processing";
 import { BUILDING_SPECS } from "$lib/domain/building-specs";
@@ -46,6 +48,10 @@ function staticPath(assetPath: string): string {
   return join(REPO_ROOT, "static", assetPath.replace(/^\/assets\//, "assets/"));
 }
 
+function readSvgTag(assetPath: string): string {
+  return readFileSync(staticPath(assetPath), "utf8").split("\n").find((line) => line.includes("<svg")) ?? "";
+}
+
 describe("Ashenmoon first-party asset manifest", () => {
   it("contains unique bundle paths", () => {
     expect(new Set(BUNDLE_ASHENMOON_FIRST_CAMP).size).toBe(BUNDLE_ASHENMOON_FIRST_CAMP.length);
@@ -54,6 +60,7 @@ describe("Ashenmoon first-party asset manifest", () => {
   it("points every first-camp asset key at an existing file", () => {
     const paths = [
       ...Object.values(ASHENMOON_ACTOR_PATHS),
+      ...Object.values(ASHENMOON_PLAYER_ANIMATION_PATHS).flat(),
       ...Object.values(ASHENMOON_PROP_PATHS),
       ...Object.values(ASHENMOON_GATHERABLE_PATHS),
       ...Object.values(ASHENMOON_ITEM_ICON_PATHS),
@@ -66,6 +73,29 @@ describe("Ashenmoon first-party asset manifest", () => {
 
     const missing = paths.filter((path) => !existsSync(staticPath(path)));
     expect(missing).toEqual([]);
+  });
+
+  it("declares real frame assets for every player animation clip", () => {
+    const manifest = ASHENMOON_PLAYER_ANIMATION_PATHS as Readonly<Record<string, readonly string[] | undefined>>;
+    const missingManifestEntries = PLAYER_ANIMATION_CLIPS
+      .map((clip) => clip.id)
+      .filter((clipId) => !manifest[clipId]?.length);
+    const missingFiles = Object.values(manifest)
+      .flatMap((paths) => paths ?? [])
+      .filter((path) => !existsSync(staticPath(path)));
+
+    expect(missingManifestEntries).toEqual([]);
+    expect(missingFiles).toEqual([]);
+  });
+
+  it("keeps player animation SVGs on the shared lean-survivor canvas contract", () => {
+    const invalid = Object.values(ASHENMOON_PLAYER_ANIMATION_PATHS)
+      .flat()
+      .map((path) => [path, readSvgTag(path)] as const)
+      .filter(([, svg]) => !svg.includes('width="160" height="220" viewBox="0 0 160 220"'))
+      .map(([path]) => path);
+
+    expect(invalid).toEqual([]);
   });
 });
 
